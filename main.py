@@ -1,7 +1,7 @@
 import os
 import json
 import secrets
-from typing import Annotated, List
+from typing import Annotated, List, Dict, Any
 import base64
 from io import BytesIO
 import datetime
@@ -12,10 +12,12 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, JSONResponse
 import google.generativeai as genai
+from openai import OpenAI
 from weasyprint import HTML
 from dotenv import load_dotenv
 import openpyxl
 from openpyxl.styles import PatternFill, Border, Side, Alignment, Font
+from pydantic import BaseModel
 
 # Load environment variables
 load_dotenv()
@@ -24,13 +26,19 @@ load_dotenv()
 APP_USERNAME = os.getenv("APP_USERNAME")
 APP_PASSWORD = os.getenv("APP_PASSWORD")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 if not all([APP_USERNAME, APP_PASSWORD, GEMINI_API_KEY]):
     print("Warning: Missing required environment variables.")
 
-# Gemini Initialization
+# AI Initialization
 genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel("gemini-2.5-flash")
+gemini_model = genai.GenerativeModel("gemini-2.5-flash")
+
+if OPENAI_API_KEY:
+    openai_client = OpenAI(api_key=OPENAI_API_KEY)
+else:
+    openai_client = None
 
 # FastAPI App
 app = FastAPI()
@@ -66,22 +74,26 @@ def authenticate(credentials: Annotated[HTTPBasicCredentials, Depends(security)]
 async def index(request: Request, username: Annotated[str, Depends(authenticate)]):
     return templates.TemplateResponse(request=request, name="index.html")
 
-@app.post("/generate-documents")
-async def generate_documents(
+# --- 1. AI Analysis Endpoint (Called in chunks by frontend) ---
+@app.post("/analyze-images")
+async def analyze_images(
     request: Request,
     username: Annotated[str, Depends(authenticate)],
     files: List[UploadFile] = File(...),
-    customer_name: str = Form("株式会社 タム 御中"),
-    discount_rate: int = Form(35)
+    ai_model: str = Form("gemini")
 ):
     try:
-        # 1. Read all Images
         image_parts = []
         for file in files:
             image_bytes = await file.read()
-            image_parts.append({"mime_type": file.content_type or "image/jpeg", "data": image_bytes})
-        
-        # 2. Gemini API Request (Chunked)
+            b64 = base64.b64encode(image_bytes).decode("utf-8")
+            mime_type = file.content_type or "image/jpeg"
+            image_parts.append({
+                "mime_type": mime_type,
+                "data": image_bytes,
+                "base64": b64
+            })
+            
         prompt = """
 あなたはアパレルブランドのデータ入力アシスタントです。提供された複数の商品タグの画像からそれぞれの情報を抽出し、厳密にJSON配列（リスト）の形式のみで出力してください。マークダウンの装飾(```jsonなど)は含めないでください。
 スキーマ: [{"code": "品番(例:148-3101)", "color": "カラー(例:24)", "size": "サイズ(例:46)", "unit_price": 単価の数値(例:38000)}, ...]
@@ -89,44 +101,82 @@ async def generate_documents(
 """.strip()
 
         items_data = []
-        chunk_size = 10
-        for i in range(0, len(image_parts), chunk_size):
-            chunk = image_parts[i:i + chunk_size]
-            contents = [prompt] + chunk
+
+        if ai_model == "openai":
+            if not openai_client:
+                raise HTTPException(status_code=500, detail="OpenAI APIキーが設定されていません。")
             
-            # Retry logic for 429
-            max_retries = 2
-            for attempt in range(max_retries + 1):
-                try:
-                    response = model.generate_content(contents)
-                    
-                    # Extract JSON from response
-                    raw_text = response.text.strip()
-                    if raw_text.startswith("```json"):
-                        raw_text = raw_text.replace("```json", "", 1).replace("```", "", 1).strip()
-                    elif raw_text.startswith("```"):
-                        raw_text = raw_text.replace("```", "", 2).strip()
-                    
-                    chunk_data = json.loads(raw_text)
-                    if not isinstance(chunk_data, list):
-                        chunk_data = [chunk_data]
-                    
-                    items_data.extend(chunk_data)
-                    break # Success, break retry loop
-                    
-                except Exception as e:
-                    error_str = str(e)
-                    if "429" in error_str or "Quota exceeded" in error_str or "rate limits" in error_str:
-                        if attempt < max_retries:
-                            time.sleep(15) # Wait 15 seconds
-                            continue
-                        else:
-                            raise HTTPException(status_code=429, detail="AI（Gemini）の利用制限に達しました。処理枚数が多すぎるか、短期間にリクエストが集中しています。数分待ってから再度お試しください。")
-                    else:
-                        raise HTTPException(status_code=500, detail=f"Gemini API Error at batch {i//chunk_size + 1}: {error_str}")
+            content_list = [{"type": "text", "text": prompt}]
+            for part in image_parts:
+                content_list.append({
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:{part['mime_type']};base64,{part['base64']}"
+                    }
+                })
+            
+            try:
+                response = openai_client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[{"role": "user", "content": content_list}],
+                    max_tokens=2000
+                )
+                raw_text = response.choices[0].message.content.strip()
+            except Exception as e:
+                error_str = str(e)
+                if "429" in error_str or "Rate limit" in error_str:
+                    raise HTTPException(status_code=429, detail="OpenAIの制限に達しました。")
+                raise HTTPException(status_code=500, detail=f"OpenAI Error: {error_str}")
+
+        else:
+            # Gemini default
+            contents = [prompt] + [{"mime_type": p["mime_type"], "data": p["data"]} for p in image_parts]
+            try:
+                response = gemini_model.generate_content(contents)
+                raw_text = response.text.strip()
+            except Exception as e:
+                error_str = str(e)
+                if "429" in error_str or "Quota exceeded" in error_str or "rate limits" in error_str:
+                    raise HTTPException(status_code=429, detail="AI（Gemini）の利用制限に達しました。数秒待ってから再試行してください。")
+                raise HTTPException(status_code=500, detail=f"Gemini API Request Error: {error_str}")
+
+        # Clean JSON
+        if raw_text.startswith("```json"):
+            raw_text = raw_text.replace("```json", "", 1).replace("```", "", 1).strip()
+        elif raw_text.startswith("```"):
+            raw_text = raw_text.replace("```", "", 2).strip()
         
-        if not items_data:
-            raise HTTPException(status_code=500, detail="タグのデータを正しく抽出できませんでした。")
+        chunk_data = json.loads(raw_text)
+        if not isinstance(chunk_data, list):
+            chunk_data = [chunk_data]
+        
+        return JSONResponse({"items": chunk_data})
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Pydantic model for final generation
+class DocumentRequest(BaseModel):
+    customer_name: str
+    discount_rate: int
+    items: List[Dict[str, Any]]
+
+# --- 2. Final Generation Endpoint ---
+@app.post("/generate-documents")
+async def generate_documents(
+    request: Request,
+    username: Annotated[str, Depends(authenticate)],
+    payload: DocumentRequest
+):
+    try:
+        items_data = payload.items
+        customer_name = payload.customer_name
+        discount_rate = payload.discount_rate
 
         # 3. Calculation Logic for all items
         processed_items = []
@@ -235,7 +285,6 @@ async def generate_documents(
         for i, item in enumerate(processed_items):
             ws.row_dimensions[current_row].height = 40
             
-            # 枝番 (Line number on the left)
             ws[f"A{current_row}"] = f"{i+1} {item['code']}"
             ws[f"B{current_row}"] = item["color"]
             ws[f"C{current_row}"] = item["size"]

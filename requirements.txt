@@ -6,3 +6,4 @@ weasyprint
 python-multipart
 python-dotenv
 openpyxl
+openai

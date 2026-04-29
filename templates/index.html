@@ -20,6 +20,7 @@
             --accent-success: #10b981;
             --btn-pdf: #dc2626;
             --btn-excel: #059669;
+            --btn-blue: #3b82f6;
         }
 
         * {
@@ -34,21 +35,21 @@
             color: var(--text-main);
             display: flex;
             justify-content: center;
-            align-items: center;
+            align-items: flex-start; /* changed from center for long tables */
             min-height: 100vh;
             padding: 20px;
         }
 
         .container {
-            max-width: 480px;
+            max-width: 600px;
             width: 100%;
             background: var(--card-bg);
             padding: 40px 32px;
             border-radius: 24px;
             box-shadow: 0 20px 40px rgba(0, 0, 0, 0.06);
             text-align: center;
-            position: relative;
-            overflow: hidden;
+            margin-top: 20px;
+            margin-bottom: 40px;
         }
 
         .logo {
@@ -68,6 +69,37 @@
             letter-spacing: 0.05em;
         }
 
+        .settings-panel {
+            background-color: #fafafa;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 24px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            text-align: left;
+        }
+        .setting-item {
+            flex: 1 1 45%;
+        }
+        .setting-item label {
+            display: block;
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+            font-weight: 600;
+        }
+        .setting-item input, .setting-item select {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 14px;
+            font-family: inherit;
+            background: #fff;
+        }
+
         .upload-area {
             border: 2px dashed var(--border-color);
             border-radius: 16px;
@@ -77,34 +109,14 @@
             transition: all 0.3s ease;
             background-color: #fafafa;
         }
-
         .upload-area:hover, .upload-area:active {
             background-color: #f0f0f0;
             border-color: var(--text-muted);
         }
-
-        .upload-icon {
-            font-size: 40px;
-            margin-bottom: 16px;
-            display: block;
-            opacity: 0.8;
-        }
-
-        .upload-text {
-            font-size: 15px;
-            font-weight: 500;
-            color: var(--text-main);
-            margin-bottom: 8px;
-        }
-        
-        .upload-subtext {
-            font-size: 12px;
-            color: var(--text-muted);
-        }
-
-        #file-input {
-            display: none;
-        }
+        .upload-icon { font-size: 40px; margin-bottom: 16px; display: block; opacity: 0.8; }
+        .upload-text { font-size: 15px; font-weight: 500; color: var(--text-main); margin-bottom: 8px; }
+        .upload-subtext { font-size: 12px; color: var(--text-muted); }
+        #file-input { display: none; }
 
         .preview-container {
             display: flex;
@@ -112,177 +124,66 @@
             overflow-x: auto;
             margin-top: 24px;
             padding-bottom: 12px;
-            scroll-behavior: smooth;
         }
-
-        .preview-container::-webkit-scrollbar {
-            height: 6px;
-        }
-        .preview-container::-webkit-scrollbar-thumb {
-            background-color: var(--border-color);
-            border-radius: 10px;
-        }
-
-        .preview-item {
-            position: relative;
-            flex-shrink: 0;
-            animation: fadeIn 0.3s ease;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        .preview-img {
-            height: 90px;
-            width: 70px;
-            object-fit: cover;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            border: 1px solid var(--border-color);
-        }
-
+        .preview-item { position: relative; flex-shrink: 0; }
+        .preview-img { height: 90px; width: 70px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border-color); }
         .remove-btn {
-            position: absolute;
-            top: -8px;
-            right: -8px;
-            background-color: var(--primary);
-            color: white;
-            border: none;
-            border-radius: 50%;
-            width: 24px;
-            height: 24px;
-            font-size: 12px;
-            cursor: pointer;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-            transition: transform 0.2s;
-        }
-
-        .remove-btn:active {
-            transform: scale(0.9);
+            position: absolute; top: -8px; right: -8px; background: var(--primary); color: white; border: none;
+            border-radius: 50%; width: 24px; height: 24px; font-size: 12px; cursor: pointer; display: flex;
+            justify-content: center; align-items: center;
         }
 
         .btn {
-            background-color: var(--primary);
-            color: var(--secondary);
-            border: none;
-            padding: 16px 24px;
-            font-size: 16px;
-            font-weight: 600;
-            border-radius: 12px;
-            width: 100%;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            margin-bottom: 12px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            letter-spacing: 0.05em;
+            background-color: var(--primary); color: var(--secondary); border: none; padding: 16px 24px;
+            font-size: 16px; font-weight: 600; border-radius: 12px; width: 100%; cursor: pointer;
+            display: flex; justify-content: center; align-items: center; margin-bottom: 12px;
         }
-
-        .btn:disabled {
-            background-color: var(--border-color);
-            color: var(--text-muted);
-            cursor: not-allowed;
-            box-shadow: none;
-        }
-
-        .btn:not(:disabled):active {
-            transform: translateY(2px);
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-
+        .btn:disabled { background-color: var(--border-color); color: var(--text-muted); cursor: not-allowed; }
         .btn-pdf { background-color: var(--btn-pdf); }
         .btn-excel { background-color: var(--btn-excel); }
+        .btn-blue { background-color: var(--btn-blue); }
 
         .loading-spinner {
-            width: 22px;
-            height: 22px;
-            border: 3px solid rgba(255,255,255,0.3);
-            border-top: 3px solid #fff;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-right: 12px;
-            display: none;
+            width: 20px; height: 20px; border: 3px solid rgba(255,255,255,0.3); border-top: 3px solid #fff;
+            border-radius: 50%; animation: spin 1s linear infinite; margin-right: 12px; display: none;
         }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-        .btn:disabled .loading-spinner {
-            border: 3px solid rgba(0,0,0,0.1);
-            border-top: 3px solid var(--text-muted);
+        /* Progress Bar */
+        .progress-container {
+            display: none; margin-top: 20px; text-align: left;
         }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+        .progress-bar {
+            width: 100%; height: 8px; background-color: var(--border-color); border-radius: 4px; overflow: hidden; margin-bottom: 8px;
         }
+        .progress-fill {
+            height: 100%; background-color: var(--btn-blue); width: 0%; transition: width 0.3s ease;
+        }
+        .progress-text { font-size: 12px; font-weight: 600; color: var(--text-muted); display: flex; justify-content: space-between;}
 
+        /* Status Toast */
         .status-toast {
-            margin-top: 20px;
-            font-size: 14px;
-            font-weight: 500;
-            padding: 12px 16px;
-            border-radius: 8px;
-            display: none;
-            animation: slideUp 0.3s ease;
+            margin-top: 16px; font-size: 14px; padding: 12px 16px; border-radius: 8px; display: none;
         }
-
-        @keyframes slideUp {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
         .status-info { background-color: #f3f4f6; color: var(--text-main); }
         .status-success { background-color: #d1fae5; color: var(--accent-success); }
         .status-error { background-color: #fee2e2; color: var(--accent-error); }
 
-        #download-section {
-            display: none;
-            margin-top: 32px;
-            border-top: 1px solid var(--border-color);
-            padding-top: 24px;
-            animation: fadeIn 0.5s ease;
+        /* Preview Data Table */
+        #preview-data-section {
+            display: none; margin-top: 32px; border-top: 1px solid var(--border-color); padding-top: 24px; animation: fadeIn 0.5s ease;
         }
-        
-        .download-title {
-            font-size: 14px;
-            font-weight: 600;
-            color: var(--text-main);
-            margin-bottom: 16px;
-        }
+        .preview-title { font-size: 16px; font-weight: bold; margin-bottom: 16px; text-align: left;}
+        .data-table-wrapper { overflow-x: auto; margin-bottom: 24px; }
+        .data-table { width: 100%; border-collapse: collapse; min-width: 400px; }
+        .data-table th, .data-table td { padding: 8px; border: 1px solid var(--border-color); text-align: center; }
+        .data-table th { background-color: #fafafa; font-size: 12px; color: var(--text-muted); }
+        .data-table td input { width: 100%; padding: 6px; border: 1px solid transparent; text-align: center; font-size: 14px; border-radius: 4px; }
+        .data-table td input:focus { border: 1px solid var(--btn-blue); outline: none; background: #eff6ff;}
+        .data-table td input.type-num { width: 80px;}
 
-        .settings-panel {
-            background-color: #fafafa;
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 16px;
-            margin-bottom: 24px;
-            display: flex;
-            gap: 16px;
-            text-align: left;
-        }
-        .setting-item {
-            flex: 1;
-        }
-        .setting-item label {
-            display: block;
-            font-size: 12px;
-            color: var(--text-muted);
-            margin-bottom: 4px;
-            font-weight: 600;
-        }
-        .setting-item input {
-            width: 100%;
-            padding: 8px 12px;
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            font-size: 14px;
-            font-family: inherit;
-        }
+        #download-section { display: none; margin-top: 24px; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     </style>
 </head>
 <body>
@@ -290,16 +191,6 @@
         <div class="logo">LAURA JAPAN</div>
         <div class="subtitle">AI INVOICE GENERATOR</div>
         
-        <div class="upload-area" id="drop-area">
-            <span class="upload-icon">📸</span>
-            <div class="upload-text">タグを撮影 / ライブラリから選択</div>
-            <div class="upload-subtext">複数枚の同時アップロードに対応</div>
-            <!-- capture属性を削除し、写真ライブラリから選べるように変更 -->
-            <input type="file" id="file-input" accept="image/*" multiple>
-        </div>
-
-        <div id="preview-container" class="preview-container"></div>
-
         <div class="settings-panel">
             <div class="setting-item">
                 <label>取引先名</label>
@@ -309,19 +200,70 @@
                 <label>掛率 (%)</label>
                 <input type="number" id="discount-rate" value="35" min="1" max="100">
             </div>
+            <div class="setting-item" style="flex: 1 1 100%;">
+                <label>AIモデル</label>
+                <select id="ai-model">
+                    <option value="gemini">Google Gemini 2.5 Flash</option>
+                    <option value="openai">OpenAI GPT-4o-mini</option>
+                </select>
+            </div>
+        </div>
+        
+        <div id="upload-wrapper">
+            <div class="upload-area" id="drop-area">
+                <span class="upload-icon">📸</span>
+                <div class="upload-text">タグを撮影 / ライブラリから選択</div>
+                <div class="upload-subtext">大量の一括処理・エラーからの再開に対応</div>
+                <input type="file" id="file-input" accept="image/*" multiple>
+            </div>
+
+            <div id="preview-container" class="preview-container"></div>
+
+            <button id="upload-btn" class="btn" disabled style="margin-top: 8px;">
+                <div class="loading-spinner" id="spinner"></div>
+                <span id="btn-text">データをAIで抽出する</span>
+            </button>
         </div>
 
-        <button id="upload-btn" class="btn" disabled style="margin-top: 8px;">
-            <div class="loading-spinner" id="spinner"></div>
-            <span id="btn-text">データを自動生成する</span>
-        </button>
+        <div class="progress-container" id="progress-container">
+            <div class="progress-text">
+                <span id="progress-label">処理の準備中...</span>
+                <span id="progress-percent">0%</span>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progress-fill"></div>
+            </div>
+        </div>
         
         <div id="status-msg" class="status-toast"></div>
 
+        <!-- Preview & Edit Data Section -->
+        <div id="preview-data-section">
+            <div class="preview-title">✏️ AIの読み取り結果（修正可能）</div>
+            <div class="data-table-wrapper">
+                <table class="data-table" id="data-table">
+                    <thead>
+                        <tr>
+                            <th>品番</th>
+                            <th>カラー</th>
+                            <th>サイズ</th>
+                            <th>単価</th>
+                        </tr>
+                    </thead>
+                    <tbody id="data-table-body">
+                        <!-- JS injected -->
+                    </tbody>
+                </table>
+            </div>
+            <button id="btn-generate" class="btn btn-blue">
+                <div class="loading-spinner" id="spinner-gen"></div>
+                <span>最終データを確定して保存する</span>
+            </button>
+        </div>
+
         <div id="download-section">
-            <div class="download-title">生成完了。保存形式を選択してください。</div>
-            <button id="btn-dl-pdf" class="btn btn-pdf">📄 納品書 (PDF) を保存</button>
-            <button id="btn-dl-excel" class="btn btn-excel">📊 管理伝票 (Excel) を保存</button>
+            <button id="btn-dl-pdf" class="btn btn-pdf">📄 納品書 (PDF) をダウンロード</button>
+            <button id="btn-dl-excel" class="btn btn-excel">📊 管理伝票 (Excel) をダウンロード</button>
         </div>
     </div>
 
@@ -333,11 +275,24 @@
         const spinner = document.getElementById('spinner');
         const statusMsg = document.getElementById('status-msg');
         const previewContainer = document.getElementById('preview-container');
+        const uploadWrapper = document.getElementById('upload-wrapper');
+        
+        const progressContainer = document.getElementById('progress-container');
+        const progressFill = document.getElementById('progress-fill');
+        const progressLabel = document.getElementById('progress-label');
+        const progressPercent = document.getElementById('progress-percent');
+
+        const previewDataSection = document.getElementById('preview-data-section');
+        const dataTableBody = document.getElementById('data-table-body');
+        const btnGenerate = document.getElementById('btn-generate');
+        const spinnerGen = document.getElementById('spinner-gen');
+
         const downloadSection = document.getElementById('download-section');
         const btnDlPdf = document.getElementById('btn-dl-pdf');
         const btnDlExcel = document.getElementById('btn-dl-excel');
 
         let selectedFiles = [];
+        let extractedItems = []; // All JSON data from AI
         let currentPdfData = null;
         let currentExcelData = null;
 
@@ -348,19 +303,19 @@
             statusMsg.style.display = 'block';
         };
 
-        const hideToast = () => {
-            statusMsg.style.display = 'none';
+        const updateProgress = (label, current, total) => {
+            progressContainer.style.display = 'block';
+            progressLabel.textContent = label;
+            const percentage = Math.round((current / total) * 100);
+            progressPercent.textContent = `${percentage}%`;
+            progressFill.style.width = `${percentage}%`;
         };
 
         dropArea.addEventListener('click', () => fileInput.click());
 
         fileInput.addEventListener('change', (e) => {
             if (e.target.files && e.target.files.length > 0) {
-                // Add new files to our array
-                Array.from(e.target.files).forEach(file => {
-                    selectedFiles.push(file);
-                });
-                // Reset input to allow selecting same files again if needed
+                Array.from(e.target.files).forEach(file => selectedFiles.push(file));
                 fileInput.value = '';
                 updatePreview();
             }
@@ -373,35 +328,25 @@
 
         const updatePreview = () => {
             previewContainer.innerHTML = '';
-            
             if (selectedFiles.length === 0) {
                 uploadBtn.disabled = true;
                 return;
             }
-
             uploadBtn.disabled = false;
-            downloadSection.style.display = 'none';
-            hideToast();
-            btnText.textContent = `${selectedFiles.length}枚のデータを作成する`;
+            btnText.textContent = `${selectedFiles.length}枚のタグを抽出する`;
 
             selectedFiles.forEach((file, index) => {
                 const reader = new FileReader();
                 reader.onload = (re) => {
                     const item = document.createElement('div');
                     item.className = 'preview-item';
-
                     const img = document.createElement('img');
                     img.src = re.target.result;
                     img.className = 'preview-img';
-
                     const removeBtn = document.createElement('button');
                     removeBtn.className = 'remove-btn';
                     removeBtn.innerHTML = '✕';
-                    removeBtn.onclick = (e) => {
-                        e.stopPropagation();
-                        removeFile(index);
-                    };
-
+                    removeBtn.onclick = (e) => { e.stopPropagation(); removeFile(index); };
                     item.appendChild(img);
                     item.appendChild(removeBtn);
                     previewContainer.appendChild(item);
@@ -410,139 +355,208 @@
             });
         };
 
-        // --- 画像リサイズ（圧縮）ロジック ---
-        // スマホからの巨大な画像を、サーバーへ送る前に軽量化して「Load failed」を防ぐ
         const compressImage = (file, maxWidth = 1200) => {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
                 reader.readAsDataURL(file);
-                reader.onload = event => {
+                reader.onload = e => {
                     const img = new Image();
-                    img.src = event.target.result;
+                    img.src = e.target.result;
                     img.onload = () => {
-                        let width = img.width;
-                        let height = img.height;
-
-                        if (width > maxWidth) {
-                            height = Math.round((height * maxWidth) / width);
-                            width = maxWidth;
-                        }
-
+                        let w = img.width, h = img.height;
+                        if (w > maxWidth) { h = Math.round((h * maxWidth) / w); w = maxWidth; }
                         const canvas = document.createElement('canvas');
-                        canvas.width = width;
-                        canvas.height = height;
+                        canvas.width = w; canvas.height = h;
                         const ctx = canvas.getContext('2d');
-                        ctx.drawImage(img, 0, 0, width, height);
-
-                        canvas.toBlob(blob => {
-                            if (blob) {
-                                // 圧縮されたBlobを返す（画質80%）
-                                resolve(blob);
-                            } else {
-                                reject(new Error('Canvas to Blob failed'));
-                            }
-                        }, 'image/jpeg', 0.8);
+                        ctx.drawImage(img, 0, 0, w, h);
+                        canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Canvas error')), 'image/jpeg', 0.8);
                     };
-                    img.onerror = error => reject(error);
+                    img.onerror = reject;
                 };
-                reader.onerror = error => reject(error);
+                reader.onerror = reject;
             });
         };
 
-        // --- ダウンロード処理 ---
-        const downloadBase64File = (base64Data, filename, contentType) => {
-            try {
-                // Remove any whitespace that might cause atob to fail in Safari
-                const cleanBase64 = base64Data.replace(/\s/g, '');
-                const byteCharacters = atob(cleanBase64);
-                const byteArrays = [];
-                const sliceSize = 512;
+        const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-                for (let offset = 0; offset < byteCharacters.length; offset += sliceSize) {
-                    const slice = byteCharacters.slice(offset, offset + sliceSize);
-                    const byteNumbers = new Array(slice.length);
-                    for (let i = 0; i < slice.length; i++) {
-                        byteNumbers[i] = slice.charCodeAt(i);
-                    }
-                    const byteArray = new Uint8Array(byteNumbers);
-                    byteArrays.push(byteArray);
-                }
-
-                const blob = new Blob(byteArrays, {type: contentType});
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.style.display = 'none';
-                a.href = url;
-                a.download = filename;
-                document.body.appendChild(a);
-                a.click();
-                window.setTimeout(() => window.URL.revokeObjectURL(url), 100);
-            } catch (e) {
-                console.error("Base64 Decode Error:", e);
-                showToast("ファイルの保存に失敗しました: " + e.message, 'error');
-            }
-        };
-
-        btnDlPdf.addEventListener('click', () => {
-            if(currentPdfData) downloadBase64File(currentPdfData, 'LAURA_JAPAN_invoice.pdf', 'application/pdf');
-        });
-
-        btnDlExcel.addEventListener('click', () => {
-            if(currentExcelData) downloadBase64File(currentExcelData, 'LAURA_JAPAN_data.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        });
-
-        // --- アップロード処理 ---
+        // --- Step 1: Analyze Images (Chunked processing in Frontend) ---
         uploadBtn.addEventListener('click', async () => {
             if (selectedFiles.length === 0) return;
-
+            
             uploadBtn.disabled = true;
             spinner.style.display = 'block';
-            btnText.textContent = 'AIが解析中...';
-            showToast('画像を最適化し、サーバーへ送信中...', 'info');
-            downloadSection.style.display = 'none';
+            btnText.textContent = '処理中...';
+            statusMsg.style.display = 'none';
+            extractedItems = []; // Reset
+            
+            const aiModel = document.getElementById('ai-model').value;
+            const chunkSize = 5; // 5 images per request
+            const totalFiles = selectedFiles.length;
 
             try {
-                const formData = new FormData();
-                formData.append('customer_name', document.getElementById('customer-name').value);
-                formData.append('discount_rate', document.getElementById('discount-rate').value);
-                
-                for (let i = 0; i < selectedFiles.length; i++) {
-                    showToast(`画像を最適化しています... (${i + 1}/${selectedFiles.length}枚)`, 'info');
+                // Compress all images sequentially
+                const compressedBlobs = [];
+                for (let i = 0; i < totalFiles; i++) {
+                    updateProgress(`画像を圧縮・軽量化中... (${i+1}/${totalFiles})`, i, totalFiles);
                     const blob = await compressImage(selectedFiles[i]);
-                    formData.append('files', blob, `image_${i}.jpg`);
+                    compressedBlobs.push(blob);
                 }
+                updateProgress(`画像処理完了`, totalFiles, totalFiles);
 
-                showToast('AIが解析しています。少しお待ちください...', 'info');
-
-                const response = await fetch('/generate-documents', {
-                    method: 'POST',
-                    body: formData
-                });
-
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.detail || 'ファイルの生成に失敗しました');
+                // Chunked API Requests
+                const totalChunks = Math.ceil(totalFiles / chunkSize);
+                
+                for (let c = 0; c < totalChunks; c++) {
+                    const chunkBlobs = compressedBlobs.slice(c * chunkSize, (c + 1) * chunkSize);
+                    updateProgress(`AIが解析中... (バッチ ${c+1}/${totalChunks})`, c, totalChunks);
+                    
+                    let success = false;
+                    let retries = 0;
+                    
+                    while (!success && retries < 3) {
+                        try {
+                            const formData = new FormData();
+                            formData.append('ai_model', aiModel);
+                            chunkBlobs.forEach((b, idx) => formData.append('files', b, `img_${c}_${idx}.jpg`));
+                            
+                            const response = await fetch('/analyze-images', { method: 'POST', body: formData });
+                            
+                            if (response.status === 429) {
+                                throw new Error('429');
+                            }
+                            if (!response.ok) {
+                                const errData = await response.json();
+                                throw new Error(errData.detail || 'APIエラー');
+                            }
+                            
+                            const data = await response.json();
+                            extractedItems.push(...data.items);
+                            success = true;
+                            
+                        } catch (error) {
+                            if (error.message === '429') {
+                                retries++;
+                                showToast(`AIが混雑しています。10秒後に再試行します... (試行 ${retries}/3)`, 'error');
+                                await sleep(10000); // Wait 10s
+                            } else {
+                                throw error; // Other errors abort the whole process
+                            }
+                        }
+                    }
+                    if (!success) throw new Error("何度か再試行しましたが、AIの制限により中断しました。しばらく時間を空けてからやり直してください。");
                 }
+                
+                updateProgress(`AI解析完了！`, 100, 100);
+                showToast(`🎉 ${totalFiles}枚すべてのタグ解析が完了しました！データをプレビューで確認してください。`, 'success');
+                
+                // Hide Upload Section, Show Preview Section
+                uploadWrapper.style.display = 'none';
+                progressContainer.style.display = 'none';
+                renderPreviewTable();
 
-                const data = await response.json();
-                
-                currentPdfData = data.pdf_base64;
-                currentExcelData = data.excel_base64;
-                
-                showToast('🎉 データ生成完了！保存ボタンを押してください。', 'success');
-                downloadSection.style.display = 'block';
-                uploadBtn.style.display = 'none';
-                dropArea.style.display = 'none';
-                previewContainer.style.display = 'none';
-                
             } catch (error) {
                 console.error(error);
                 showToast(error.message, 'error');
                 uploadBtn.disabled = false;
                 spinner.style.display = 'none';
-                btnText.textContent = '再試行する';
+                btnText.textContent = 'エラー箇所から再試行する';
             }
         });
+
+        // --- Step 2: Render Preview Table ---
+        const renderPreviewTable = () => {
+            dataTableBody.innerHTML = '';
+            extractedItems.forEach((item, index) => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><input type="text" value="${item.code || ''}" data-idx="${index}" data-key="code"></td>
+                    <td><input type="text" value="${item.color || ''}" data-idx="${index}" data-key="color"></td>
+                    <td><input type="text" value="${item.size || ''}" data-idx="${index}" data-key="size"></td>
+                    <td><input type="number" class="type-num" value="${item.unit_price || 0}" data-idx="${index}" data-key="unit_price"></td>
+                `;
+                dataTableBody.appendChild(tr);
+            });
+            previewDataSection.style.display = 'block';
+        };
+
+        // --- Step 3: Generate Final Documents ---
+        btnGenerate.addEventListener('click', async () => {
+            btnGenerate.disabled = true;
+            spinnerGen.style.display = 'block';
+            statusMsg.style.display = 'none';
+
+            // Extract edited values from table
+            const inputs = dataTableBody.querySelectorAll('input');
+            inputs.forEach(input => {
+                const idx = input.getAttribute('data-idx');
+                const key = input.getAttribute('data-key');
+                let val = input.value;
+                if (key === 'unit_price') val = parseInt(val, 10) || 0;
+                extractedItems[idx][key] = val;
+            });
+
+            const payload = {
+                customer_name: document.getElementById('customer-name').value,
+                discount_rate: parseInt(document.getElementById('discount-rate').value, 10) || 35,
+                items: extractedItems
+            };
+
+            try {
+                showToast('最終ドキュメント（Excel/PDF）を生成中...', 'info');
+                
+                const response = await fetch('/generate-documents', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    const errData = await response.json();
+                    throw new Error(errData.detail || 'ファイル生成エラー');
+                }
+
+                const data = await response.json();
+                currentPdfData = data.pdf_base64;
+                currentExcelData = data.excel_base64;
+                
+                showToast('✨ 完了しました！下のボタンから保存してください。', 'success');
+                btnGenerate.style.display = 'none';
+                downloadSection.style.display = 'block';
+                
+            } catch (error) {
+                console.error(error);
+                showToast(error.message, 'error');
+                btnGenerate.disabled = false;
+                spinnerGen.style.display = 'none';
+            }
+        });
+
+        // --- Step 4: Download Helper ---
+        const downloadBase64File = (base64Data, filename, contentType) => {
+            try {
+                const cleanBase64 = base64Data.replace(/\s/g, '');
+                const byteCharacters = atob(cleanBase64);
+                const byteArrays = [];
+                for (let offset = 0; offset < byteCharacters.length; offset += 512) {
+                    const slice = byteCharacters.slice(offset, offset + 512);
+                    const byteNumbers = new Array(slice.length);
+                    for (let i = 0; i < slice.length; i++) byteNumbers[i] = slice.charCodeAt(i);
+                    byteArrays.push(new Uint8Array(byteNumbers));
+                }
+                const blob = new Blob(byteArrays, {type: contentType});
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none'; a.href = url; a.download = filename;
+                document.body.appendChild(a); a.click();
+                window.setTimeout(() => window.URL.revokeObjectURL(url), 100);
+            } catch (e) {
+                console.error(e);
+                showToast("保存エラー: " + e.message, 'error');
+            }
+        };
+
+        btnDlPdf.addEventListener('click', () => currentPdfData && downloadBase64File(currentPdfData, 'LAURA_JAPAN_invoice.pdf', 'application/pdf'));
+        btnDlExcel.addEventListener('click', () => currentExcelData && downloadBase64File(currentExcelData, 'LAURA_JAPAN_data.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'));
     </script>
 </body>
 </html>
