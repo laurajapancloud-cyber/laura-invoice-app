@@ -36,6 +36,7 @@
                     <th>品番</th>
                     <th>カラー</th>
                     <th>サイズ</th>
+                    <th>数量</th>
                     <th>単価</th>
                     <th>金額（掛率{{ discount_rate }}%）</th>
                 </tr>
@@ -47,6 +48,7 @@
                     <td>{{ item.code }}</td>
                     <td>{{ item.color }}</td>
                     <td>{{ item.size }}</td>
+                    <td>{{ item.quantity }}</td>
                     <td>¥{{ "{:,}".format(item.unit_price) }}</td>
                     <td>¥{{ "{:,}".format(item.net_amount) }}</td>
                 </tr>

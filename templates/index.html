@@ -52,11 +52,13 @@
         .toast-info { background:#eff6ff; color:var(--blue); }
         .toast-ok { background:#d1fae5; color:var(--green); }
         .toast-err { background:#fee2e2; color:var(--red); }
-        .data-table { width:100%; border-collapse:collapse; font-size:13px; }
-        .data-table th { background:#fafafa; padding:8px; border:1px solid var(--border); font-size:11px; color:var(--muted); }
-        .data-table td { padding:4px; border:1px solid var(--border); }
-        .data-table td input { width:100%; padding:8px 4px; border:1px solid transparent; text-align:center; font-size:16px; border-radius:4px; }
+        .data-table { width:100%; border-collapse:collapse; font-size:14px; }
+        .data-table th { background:linear-gradient(135deg,#1e1b4b,#312e81); color:#fff; padding:10px 6px; border:none; font-size:12px; font-weight:600; white-space:nowrap; }
+        .data-table td { padding:2px; border-bottom:1px solid var(--border); background:#fff; }
+        .data-table tr:nth-child(even) td { background:#fafafa; }
+        .data-table td input { width:100%; padding:10px 4px; border:1px solid transparent; text-align:center; font-size:16px; border-radius:4px; background:transparent; }
         .data-table td input:focus { border-color:var(--accent); outline:none; background:#eff6ff; }
+        .del-btn { background:none; border:none; color:var(--red); font-size:18px; cursor:pointer; padding:4px 8px; }
         .hist-item { display:flex; justify-content:space-between; align-items:center; padding:14px 0; border-bottom:1px solid var(--border); }
         .hist-item:last-child { border-bottom:none; }
         .hist-info { text-align:left; }
@@ -133,7 +135,7 @@
         </div>
         <div class="card" id="preview-card" style="display:none">
             <div class="card-title" id="preview-title">✏️ 読み取り結果（タップで修正可能）</div>
-            <div style="overflow-x:auto"><table class="data-table"><thead><tr><th>品番</th><th>カラー</th><th>サイズ</th><th>単価</th></tr></thead><tbody id="tbl-body"></tbody></table></div>
+            <div style="overflow-x:auto"><table class="data-table"><thead><tr><th>品番</th><th>カラー</th><th>サイズ</th><th>数量</th><th>単価</th><th></th></tr></thead><tbody id="tbl-body"></tbody></table></div>
             <button class="btn btn-sm" id="btn-add-row" style="background:var(--border);color:var(--primary);margin-top:8px;width:100%">＋ 空白行を追加</button>
             <div style="margin-top:16px">
                 <button class="btn btn-accent" id="btn-generate"><div class="spinner" id="sp2"></div>最終データを確定して保存</button>
@@ -325,7 +327,16 @@
                 }
                 if(!ok)throw new Error('無料枠上限です。AIモデルを切り替えてください。');
             }
-            updProg('完了',1,1);toast(`🎉 ${total}枚の解析完了！内容を確認してください`,'ok');
+            updProg('完了',1,1);
+            // Merge duplicates
+            const merged = {};
+            extractedItems.forEach(it => {
+                const key = `${it.code}|${it.color}|${it.size}|${it.unit_price}`;
+                if (merged[key]) { merged[key].quantity = (merged[key].quantity||1) + 1; }
+                else { merged[key] = {...it, quantity: it.quantity||1}; }
+            });
+            extractedItems = Object.values(merged);
+            toast(`🎉 ${total}枚の解析完了！${extractedItems.length}件に集約しました`,'ok');
             $('drop-area').style.display='none';$('thumbs').style.display='none';$('btn-analyze').style.display='none';
             pw.style.display='none';
             $('preview-title').textContent = '✏️ 読み取り結果（タップで修正可能）';
@@ -337,20 +348,36 @@
     // ===== Preview Table =====
     function renderPreview(){
         const tb=$('tbl-body');tb.innerHTML='';
-        extractedItems.forEach((it,i)=>{const tr=document.createElement('tr');tr.innerHTML=`<td><input value="${it.code||''}" data-i="${i}" data-k="code"></td><td><input value="${it.color||''}" data-i="${i}" data-k="color"></td><td><input value="${it.size||''}" data-i="${i}" data-k="size"></td><td><input type="number" value="${it.unit_price||0}" data-i="${i}" data-k="unit_price" style="width:70px"></td>`;tb.appendChild(tr);});
+        extractedItems.forEach((it,i)=>{
+            const tr=document.createElement('tr');
+            tr.innerHTML=`<td><input value="${it.code||''}" data-i="${i}" data-k="code"></td><td><input value="${it.color||''}" data-i="${i}" data-k="color" style="width:50px"></td><td><input value="${it.size||''}" data-i="${i}" data-k="size" style="width:50px"></td><td><input type="number" value="${it.quantity||1}" data-i="${i}" data-k="quantity" style="width:45px" min="1"></td><td><input type="number" value="${it.unit_price||0}" data-i="${i}" data-k="unit_price" style="width:70px"></td><td><button class="del-btn" onclick="delRow(${i})">✖</button></td>`;
+            tb.appendChild(tr);
+        });
         $('preview-card').style.display='block';
     }
+    function delRow(i){
+        syncInputs();
+        extractedItems.splice(i,1);
+        renderPreview();
+    }
+    function syncInputs(){
+        $('tbl-body').querySelectorAll('input').forEach(inp=>{
+            const i=inp.dataset.i,k=inp.dataset.k;
+            let v=inp.value;
+            if(k==='unit_price'||k==='quantity') v=parseInt(v)||0;
+            extractedItems[i][k]=v;
+        });
+    }
     $('btn-add-row').addEventListener('click',()=>{
-        // Save current inputs to state before re-render
-        $('tbl-body').querySelectorAll('input').forEach(inp=>{const i=inp.dataset.i,k=inp.dataset.k;let v=inp.value;if(k==='unit_price')v=parseInt(v)||0;extractedItems[i][k]=v;});
-        extractedItems.push({code:'',color:'',size:'',unit_price:0});
+        syncInputs();
+        extractedItems.push({code:'',color:'',size:'',quantity:1,unit_price:0});
         renderPreview();
     });
 
     // ===== Generate =====
     $('btn-generate').addEventListener('click',async()=>{
         $('btn-generate').disabled=true;$('sp2').style.display='block';$('toast').style.display='none';
-        $('tbl-body').querySelectorAll('input').forEach(inp=>{const i=inp.dataset.i,k=inp.dataset.k;let v=inp.value;if(k==='unit_price')v=parseInt(v)||0;extractedItems[i][k]=v;});
+        syncInputs();
         let cn='';try{cn=JSON.parse($('sel-customer').value).name;}catch{cn=$('sel-customer').options[$('sel-customer').selectedIndex]?.textContent?.replace(/ \(\d+%\)/,'')||'取引先不明';}
         const payload={invoice_id:currentEditingInvId, customer_name:cn,discount_rate:parseInt($('inp-rate').value)||35,items:extractedItems};
         try{

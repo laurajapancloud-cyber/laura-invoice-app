@@ -123,6 +123,7 @@ def init_db():
             color TEXT,
             size TEXT,
             unit_price INTEGER DEFAULT 0,
+            quantity INTEGER DEFAULT 1,
             net_amount INTEGER DEFAULT 0,
             FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE CASCADE
         );
@@ -283,7 +284,7 @@ async def download_history_excel(inv_id: int, username: Annotated[str, Depends(a
 @app.get("/api/history/{inv_id}/items")
 async def get_history_items(inv_id: int, username: Annotated[str, Depends(authenticate)]):
     conn = get_db()
-    rows = conn.execute("SELECT code, color, size, unit_price FROM invoice_items WHERE invoice_id = ?", (inv_id,)).fetchall()
+    rows = conn.execute("SELECT code, color, size, unit_price, quantity FROM invoice_items WHERE invoice_id = ?", (inv_id,)).fetchall()
     inv = conn.execute("SELECT invoice_number, customer_name, discount_rate FROM invoices WHERE id = ?", (inv_id,)).fetchone()
     conn.close()
     if not inv:
@@ -445,12 +446,17 @@ async def generate_documents(
             unit_price = data.get("unit_price", 0)
             if isinstance(unit_price, str):
                 unit_price = int(unit_price.replace(',', '').replace('¥', '').strip() or '0')
-            net_amount = int(unit_price * (discount_rate / 100))
+            quantity = data.get("quantity", 1)
+            if isinstance(quantity, str):
+                quantity = int(quantity or '1')
+            if quantity < 1: quantity = 1
+            net_amount = int(unit_price * (discount_rate / 100) * quantity)
             tax_amount = int(net_amount * 0.1)
             grand_total = net_amount + tax_amount
             processed_items.append({
                 "code": data.get("code", "-"), "color": data.get("color", "-"),
                 "size": data.get("size", "-"), "unit_price": unit_price,
+                "quantity": quantity,
                 "net_amount": net_amount, "tax_amount": tax_amount, "grand_total": grand_total
             })
             total_net_amount += net_amount
@@ -524,7 +530,7 @@ async def generate_documents(
             ws[f"B{current_row}"] = item["color"]
             ws[f"C{current_row}"] = item["size"]
             ws[f"D{current_row}"] = ""
-            ws[f"F{current_row}"] = 1
+            ws[f"F{current_row}"] = item["quantity"]
             ws[f"G{current_row}"] = item["unit_price"]
             ws[f"G{current_row}"].number_format = '#,##0'
             ws[f"H{current_row}"] = item["net_amount"]
@@ -576,8 +582,8 @@ async def generate_documents(
             inv_id = cursor.lastrowid
             
         for item in processed_items:
-            conn.execute("INSERT INTO invoice_items (invoice_id, code, color, size, unit_price, net_amount) VALUES (?,?,?,?,?,?)",
-                         (inv_id, item["code"], item["color"], item["size"], item["unit_price"], item["net_amount"]))
+            conn.execute("INSERT INTO invoice_items (invoice_id, code, color, size, unit_price, quantity, net_amount) VALUES (?,?,?,?,?,?,?)",
+                         (inv_id, item["code"], item["color"], item["size"], item["unit_price"], item["quantity"], item["net_amount"]))
         conn.commit()
         conn.close()
 
