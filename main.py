@@ -633,6 +633,10 @@ async def generate_documents(
             "pdf_base64": pdf_b64,
             "excel_base64": excel_b64
         })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/history/{inv_id}/upload-drive")
 async def upload_to_drive(inv_id: int, username: Annotated[str, Depends(authenticate)]):
