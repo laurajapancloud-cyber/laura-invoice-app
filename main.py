@@ -1,31 +1,40 @@
 import os
 import json
 import secrets
-from typing import Annotated, List, Dict, Any
+import sqlite3
+from typing import Annotated, List, Dict, Any, Optional
 import base64
 from io import BytesIO
 import datetime
 import time
+import re
 
 from fastapi import FastAPI, UploadFile, File, Depends, HTTPException, status, Response, Request, Form
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, JSONResponse
 import google.generativeai as genai
-from openai import OpenAI
 from weasyprint import HTML
 from dotenv import load_dotenv
 import openpyxl
 from openpyxl.styles import PatternFill, Border, Side, Alignment, Font
 from pydantic import BaseModel
-import re
-from google.oauth2 import service_account
-from google.cloud import vision
+
+# Conditional imports
+try:
+    from openai import OpenAI
+except ImportError:
+    OpenAI = None
+
+try:
+    from google.oauth2 import service_account
+    from google.cloud import vision
+except ImportError:
+    vision = None
 
 # Load environment variables
 load_dotenv()
 
-# Configuration
 APP_USERNAME = os.getenv("APP_USERNAME")
 APP_PASSWORD = os.getenv("APP_PASSWORD")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
@@ -39,13 +48,12 @@ if not all([APP_USERNAME, APP_PASSWORD, GEMINI_API_KEY]):
 genai.configure(api_key=GEMINI_API_KEY)
 gemini_model = genai.GenerativeModel("gemini-2.5-flash")
 
-if OPENAI_API_KEY:
+openai_client = None
+if OPENAI_API_KEY and OpenAI:
     openai_client = OpenAI(api_key=OPENAI_API_KEY)
-else:
-    openai_client = None
 
 vision_client = None
-if GOOGLE_CREDENTIALS_JSON:
+if GOOGLE_CREDENTIALS_JSON and vision:
     try:
         creds_dict = json.loads(GOOGLE_CREDENTIALS_JSON)
         creds = service_account.Credentials.from_service_account_info(creds_dict)
@@ -53,41 +61,156 @@ if GOOGLE_CREDENTIALS_JSON:
     except Exception as e:
         print(f"Warning: Cloud Vision init failed: {e}")
 
-# FastAPI App
+# ==================== SQLite Database ====================
+DB_PATH = "invoices.db"
+
+def get_db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    return conn
+
+def init_db():
+    conn = get_db()
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS customers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            discount_rate INTEGER NOT NULL DEFAULT 35,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS invoices (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            invoice_number TEXT NOT NULL UNIQUE,
+            customer_name TEXT NOT NULL,
+            discount_rate INTEGER NOT NULL,
+            total_net_amount INTEGER DEFAULT 0,
+            total_tax_amount INTEGER DEFAULT 0,
+            total_grand_total INTEGER DEFAULT 0,
+            item_count INTEGER DEFAULT 0,
+            pdf_data BLOB,
+            excel_data BLOB,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS invoice_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            invoice_id INTEGER NOT NULL,
+            code TEXT,
+            color TEXT,
+            size TEXT,
+            unit_price INTEGER DEFAULT 0,
+            net_amount INTEGER DEFAULT 0,
+            FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE CASCADE
+        );
+    """)
+    # Insert default customers if table is empty
+    count = conn.execute("SELECT COUNT(*) FROM customers").fetchone()[0]
+    if count == 0:
+        conn.executemany("INSERT INTO customers (name, discount_rate) VALUES (?, ?)", [
+            ("株式会社 タム 御中", 35),
+            ("株式会社 サンプル 御中", 40),
+        ])
+    conn.commit()
+    conn.close()
+
+def generate_invoice_number():
+    now = datetime.datetime.now()
+    prefix = f"LJ-{now.strftime('%Y%m')}"
+    conn = get_db()
+    row = conn.execute(
+        "SELECT COUNT(*) FROM invoices WHERE invoice_number LIKE ?",
+        (f"{prefix}%",)
+    ).fetchone()
+    seq = (row[0] or 0) + 1
+    conn.close()
+    return f"{prefix}-{seq:04d}"
+
+# Initialize DB on startup
+init_db()
+
+# ==================== FastAPI App ====================
 app = FastAPI()
 security = HTTPBasic()
 templates = Jinja2Templates(directory="templates")
 
 def authenticate(credentials: Annotated[HTTPBasicCredentials, Depends(security)]):
     if not APP_USERNAME or not APP_PASSWORD:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Server configuration error: Auth credentials not set."
-        )
-    
-    current_username_bytes = credentials.username.encode("utf8")
-    correct_username_bytes = APP_USERNAME.encode("utf8")
-    is_correct_username = secrets.compare_digest(
-        current_username_bytes, correct_username_bytes
-    )
-    current_password_bytes = credentials.password.encode("utf8")
-    correct_password_bytes = APP_PASSWORD.encode("utf8")
-    is_correct_password = secrets.compare_digest(
-        current_password_bytes, correct_password_bytes
-    )
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Server config error.")
+    is_correct_username = secrets.compare_digest(credentials.username.encode("utf8"), APP_USERNAME.encode("utf8"))
+    is_correct_password = secrets.compare_digest(credentials.password.encode("utf8"), APP_PASSWORD.encode("utf8"))
     if not (is_correct_username and is_correct_password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
-            headers={"WWW-Authenticate": "Basic"},
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect credentials", headers={"WWW-Authenticate": "Basic"})
     return credentials.username
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request, username: Annotated[str, Depends(authenticate)]):
     return templates.TemplateResponse(request=request, name="index.html")
 
-# --- 1. AI Analysis Endpoint (Called in chunks by frontend) ---
+# ==================== Customer Master API ====================
+@app.get("/api/customers")
+async def get_customers(username: Annotated[str, Depends(authenticate)]):
+    conn = get_db()
+    rows = conn.execute("SELECT id, name, discount_rate FROM customers ORDER BY id").fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+@app.post("/api/customers")
+async def add_customer(username: Annotated[str, Depends(authenticate)], name: str = Form(...), discount_rate: int = Form(35)):
+    conn = get_db()
+    conn.execute("INSERT INTO customers (name, discount_rate) VALUES (?, ?)", (name, discount_rate))
+    conn.commit()
+    conn.close()
+    return {"status": "ok"}
+
+@app.delete("/api/customers/{cid}")
+async def delete_customer(cid: int, username: Annotated[str, Depends(authenticate)]):
+    conn = get_db()
+    conn.execute("DELETE FROM customers WHERE id = ?", (cid,))
+    conn.commit()
+    conn.close()
+    return {"status": "ok"}
+
+# ==================== History API ====================
+@app.get("/api/history")
+async def get_history(username: Annotated[str, Depends(authenticate)]):
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT id, invoice_number, customer_name, total_grand_total, item_count, created_at FROM invoices ORDER BY id DESC"
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+@app.get("/api/history/{inv_id}/pdf")
+async def download_history_pdf(inv_id: int, username: Annotated[str, Depends(authenticate)]):
+    conn = get_db()
+    row = conn.execute("SELECT pdf_data, invoice_number FROM invoices WHERE id = ?", (inv_id,)).fetchone()
+    conn.close()
+    if not row or not row["pdf_data"]:
+        raise HTTPException(status_code=404, detail="PDF not found")
+    return Response(content=row["pdf_data"], media_type="application/pdf",
+                    headers={"Content-Disposition": f'attachment; filename="{row["invoice_number"]}.pdf"'})
+
+@app.get("/api/history/{inv_id}/excel")
+async def download_history_excel(inv_id: int, username: Annotated[str, Depends(authenticate)]):
+    conn = get_db()
+    row = conn.execute("SELECT excel_data, invoice_number FROM invoices WHERE id = ?", (inv_id,)).fetchone()
+    conn.close()
+    if not row or not row["excel_data"]:
+        raise HTTPException(status_code=404, detail="Excel not found")
+    return Response(content=row["excel_data"],
+                    media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={"Content-Disposition": f'attachment; filename="{row["invoice_number"]}.xlsx"'})
+
+@app.delete("/api/history/{inv_id}")
+async def delete_history(inv_id: int, username: Annotated[str, Depends(authenticate)]):
+    conn = get_db()
+    conn.execute("DELETE FROM invoice_items WHERE invoice_id = ?", (inv_id,))
+    conn.execute("DELETE FROM invoices WHERE id = ?", (inv_id,))
+    conn.commit()
+    conn.close()
+    return {"status": "ok"}
+
+# ==================== AI Analysis API ====================
 @app.post("/analyze-images")
 async def analyze_images(
     request: Request,
@@ -101,12 +224,8 @@ async def analyze_images(
             image_bytes = await file.read()
             b64 = base64.b64encode(image_bytes).decode("utf-8")
             mime_type = file.content_type or "image/jpeg"
-            image_parts.append({
-                "mime_type": mime_type,
-                "data": image_bytes,
-                "base64": b64
-            })
-            
+            image_parts.append({"mime_type": mime_type, "data": image_bytes, "base64": b64})
+
         prompt = """
 あなたはアパレルブランドのデータ入力アシスタントです。提供された複数の商品タグの画像からそれぞれの情報を抽出し、厳密にJSON配列（リスト）の形式のみで出力してください。マークダウンの装飾(```jsonなど)は含めないでください。
 スキーマ: [{"code": "品番(例:148-3101)", "color": "カラー(例:24)", "size": "サイズ(例:46)", "unit_price": 単価の数値(例:38000)}, ...]
@@ -117,99 +236,60 @@ async def analyze_images(
 
         if ai_model == "vision":
             if not vision_client:
-                raise HTTPException(status_code=500, detail="Google Cloud VisionのJSONキー（環境変数）が設定されていません。")
-            
+                raise HTTPException(status_code=500, detail="Cloud VisionのJSONキーが未設定です。")
             for part in image_parts:
                 image = vision.Image(content=part["data"])
-                try:
-                    response = vision_client.text_detection(image=image)
-                    if response.error.message:
-                        raise HTTPException(status_code=500, detail=f"Vision API Error: {response.error.message}")
-                    
-                    raw_text = response.text_annotations[0].description if response.text_annotations else ""
-                    
-                    # Regex Parsing (Heuristics)
-                    code_match = re.search(r'[A-Za-z0-9]+-[A-Za-z0-9]+', raw_text)
-                    code = code_match.group(0) if code_match else "-"
-                    
-                    col_match = re.search(r'(?i)col(?:or)?[\s\.:]*(\d{1,3})', raw_text)
-                    color = col_match.group(1) if col_match else "-"
-                    
-                    sz_match = re.search(r'(?i)size[\s\.:]*([A-Za-z0-9]+)', raw_text)
-                    if not sz_match:
-                        sz_match = re.search(r'\b(3[68]|4[02468]|50)\b', raw_text)
-                    size = sz_match.group(1) if sz_match else "-"
-                    
-                    price_match = re.search(r'[¥￥]\s*([\d,]+)', raw_text)
-                    if not price_match:
-                        price_match = re.search(r'\b(\d{1,3}(?:,\d{3})+)\b', raw_text)
-                    
-                    unit_price = 0
-                    if price_match:
-                        try:
-                            unit_price = int(price_match.group(1).replace(',', ''))
-                        except:
-                            pass
-                    
-                    items_data.append({
-                        "code": code,
-                        "color": color,
-                        "size": size,
-                        "unit_price": unit_price
-                    })
-                except Exception as e:
-                    raise HTTPException(status_code=500, detail=f"Vision API Request Error: {e}")
-            
+                response = vision_client.text_detection(image=image)
+                if response.error.message:
+                    raise HTTPException(status_code=500, detail=f"Vision Error: {response.error.message}")
+                raw_text = response.text_annotations[0].description if response.text_annotations else ""
+                code_match = re.search(r'[A-Za-z0-9]+-[A-Za-z0-9]+', raw_text)
+                col_match = re.search(r'(?i)col(?:or)?[\s\.:]*(\\d{1,3})', raw_text)
+                sz_match = re.search(r'(?i)size[\s\\.:]*([\w]+)', raw_text)
+                if not sz_match:
+                    sz_match = re.search(r'\b(3[68]|4[02468]|50)\b', raw_text)
+                price_match = re.search(r'[¥￥]\s*([\d,]+)', raw_text)
+                if not price_match:
+                    price_match = re.search(r'\b(\d{1,3}(?:,\d{3})+)\b', raw_text)
+                unit_price = 0
+                if price_match:
+                    try: unit_price = int(price_match.group(1).replace(',', ''))
+                    except: pass
+                items_data.append({
+                    "code": code_match.group(0) if code_match else "-",
+                    "color": col_match.group(1) if col_match else "-",
+                    "size": sz_match.group(1) if sz_match else "-",
+                    "unit_price": unit_price
+                })
             return JSONResponse({"items": items_data})
-            
+
         elif ai_model == "openai":
             if not openai_client:
-                raise HTTPException(status_code=500, detail="OpenAI APIキーが設定されていません。")
-            
+                raise HTTPException(status_code=500, detail="OpenAI APIキーが未設定です。")
             content_list = [{"type": "text", "text": prompt}]
             for part in image_parts:
-                content_list.append({
-                    "type": "image_url",
-                    "image_url": {
-                        "url": f"data:{part['mime_type']};base64,{part['base64']}"
-                    }
-                })
-            
-            try:
-                response = openai_client.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=[{"role": "user", "content": content_list}],
-                    max_tokens=2000
-                )
-                raw_text = response.choices[0].message.content.strip()
-            except Exception as e:
-                error_str = str(e)
-                if "429" in error_str or "Rate limit" in error_str:
-                    raise HTTPException(status_code=429, detail="OpenAIの制限に達しました。")
-                raise HTTPException(status_code=500, detail=f"OpenAI Error: {error_str}")
+                content_list.append({"type": "image_url", "image_url": {"url": f"data:{part['mime_type']};base64,{part['base64']}"}})
+            response = openai_client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": content_list}], max_tokens=2000)
+            raw_text = response.choices[0].message.content.strip()
 
         else:
-            # Gemini default
             contents = [prompt] + [{"mime_type": p["mime_type"], "data": p["data"]} for p in image_parts]
             try:
                 response = gemini_model.generate_content(contents)
                 raw_text = response.text.strip()
             except Exception as e:
                 error_str = str(e)
-                if "429" in error_str or "Quota exceeded" in error_str or "rate limits" in error_str:
-                    raise HTTPException(status_code=429, detail="AI（Gemini）の利用制限に達しました。数秒待ってから再試行してください。")
-                raise HTTPException(status_code=500, detail=f"Gemini API Request Error: {error_str}")
+                if "429" in error_str or "Quota" in error_str or "rate" in error_str:
+                    raise HTTPException(status_code=429, detail="Geminiの無料枠上限に達しました。設定からAIモデルを切り替えてください。")
+                raise HTTPException(status_code=500, detail=f"Gemini Error: {error_str}")
 
-        # Clean JSON
         if raw_text.startswith("```json"):
             raw_text = raw_text.replace("```json", "", 1).replace("```", "", 1).strip()
         elif raw_text.startswith("```"):
             raw_text = raw_text.replace("```", "", 2).strip()
-        
         chunk_data = json.loads(raw_text)
         if not isinstance(chunk_data, list):
             chunk_data = [chunk_data]
-        
         return JSONResponse({"items": chunk_data})
 
     except HTTPException:
@@ -219,14 +299,12 @@ async def analyze_images(
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# Pydantic model for final generation
+# ==================== Document Generation API ====================
 class DocumentRequest(BaseModel):
     customer_name: str
     discount_rate: int
     items: List[Dict[str, Any]]
 
-# --- 2. Final Generation Endpoint ---
 @app.post("/generate-documents")
 async def generate_documents(
     request: Request,
@@ -237,61 +315,49 @@ async def generate_documents(
         items_data = payload.items
         customer_name = payload.customer_name
         discount_rate = payload.discount_rate
+        invoice_number = generate_invoice_number()
 
-        # 3. Calculation Logic for all items
         processed_items = []
         total_net_amount = 0
         total_tax_amount = 0
         total_grand_total = 0
-        
+
         for data in items_data:
             unit_price = data.get("unit_price", 0)
             if isinstance(unit_price, str):
-                unit_price = int(unit_price.replace(',', '').replace('¥', '').strip())
+                unit_price = int(unit_price.replace(',', '').replace('¥', '').strip() or '0')
             net_amount = int(unit_price * (discount_rate / 100))
             tax_amount = int(net_amount * 0.1)
             grand_total = net_amount + tax_amount
-            
             processed_items.append({
-                "code": data.get("code", "-"),
-                "color": data.get("color", "-"),
-                "size": data.get("size", "-"),
-                "unit_price": unit_price,
-                "net_amount": net_amount,
-                "tax_amount": tax_amount,
-                "grand_total": grand_total
+                "code": data.get("code", "-"), "color": data.get("color", "-"),
+                "size": data.get("size", "-"), "unit_price": unit_price,
+                "net_amount": net_amount, "tax_amount": tax_amount, "grand_total": grand_total
             })
-            
             total_net_amount += net_amount
             total_tax_amount += tax_amount
             total_grand_total += grand_total
-        
+
         invoice_data = {
-            "customer_name": customer_name,
-            "discount_rate": discount_rate,
-            "items": processed_items,
-            "total_net_amount": total_net_amount,
-            "total_tax_amount": total_tax_amount,
-            "total_grand_total": total_grand_total,
-            "issuer": "株式会社 ラウラジャパン",
+            "invoice_number": invoice_number, "customer_name": customer_name,
+            "discount_rate": discount_rate, "items": processed_items,
+            "total_net_amount": total_net_amount, "total_tax_amount": total_tax_amount,
+            "total_grand_total": total_grand_total, "issuer": "株式会社 ラウラジャパン",
             "date": datetime.datetime.now().strftime("%Y年%m月%d日")
         }
 
-        # 4. Generate PDF with WeasyPrint
+        # Generate PDF
         html_content = templates.get_template("invoice_template.html").render(invoice_data)
         pdf_bytes = HTML(string=html_content).write_pdf()
 
-        # 5. Generate Excel with openpyxl
+        # Generate Excel
         wb = openpyxl.Workbook()
         ws = wb.active
         ws.title = "伝票"
-
-        # Styles
         fill_yellow = PatternFill(start_color="FFE699", end_color="FFE699", fill_type="solid")
         fill_blue = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
         border_thin = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
 
-        # Header values
         ws["A1"] = "伝票"
         ws["A1"].font = Font(bold=True, size=14)
         ws["B2"] = "1売上"
@@ -301,10 +367,9 @@ async def generate_documents(
         ws["C4"] = "店名"
         ws["C5"] = customer_name
         ws["C5"].fill = fill_yellow
-        
         ws["F1"] = "No."
+        ws["G1"] = invoice_number
         ws["G1"].fill = fill_yellow
-        
         now = datetime.datetime.now()
         reiwa_year = now.year - 2018
         ws["F3"] = "日付"
@@ -316,20 +381,13 @@ async def generate_documents(
         ws["I3"] = f"{now.day}日"
         ws["I3"].fill = fill_yellow
 
-        # Table Headers
         start_row = 8
-        header_mapping = {
-            "A": "品番", "B": "カラー", "C": "サイズ", "D": "バーコード",
-            "F": "数量", "G": "単価", "H": "金額", "I": "掛率"
-        }
-        
-        for col, text in header_mapping.items():
+        for col, text in {"A": "品番", "B": "カラー", "C": "サイズ", "D": "バーコード", "F": "数量", "G": "単価", "H": "金額", "I": "掛率"}.items():
             cell = ws[f"{col}{start_row}"]
             cell.value = text
             cell.border = border_thin
             cell.alignment = Alignment(horizontal="center")
-            
-        # Adjust column widths
+
         ws.column_dimensions['A'].width = 15
         ws.column_dimensions['B'].width = 10
         ws.column_dimensions['C'].width = 10
@@ -340,11 +398,9 @@ async def generate_documents(
         ws.column_dimensions['H'].width = 15
         ws.column_dimensions['I'].width = 10
 
-        # Data Rows
         current_row = start_row + 1
         for i, item in enumerate(processed_items):
             ws.row_dimensions[current_row].height = 40
-            
             ws[f"A{current_row}"] = f"{i+1} {item['code']}"
             ws[f"B{current_row}"] = item["color"]
             ws[f"C{current_row}"] = item["size"]
@@ -355,35 +411,38 @@ async def generate_documents(
             ws[f"H{current_row}"] = item["net_amount"]
             ws[f"H{current_row}"].number_format = '#,##0'
             ws[f"I{current_row}"] = f"{discount_rate}%"
-            
             for col in ['A', 'B', 'C', 'D', 'F', 'G', 'H', 'I']:
                 cell = ws[f"{col}{current_row}"]
                 cell.border = border_thin
                 cell.alignment = Alignment(vertical="center", horizontal="center" if col not in ["A", "D"] else "left")
-                
-                if col in ['A', 'B', 'C', 'F', 'G', 'I']:
-                    cell.fill = fill_yellow
-                if col == 'H':
-                    cell.fill = fill_blue
-                
-                if col == 'D':
-                    cell.font = Font(name="Code39", size=24)
-            
+                if col in ['A', 'B', 'C', 'F', 'G', 'I']: cell.fill = fill_yellow
+                if col == 'H': cell.fill = fill_blue
+                if col == 'D': cell.font = Font(name="Code39", size=24)
             current_row += 1
 
-        # Save Excel to BytesIO
         excel_io = BytesIO()
         wb.save(excel_io)
         excel_bytes = excel_io.getvalue()
 
-        # 6. Return Response
+        # Save to SQLite
+        conn = get_db()
+        cursor = conn.execute(
+            "INSERT INTO invoices (invoice_number, customer_name, discount_rate, total_net_amount, total_tax_amount, total_grand_total, item_count, pdf_data, excel_data) VALUES (?,?,?,?,?,?,?,?,?)",
+            (invoice_number, customer_name, discount_rate, total_net_amount, total_tax_amount, total_grand_total, len(processed_items), pdf_bytes, excel_bytes)
+        )
+        inv_id = cursor.lastrowid
+        for item in processed_items:
+            conn.execute("INSERT INTO invoice_items (invoice_id, code, color, size, unit_price, net_amount) VALUES (?,?,?,?,?,?)",
+                         (inv_id, item["code"], item["color"], item["size"], item["unit_price"], item["net_amount"]))
+        conn.commit()
+        conn.close()
+
         pdf_b64 = base64.b64encode(pdf_bytes).decode('utf-8')
         excel_b64 = base64.b64encode(excel_bytes).decode('utf-8')
 
         return JSONResponse({
-            "pdf_filename": "LAURA_JAPAN_invoice.pdf",
+            "invoice_number": invoice_number,
             "pdf_base64": pdf_b64,
-            "excel_filename": "LAURA_JAPAN_data.xlsx",
             "excel_base64": excel_b64
         })
 

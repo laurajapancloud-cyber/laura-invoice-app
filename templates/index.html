@@ -3,561 +3,294 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>LAURA JAPAN | 納品書・伝票システム</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <title>LAURA JAPAN | Invoice System</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
-        :root {
-            --primary: #000000;
-            --secondary: #ffffff;
-            --text-main: #1a1a1a;
-            --text-muted: #6b7280;
-            --bg-color: #f3f4f6;
-            --card-bg: #ffffff;
-            --border-color: #e5e7eb;
-            --accent-error: #ef4444;
-            --accent-success: #10b981;
-            --btn-pdf: #dc2626;
-            --btn-excel: #059669;
-            --btn-blue: #3b82f6;
-        }
-
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
-        body {
-            font-family: 'Inter', 'Noto Sans JP', sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-main);
-            display: flex;
-            justify-content: center;
-            align-items: flex-start; /* changed from center for long tables */
-            min-height: 100vh;
-            padding: 20px;
-        }
-
-        .container {
-            max-width: 600px;
-            width: 100%;
-            background: var(--card-bg);
-            padding: 40px 32px;
-            border-radius: 24px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.06);
-            text-align: center;
-            margin-top: 20px;
-            margin-bottom: 40px;
-        }
-
-        .logo {
-            font-family: 'Inter', sans-serif;
-            font-size: 28px;
-            font-weight: 800;
-            letter-spacing: 0.25em;
-            margin-bottom: 8px;
-            text-transform: uppercase;
-            color: var(--primary);
-        }
-
-        .subtitle {
-            font-size: 13px;
-            color: var(--text-muted);
-            margin-bottom: 40px;
-            letter-spacing: 0.05em;
-        }
-
-        .settings-panel {
-            background-color: #fafafa;
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 16px;
-            margin-bottom: 24px;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 16px;
-            text-align: left;
-        }
-        .setting-item {
-            flex: 1 1 45%;
-        }
-        .setting-item label {
-            display: block;
-            font-size: 12px;
-            color: var(--text-muted);
-            margin-bottom: 4px;
-            font-weight: 600;
-        }
-        .setting-item input, .setting-item select {
-            width: 100%;
-            padding: 8px 12px;
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            font-size: 14px;
-            font-family: inherit;
-            background: #fff;
-        }
-
-        .upload-area {
-            border: 2px dashed var(--border-color);
-            border-radius: 16px;
-            padding: 48px 24px;
-            margin-bottom: 24px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            background-color: #fafafa;
-        }
-        .upload-area:hover, .upload-area:active {
-            background-color: #f0f0f0;
-            border-color: var(--text-muted);
-        }
-        .upload-icon { font-size: 40px; margin-bottom: 16px; display: block; opacity: 0.8; }
-        .upload-text { font-size: 15px; font-weight: 500; color: var(--text-main); margin-bottom: 8px; }
-        .upload-subtext { font-size: 12px; color: var(--text-muted); }
-        #file-input { display: none; }
-
-        .preview-container {
-            display: flex;
-            gap: 12px;
-            overflow-x: auto;
-            margin-top: 24px;
-            padding-bottom: 12px;
-        }
-        .preview-item { position: relative; flex-shrink: 0; }
-        .preview-img { height: 90px; width: 70px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border-color); }
-        .remove-btn {
-            position: absolute; top: -8px; right: -8px; background: var(--primary); color: white; border: none;
-            border-radius: 50%; width: 24px; height: 24px; font-size: 12px; cursor: pointer; display: flex;
-            justify-content: center; align-items: center;
-        }
-
-        .btn {
-            background-color: var(--primary); color: var(--secondary); border: none; padding: 16px 24px;
-            font-size: 16px; font-weight: 600; border-radius: 12px; width: 100%; cursor: pointer;
-            display: flex; justify-content: center; align-items: center; margin-bottom: 12px;
-        }
-        .btn:disabled { background-color: var(--border-color); color: var(--text-muted); cursor: not-allowed; }
-        .btn-pdf { background-color: var(--btn-pdf); }
-        .btn-excel { background-color: var(--btn-excel); }
-        .btn-blue { background-color: var(--btn-blue); }
-
-        .loading-spinner {
-            width: 20px; height: 20px; border: 3px solid rgba(255,255,255,0.3); border-top: 3px solid #fff;
-            border-radius: 50%; animation: spin 1s linear infinite; margin-right: 12px; display: none;
-        }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-
-        /* Progress Bar */
-        .progress-container {
-            display: none; margin-top: 20px; text-align: left;
-        }
-        .progress-bar {
-            width: 100%; height: 8px; background-color: var(--border-color); border-radius: 4px; overflow: hidden; margin-bottom: 8px;
-        }
-        .progress-fill {
-            height: 100%; background-color: var(--btn-blue); width: 0%; transition: width 0.3s ease;
-        }
-        .progress-text { font-size: 12px; font-weight: 600; color: var(--text-muted); display: flex; justify-content: space-between;}
-
-        /* Status Toast */
-        .status-toast {
-            margin-top: 16px; font-size: 14px; padding: 12px 16px; border-radius: 8px; display: none;
-        }
-        .status-info { background-color: #f3f4f6; color: var(--text-main); }
-        .status-success { background-color: #d1fae5; color: var(--accent-success); }
-        .status-error { background-color: #fee2e2; color: var(--accent-error); }
-
-        /* Preview Data Table */
-        #preview-data-section {
-            display: none; margin-top: 32px; border-top: 1px solid var(--border-color); padding-top: 24px; animation: fadeIn 0.5s ease;
-        }
-        .preview-title { font-size: 16px; font-weight: bold; margin-bottom: 16px; text-align: left;}
-        .data-table-wrapper { overflow-x: auto; margin-bottom: 24px; }
-        .data-table { width: 100%; border-collapse: collapse; min-width: 400px; }
-        .data-table th, .data-table td { padding: 8px; border: 1px solid var(--border-color); text-align: center; }
-        .data-table th { background-color: #fafafa; font-size: 12px; color: var(--text-muted); }
-        .data-table td input { width: 100%; padding: 6px; border: 1px solid transparent; text-align: center; font-size: 14px; border-radius: 4px; }
-        .data-table td input:focus { border: 1px solid var(--btn-blue); outline: none; background: #eff6ff;}
-        .data-table td input.type-num { width: 80px;}
-
-        #download-section { display: none; margin-top: 24px; }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        :root { --primary:#111; --accent:#6366f1; --bg:#f0f2f5; --card:#fff; --border:#e5e7eb; --muted:#6b7280; --red:#ef4444; --green:#10b981; --blue:#3b82f6; }
+        * { box-sizing:border-box; margin:0; padding:0; }
+        body { font-family:'Inter','Noto Sans JP',sans-serif; background:var(--bg); color:var(--primary); min-height:100vh; }
+        .app-header { background:linear-gradient(135deg,#111 0%,#1e1b4b 100%); color:#fff; padding:20px 24px 0; text-align:center; }
+        .logo { font-size:24px; font-weight:800; letter-spacing:.3em; margin-bottom:4px; }
+        .logo-sub { font-size:11px; color:rgba(255,255,255,.5); letter-spacing:.15em; margin-bottom:16px; }
+        .tabs { display:flex; gap:0; }
+        .tab { flex:1; padding:12px; font-size:13px; font-weight:600; color:rgba(255,255,255,.5); cursor:pointer; border-bottom:3px solid transparent; transition:all .2s; }
+        .tab.active { color:#fff; border-bottom-color:var(--accent); }
+        .tab:hover { color:rgba(255,255,255,.8); }
+        .page { max-width:600px; margin:0 auto; padding:20px 16px 40px; display:none; }
+        .page.active { display:block; animation:fadeIn .3s; }
+        @keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+        .card { background:var(--card); border-radius:16px; padding:24px; margin-bottom:16px; box-shadow:0 4px 12px rgba(0,0,0,.04); }
+        .card-title { font-size:14px; font-weight:700; margin-bottom:16px; display:flex; align-items:center; gap:8px; }
+        .form-row { display:flex; gap:12px; margin-bottom:12px; flex-wrap:wrap; }
+        .form-group { flex:1; min-width:120px; }
+        .form-group label { display:block; font-size:11px; color:var(--muted); font-weight:600; margin-bottom:4px; }
+        .form-group input, .form-group select { width:100%; padding:10px 12px; border:1px solid var(--border); border-radius:8px; font-size:14px; font-family:inherit; background:#fff; }
+        .form-group select { appearance:auto; }
+        .upload-area { border:2px dashed var(--border); border-radius:12px; padding:40px 20px; cursor:pointer; text-align:center; transition:all .2s; background:#fafafa; }
+        .upload-area:active { background:#f0f0f0; border-color:var(--muted); }
+        .upload-icon { font-size:36px; margin-bottom:12px; }
+        .upload-text { font-size:14px; font-weight:600; }
+        .upload-sub { font-size:11px; color:var(--muted); margin-top:4px; }
+        #file-input { display:none; }
+        .thumb-row { display:flex; gap:10px; overflow-x:auto; padding:12px 0; }
+        .thumb-item { position:relative; flex-shrink:0; }
+        .thumb-img { height:80px; width:60px; object-fit:cover; border-radius:6px; border:1px solid var(--border); }
+        .thumb-x { position:absolute; top:-6px; right:-6px; background:#111; color:#fff; border:none; border-radius:50%; width:20px; height:20px; font-size:10px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+        .btn { width:100%; padding:14px; font-size:15px; font-weight:600; border:none; border-radius:10px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; transition:all .15s; margin-bottom:10px; color:#fff; }
+        .btn:disabled { opacity:.4; cursor:not-allowed; }
+        .btn-dark { background:#111; }
+        .btn-accent { background:var(--accent); }
+        .btn-red { background:var(--red); }
+        .btn-green { background:var(--green); }
+        .btn-blue { background:var(--blue); }
+        .btn-sm { padding:8px 14px; font-size:12px; width:auto; margin:0; border-radius:6px; }
+        .progress-wrap { margin:16px 0; }
+        .progress-bar { width:100%; height:6px; background:var(--border); border-radius:3px; overflow:hidden; }
+        .progress-fill { height:100%; background:var(--accent); width:0%; transition:width .3s; }
+        .progress-label { font-size:11px; color:var(--muted); margin-top:4px; display:flex; justify-content:space-between; }
+        .toast { padding:10px 14px; border-radius:8px; font-size:13px; margin-top:12px; display:none; }
+        .toast-info { background:#eff6ff; color:var(--blue); }
+        .toast-ok { background:#d1fae5; color:var(--green); }
+        .toast-err { background:#fee2e2; color:var(--red); }
+        .data-table { width:100%; border-collapse:collapse; font-size:13px; }
+        .data-table th { background:#fafafa; padding:8px; border:1px solid var(--border); font-size:11px; color:var(--muted); }
+        .data-table td { padding:4px; border:1px solid var(--border); }
+        .data-table td input { width:100%; padding:6px; border:1px solid transparent; text-align:center; font-size:13px; border-radius:4px; }
+        .data-table td input:focus { border-color:var(--accent); outline:none; background:#eff6ff; }
+        .hist-item { display:flex; justify-content:space-between; align-items:center; padding:14px 0; border-bottom:1px solid var(--border); }
+        .hist-item:last-child { border-bottom:none; }
+        .hist-info { text-align:left; }
+        .hist-num { font-size:14px; font-weight:700; }
+        .hist-meta { font-size:11px; color:var(--muted); margin-top:2px; }
+        .hist-amt { font-size:16px; font-weight:800; color:var(--accent); }
+        .hist-actions { display:flex; gap:6px; margin-top:6px; }
+        .cust-item { display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--border); }
+        .cust-item:last-child { border-bottom:none; }
+        .empty-state { text-align:center; padding:40px 20px; color:var(--muted); font-size:13px; }
+        .spinner { width:18px; height:18px; border:2px solid rgba(255,255,255,.3); border-top:2px solid #fff; border-radius:50%; animation:spin .8s linear infinite; display:none; }
+        @keyframes spin { to{transform:rotate(360deg)} }
     </style>
 </head>
 <body>
-    <div class="container">
+    <div class="app-header">
         <div class="logo">LAURA JAPAN</div>
-        <div class="subtitle">AI INVOICE GENERATOR</div>
-        
-        <div class="settings-panel">
-            <div class="setting-item">
-                <label>取引先名</label>
-                <input type="text" id="customer-name" value="株式会社 タム 御中">
+        <div class="logo-sub">INVOICE & DATA MANAGEMENT</div>
+        <div class="tabs">
+            <div class="tab active" data-tab="create">📝 新規作成</div>
+            <div class="tab" data-tab="history">📂 履歴</div>
+            <div class="tab" data-tab="settings">⚙️ 設定</div>
+        </div>
+    </div>
+
+    <!-- ========== TAB 1: CREATE ========== -->
+    <div class="page active" id="page-create">
+        <div class="card">
+            <div class="card-title">⚙️ 伝票設定</div>
+            <div class="form-row">
+                <div class="form-group"><label>取引先</label><select id="sel-customer"><option value="">読込中...</option></select></div>
+                <div class="form-group" style="max-width:80px"><label>掛率(%)</label><input type="number" id="inp-rate" value="35" min="1" max="100"></div>
             </div>
-            <div class="setting-item">
-                <label>掛率 (%)</label>
-                <input type="number" id="discount-rate" value="35" min="1" max="100">
-            </div>
-            <div class="setting-item" style="flex: 1 1 100%;">
-                <label>AIモデル</label>
-                <select id="ai-model">
-                    <option value="gemini">Google Gemini 2.5 Flash</option>
-                    <option value="openai">OpenAI GPT-4o-mini</option>
-                    <option value="vision">Google Cloud Vision API (高速OCR)</option>
-                </select>
+            <div class="form-row">
+                <div class="form-group"><label>AIモデル</label>
+                    <select id="sel-ai">
+                        <option value="gemini">Gemini 2.5 Flash</option>
+                        <option value="openai">OpenAI GPT-4o-mini</option>
+                        <option value="vision">Cloud Vision (高速OCR)</option>
+                    </select>
+                </div>
             </div>
         </div>
-        
-        <div id="upload-wrapper">
+        <div class="card">
             <div class="upload-area" id="drop-area">
-                <span class="upload-icon">📸</span>
+                <div class="upload-icon">📸</div>
                 <div class="upload-text">タグを撮影 / ライブラリから選択</div>
-                <div class="upload-subtext">大量の一括処理・エラーからの再開に対応</div>
+                <div class="upload-sub">複数選択・大量一括処理に対応</div>
                 <input type="file" id="file-input" accept="image/*" multiple>
             </div>
-
-            <div id="preview-container" class="preview-container"></div>
-
-            <button id="upload-btn" class="btn" disabled style="margin-top: 8px;">
-                <div class="loading-spinner" id="spinner"></div>
-                <span id="btn-text">データをAIで抽出する</span>
+            <div class="thumb-row" id="thumbs"></div>
+            <button class="btn btn-dark" id="btn-analyze" disabled>
+                <div class="spinner" id="sp1"></div><span id="btn-analyze-text">AIでデータを抽出する</span>
             </button>
-        </div>
-
-        <div class="progress-container" id="progress-container">
-            <div class="progress-text">
-                <span id="progress-label">処理の準備中...</span>
-                <span id="progress-percent">0%</span>
+            <div class="progress-wrap" id="prog-wrap" style="display:none">
+                <div class="progress-bar"><div class="progress-fill" id="prog-fill"></div></div>
+                <div class="progress-label"><span id="prog-label">準備中...</span><span id="prog-pct">0%</span></div>
             </div>
-            <div class="progress-bar">
-                <div class="progress-fill" id="progress-fill"></div>
+            <div class="toast" id="toast"></div>
+        </div>
+        <div class="card" id="preview-card" style="display:none">
+            <div class="card-title">✏️ 読み取り結果（タップで修正可能）</div>
+            <div style="overflow-x:auto"><table class="data-table"><thead><tr><th>品番</th><th>カラー</th><th>サイズ</th><th>単価</th></tr></thead><tbody id="tbl-body"></tbody></table></div>
+            <div style="margin-top:16px">
+                <button class="btn btn-accent" id="btn-generate"><div class="spinner" id="sp2"></div>最終データを確定して保存</button>
             </div>
         </div>
-        
-        <div id="status-msg" class="status-toast"></div>
-
-        <!-- Preview & Edit Data Section -->
-        <div id="preview-data-section">
-            <div class="preview-title">✏️ AIの読み取り結果（修正可能）</div>
-            <div class="data-table-wrapper">
-                <table class="data-table" id="data-table">
-                    <thead>
-                        <tr>
-                            <th>品番</th>
-                            <th>カラー</th>
-                            <th>サイズ</th>
-                            <th>単価</th>
-                        </tr>
-                    </thead>
-                    <tbody id="data-table-body">
-                        <!-- JS injected -->
-                    </tbody>
-                </table>
+        <div id="dl-section" style="display:none">
+            <div class="card" style="text-align:center">
+                <div style="font-size:32px;margin-bottom:8px">✅</div>
+                <div style="font-size:15px;font-weight:700;margin-bottom:4px" id="inv-num-display"></div>
+                <div style="font-size:12px;color:var(--muted);margin-bottom:16px">伝票が作成され、履歴に保存されました</div>
+                <button class="btn btn-red" id="btn-pdf">📄 納品書 (PDF) をダウンロード</button>
+                <button class="btn btn-green" id="btn-excel">📊 管理伝票 (Excel) をダウンロード</button>
+                <button class="btn btn-dark" id="btn-new" style="margin-top:8px">＋ 新しい伝票を作成する</button>
             </div>
-            <button id="btn-generate" class="btn btn-blue">
-                <div class="loading-spinner" id="spinner-gen"></div>
-                <span>最終データを確定して保存する</span>
-            </button>
         </div>
+    </div>
 
-        <div id="download-section">
-            <button id="btn-dl-pdf" class="btn btn-pdf">📄 納品書 (PDF) をダウンロード</button>
-            <button id="btn-dl-excel" class="btn btn-excel">📊 管理伝票 (Excel) をダウンロード</button>
+    <!-- ========== TAB 2: HISTORY ========== -->
+    <div class="page" id="page-history">
+        <div class="card">
+            <div class="card-title">📂 伝票履歴</div>
+            <div id="hist-list"><div class="empty-state">読込中...</div></div>
+        </div>
+    </div>
+
+    <!-- ========== TAB 3: SETTINGS ========== -->
+    <div class="page" id="page-settings">
+        <div class="card">
+            <div class="card-title">👤 取引先マスタ</div>
+            <div id="cust-list"></div>
+            <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:16px">
+                <div class="form-row">
+                    <div class="form-group"><label>取引先名</label><input type="text" id="new-cust-name" placeholder="例: 株式会社 〇〇 御中"></div>
+                    <div class="form-group" style="max-width:80px"><label>掛率(%)</label><input type="number" id="new-cust-rate" value="35"></div>
+                </div>
+                <button class="btn btn-accent btn-sm" id="btn-add-cust" style="width:100%">＋ 取引先を追加</button>
+            </div>
         </div>
     </div>
 
     <script>
-        const fileInput = document.getElementById('file-input');
-        const dropArea = document.getElementById('drop-area');
-        const uploadBtn = document.getElementById('upload-btn');
-        const btnText = document.getElementById('btn-text');
-        const spinner = document.getElementById('spinner');
-        const statusMsg = document.getElementById('status-msg');
-        const previewContainer = document.getElementById('preview-container');
-        const uploadWrapper = document.getElementById('upload-wrapper');
-        
-        const progressContainer = document.getElementById('progress-container');
-        const progressFill = document.getElementById('progress-fill');
-        const progressLabel = document.getElementById('progress-label');
-        const progressPercent = document.getElementById('progress-percent');
+    // ===== State =====
+    let selectedFiles=[], extractedItems=[], pdfData=null, excelData=null;
+    const $=id=>document.getElementById(id);
 
-        const previewDataSection = document.getElementById('preview-data-section');
-        const dataTableBody = document.getElementById('data-table-body');
-        const btnGenerate = document.getElementById('btn-generate');
-        const spinnerGen = document.getElementById('spinner-gen');
+    // ===== Tabs =====
+    document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
+        document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+        document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
+        t.classList.add('active');
+        $('page-'+t.dataset.tab).classList.add('active');
+        if(t.dataset.tab==='history') loadHistory();
+        if(t.dataset.tab==='settings') loadCustomers();
+    }));
 
-        const downloadSection = document.getElementById('download-section');
-        const btnDlPdf = document.getElementById('btn-dl-pdf');
-        const btnDlExcel = document.getElementById('btn-dl-excel');
+    // ===== Toast =====
+    const toast=(msg,type)=>{const t=$('toast');t.textContent=msg;t.className='toast toast-'+type;t.style.display='block';};
 
-        let selectedFiles = [];
-        let extractedItems = []; // All JSON data from AI
-        let currentPdfData = null;
-        let currentExcelData = null;
-
-        // UI Helpers
-        const showToast = (msg, type) => {
-            statusMsg.textContent = msg;
-            statusMsg.className = `status-toast status-${type}`;
-            statusMsg.style.display = 'block';
-        };
-
-        const updateProgress = (label, current, total) => {
-            progressContainer.style.display = 'block';
-            progressLabel.textContent = label;
-            const percentage = Math.round((current / total) * 100);
-            progressPercent.textContent = `${percentage}%`;
-            progressFill.style.width = `${percentage}%`;
-        };
-
-        dropArea.addEventListener('click', () => fileInput.click());
-
-        fileInput.addEventListener('change', (e) => {
-            if (e.target.files && e.target.files.length > 0) {
-                Array.from(e.target.files).forEach(file => selectedFiles.push(file));
-                fileInput.value = '';
-                updatePreview();
-            }
+    // ===== Customers =====
+    async function loadCustomers(){
+        const r=await fetch('/api/customers');const data=await r.json();
+        const sel=$('sel-customer'); sel.innerHTML='';
+        data.forEach(c=>{const o=document.createElement('option');o.value=JSON.stringify(c);o.textContent=`${c.name} (${c.discount_rate}%)`;sel.appendChild(o);});
+        const manual=document.createElement('option');manual.value='';manual.textContent='-- 手動入力 --';sel.appendChild(manual);
+        const cl=$('cust-list'); cl.innerHTML='';
+        if(!data.length){cl.innerHTML='<div class="empty-state">取引先が未登録です</div>';return;}
+        data.forEach(c=>{
+            const d=document.createElement('div');d.className='cust-item';
+            d.innerHTML=`<div><strong>${c.name}</strong> <span style="color:var(--muted);font-size:12px">掛率 ${c.discount_rate}%</span></div><button class="btn btn-red btn-sm" onclick="delCust(${c.id})">削除</button>`;
+            cl.appendChild(d);
         });
+    }
+    $('sel-customer').addEventListener('change',e=>{try{const c=JSON.parse(e.target.value);$('inp-rate').value=c.discount_rate;}catch{}});
+    $('btn-add-cust').addEventListener('click',async()=>{
+        const n=$('new-cust-name').value.trim(),r=$('new-cust-rate').value;
+        if(!n)return;
+        const fd=new FormData();fd.append('name',n);fd.append('discount_rate',r);
+        await fetch('/api/customers',{method:'POST',body:fd});
+        $('new-cust-name').value='';loadCustomers();
+    });
+    async function delCust(id){if(confirm('削除しますか？')){await fetch(`/api/customers/${id}`,{method:'DELETE'});loadCustomers();}}
 
-        const removeFile = (index) => {
-            selectedFiles.splice(index, 1);
-            updatePreview();
-        };
-
-        const updatePreview = () => {
-            previewContainer.innerHTML = '';
-            if (selectedFiles.length === 0) {
-                uploadBtn.disabled = true;
-                return;
-            }
-            uploadBtn.disabled = false;
-            btnText.textContent = `${selectedFiles.length}枚のタグを抽出する`;
-
-            selectedFiles.forEach((file, index) => {
-                const reader = new FileReader();
-                reader.onload = (re) => {
-                    const item = document.createElement('div');
-                    item.className = 'preview-item';
-                    const img = document.createElement('img');
-                    img.src = re.target.result;
-                    img.className = 'preview-img';
-                    const removeBtn = document.createElement('button');
-                    removeBtn.className = 'remove-btn';
-                    removeBtn.innerHTML = '✕';
-                    removeBtn.onclick = (e) => { e.stopPropagation(); removeFile(index); };
-                    item.appendChild(img);
-                    item.appendChild(removeBtn);
-                    previewContainer.appendChild(item);
-                };
-                reader.readAsDataURL(file);
-            });
-        };
-
-        const compressImage = (file, maxWidth = 1200) => {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.readAsDataURL(file);
-                reader.onload = e => {
-                    const img = new Image();
-                    img.src = e.target.result;
-                    img.onload = () => {
-                        let w = img.width, h = img.height;
-                        if (w > maxWidth) { h = Math.round((h * maxWidth) / w); w = maxWidth; }
-                        const canvas = document.createElement('canvas');
-                        canvas.width = w; canvas.height = h;
-                        const ctx = canvas.getContext('2d');
-                        ctx.drawImage(img, 0, 0, w, h);
-                        canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Canvas error')), 'image/jpeg', 0.8);
-                    };
-                    img.onerror = reject;
-                };
-                reader.onerror = reject;
-            });
-        };
-
-        const sleep = ms => new Promise(r => setTimeout(r, ms));
-
-        // --- Step 1: Analyze Images (Chunked processing in Frontend) ---
-        uploadBtn.addEventListener('click', async () => {
-            if (selectedFiles.length === 0) return;
-            
-            uploadBtn.disabled = true;
-            spinner.style.display = 'block';
-            btnText.textContent = '処理中...';
-            statusMsg.style.display = 'none';
-            extractedItems = []; // Reset
-            
-            const aiModel = document.getElementById('ai-model').value;
-            const chunkSize = 5; // 5 images per request
-            const totalFiles = selectedFiles.length;
-
-            try {
-                // Compress all images sequentially
-                const compressedBlobs = [];
-                for (let i = 0; i < totalFiles; i++) {
-                    updateProgress(`画像を圧縮・軽量化中... (${i+1}/${totalFiles})`, i, totalFiles);
-                    const blob = await compressImage(selectedFiles[i]);
-                    compressedBlobs.push(blob);
-                }
-                updateProgress(`画像処理完了`, totalFiles, totalFiles);
-
-                // Chunked API Requests
-                const totalChunks = Math.ceil(totalFiles / chunkSize);
-                
-                for (let c = 0; c < totalChunks; c++) {
-                    const chunkBlobs = compressedBlobs.slice(c * chunkSize, (c + 1) * chunkSize);
-                    updateProgress(`AIが解析中... (バッチ ${c+1}/${totalChunks})`, c, totalChunks);
-                    
-                    let success = false;
-                    let retries = 0;
-                    
-                    while (!success && retries < 1) {
-                        try {
-                            const formData = new FormData();
-                            formData.append('ai_model', aiModel);
-                            chunkBlobs.forEach((b, idx) => formData.append('files', b, `img_${c}_${idx}.jpg`));
-                            
-                            const response = await fetch('/analyze-images', { method: 'POST', body: formData });
-                            
-                            if (response.status === 429) {
-                                throw new Error('429');
-                            }
-                            if (!response.ok) {
-                                const errData = await response.json();
-                                throw new Error(errData.detail || 'APIエラー');
-                            }
-                            
-                            const data = await response.json();
-                            extractedItems.push(...data.items);
-                            success = true;
-                            
-                        } catch (error) {
-                            if (error.message === '429') {
-                                retries++;
-                                showToast(`AIが混雑しています。10秒後に再試行します... (試行 ${retries}/1)`, 'error');
-                                await sleep(10000); // Wait 10s
-                            } else {
-                                throw error; // Other errors abort the whole process
-                            }
-                        }
-                    }
-                    if (!success) throw new Error("無料枠の利用上限に完全に達しました。「設定パネル」から別のAIモデル（Cloud Vision等）に切り替えてやり直してください。");
-                }
-                
-                updateProgress(`AI解析完了！`, 100, 100);
-                showToast(`🎉 ${totalFiles}枚すべてのタグ解析が完了しました！データをプレビューで確認してください。`, 'success');
-                
-                // Hide Upload Section, Show Preview Section
-                uploadWrapper.style.display = 'none';
-                progressContainer.style.display = 'none';
-                renderPreviewTable();
-
-            } catch (error) {
-                console.error(error);
-                showToast(error.message, 'error');
-                uploadBtn.disabled = false;
-                spinner.style.display = 'none';
-                btnText.textContent = 'エラー箇所から再試行する';
-            }
+    // ===== History =====
+    async function loadHistory(){
+        const r=await fetch('/api/history');const data=await r.json();const hl=$('hist-list');hl.innerHTML='';
+        if(!data.length){hl.innerHTML='<div class="empty-state">まだ伝票がありません</div>';return;}
+        data.forEach(inv=>{
+            const d=document.createElement('div');d.className='hist-item';
+            d.innerHTML=`<div class="hist-info"><div class="hist-num">${inv.invoice_number}</div><div class="hist-meta">${inv.customer_name} · ${inv.item_count}点 · ${inv.created_at?.split('T')[0]||''}</div><div class="hist-actions"><a href="/api/history/${inv.id}/pdf" class="btn btn-red btn-sm">PDF</a><a href="/api/history/${inv.id}/excel" class="btn btn-green btn-sm">Excel</a><button class="btn btn-sm" style="background:var(--muted)" onclick="delHist(${inv.id})">削除</button></div></div><div class="hist-amt">¥${(inv.total_grand_total||0).toLocaleString()}</div>`;
+            hl.appendChild(d);
         });
+    }
+    async function delHist(id){if(confirm('この伝票を削除しますか？')){await fetch(`/api/history/${id}`,{method:'DELETE'});loadHistory();}}
 
-        // --- Step 2: Render Preview Table ---
-        const renderPreviewTable = () => {
-            dataTableBody.innerHTML = '';
-            extractedItems.forEach((item, index) => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td><input type="text" value="${item.code || ''}" data-idx="${index}" data-key="code"></td>
-                    <td><input type="text" value="${item.color || ''}" data-idx="${index}" data-key="color"></td>
-                    <td><input type="text" value="${item.size || ''}" data-idx="${index}" data-key="size"></td>
-                    <td><input type="number" class="type-num" value="${item.unit_price || 0}" data-idx="${index}" data-key="unit_price"></td>
-                `;
-                dataTableBody.appendChild(tr);
-            });
-            previewDataSection.style.display = 'block';
-        };
+    // ===== File Upload =====
+    $('drop-area').addEventListener('click',()=>$('file-input').click());
+    $('file-input').addEventListener('change',e=>{if(e.target.files.length){Array.from(e.target.files).forEach(f=>selectedFiles.push(f));e.target.value='';renderThumbs();}});
+    function renderThumbs(){
+        const c=$('thumbs');c.innerHTML='';
+        $('btn-analyze').disabled=!selectedFiles.length;
+        $('btn-analyze-text').textContent=selectedFiles.length?`${selectedFiles.length}枚を抽出する`:'AIでデータを抽出する';
+        selectedFiles.forEach((f,i)=>{const r=new FileReader();r.onload=e=>{const d=document.createElement('div');d.className='thumb-item';d.innerHTML=`<img class="thumb-img" src="${e.target.result}"><button class="thumb-x" onclick="rmFile(${i})">✕</button>`;c.appendChild(d);};r.readAsDataURL(f);});
+    }
+    function rmFile(i){selectedFiles.splice(i,1);renderThumbs();}
 
-        // --- Step 3: Generate Final Documents ---
-        btnGenerate.addEventListener('click', async () => {
-            btnGenerate.disabled = true;
-            spinnerGen.style.display = 'block';
-            statusMsg.style.display = 'none';
+    // ===== Compress =====
+    const compress=(file,mw=1200)=>new Promise((res,rej)=>{const r=new FileReader();r.readAsDataURL(file);r.onload=e=>{const img=new Image();img.src=e.target.result;img.onload=()=>{let w=img.width,h=img.height;if(w>mw){h=Math.round(h*mw/w);w=mw;}const cv=document.createElement('canvas');cv.width=w;cv.height=h;cv.getContext('2d').drawImage(img,0,0,w,h);cv.toBlob(b=>b?res(b):rej('blob err'),'image/jpeg',.8);};img.onerror=rej;};r.onerror=rej;});
+    const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 
-            // Extract edited values from table
-            const inputs = dataTableBody.querySelectorAll('input');
-            inputs.forEach(input => {
-                const idx = input.getAttribute('data-idx');
-                const key = input.getAttribute('data-key');
-                let val = input.value;
-                if (key === 'unit_price') val = parseInt(val, 10) || 0;
-                extractedItems[idx][key] = val;
-            });
-
-            const payload = {
-                customer_name: document.getElementById('customer-name').value,
-                discount_rate: parseInt(document.getElementById('discount-rate').value, 10) || 35,
-                items: extractedItems
-            };
-
-            try {
-                showToast('最終ドキュメント（Excel/PDF）を生成中...', 'info');
-                
-                const response = await fetch('/generate-documents', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-
-                if (!response.ok) {
-                    const errData = await response.json();
-                    throw new Error(errData.detail || 'ファイル生成エラー');
+    // ===== Analyze =====
+    $('btn-analyze').addEventListener('click',async()=>{
+        if(!selectedFiles.length)return;
+        $('btn-analyze').disabled=true;$('sp1').style.display='block';$('btn-analyze-text').textContent='処理中...';
+        $('toast').style.display='none';extractedItems=[];$('preview-card').style.display='none';$('dl-section').style.display='none';
+        const ai=$('sel-ai').value, chunk=5, total=selectedFiles.length;
+        const pw=$('prog-wrap');pw.style.display='block';
+        try{
+            const blobs=[];
+            for(let i=0;i<total;i++){updProg(`画像を圧縮中 (${i+1}/${total})`,i,total);blobs.push(await compress(selectedFiles[i]));}
+            const chunks=Math.ceil(total/chunk);
+            for(let c=0;c<chunks;c++){
+                const cb=blobs.slice(c*chunk,(c+1)*chunk);
+                updProg(`AI解析中 (${c+1}/${chunks})`,c,chunks);
+                let ok=false,retry=0;
+                while(!ok&&retry<1){
+                    const fd=new FormData();fd.append('ai_model',ai);cb.forEach((b,j)=>fd.append('files',b,`i_${c}_${j}.jpg`));
+                    const r=await fetch('/analyze-images',{method:'POST',body:fd});
+                    if(r.status===429){retry++;toast('AI混雑中。10秒後に再試行..','err');await sleep(10000);continue;}
+                    if(!r.ok){const e=await r.json();throw new Error(e.detail||'APIエラー');}
+                    const d=await r.json();extractedItems.push(...d.items);ok=true;
                 }
-
-                const data = await response.json();
-                currentPdfData = data.pdf_base64;
-                currentExcelData = data.excel_base64;
-                
-                showToast('✨ 完了しました！下のボタンから保存してください。', 'success');
-                btnGenerate.style.display = 'none';
-                downloadSection.style.display = 'block';
-                
-            } catch (error) {
-                console.error(error);
-                showToast(error.message, 'error');
-                btnGenerate.disabled = false;
-                spinnerGen.style.display = 'none';
+                if(!ok)throw new Error('無料枠上限です。AIモデルを切り替えてください。');
             }
-        });
+            updProg('完了',1,1);toast(`🎉 ${total}枚の解析完了！内容を確認してください`,'ok');
+            $('drop-area').style.display='none';$('thumbs').style.display='none';$('btn-analyze').style.display='none';
+            pw.style.display='none';renderPreview();
+        }catch(e){console.error(e);toast(e.message,'err');$('btn-analyze').disabled=false;$('sp1').style.display='none';$('btn-analyze-text').textContent='再試行';}
+    });
+    function updProg(label,cur,tot){$('prog-label').textContent=label;const p=Math.round(cur/tot*100);$('prog-pct').textContent=p+'%';$('prog-fill').style.width=p+'%';}
 
-        // --- Step 4: Download Helper ---
-        const downloadBase64File = (base64Data, filename, contentType) => {
-            try {
-                const cleanBase64 = base64Data.replace(/\s/g, '');
-                const byteCharacters = atob(cleanBase64);
-                const byteArrays = [];
-                for (let offset = 0; offset < byteCharacters.length; offset += 512) {
-                    const slice = byteCharacters.slice(offset, offset + 512);
-                    const byteNumbers = new Array(slice.length);
-                    for (let i = 0; i < slice.length; i++) byteNumbers[i] = slice.charCodeAt(i);
-                    byteArrays.push(new Uint8Array(byteNumbers));
-                }
-                const blob = new Blob(byteArrays, {type: contentType});
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.style.display = 'none'; a.href = url; a.download = filename;
-                document.body.appendChild(a); a.click();
-                window.setTimeout(() => window.URL.revokeObjectURL(url), 100);
-            } catch (e) {
-                console.error(e);
-                showToast("保存エラー: " + e.message, 'error');
-            }
-        };
+    // ===== Preview Table =====
+    function renderPreview(){
+        const tb=$('tbl-body');tb.innerHTML='';
+        extractedItems.forEach((it,i)=>{const tr=document.createElement('tr');tr.innerHTML=`<td><input value="${it.code||''}" data-i="${i}" data-k="code"></td><td><input value="${it.color||''}" data-i="${i}" data-k="color"></td><td><input value="${it.size||''}" data-i="${i}" data-k="size"></td><td><input type="number" value="${it.unit_price||0}" data-i="${i}" data-k="unit_price" style="width:70px"></td>`;tb.appendChild(tr);});
+        $('preview-card').style.display='block';
+    }
 
-        btnDlPdf.addEventListener('click', () => currentPdfData && downloadBase64File(currentPdfData, 'LAURA_JAPAN_invoice.pdf', 'application/pdf'));
-        btnDlExcel.addEventListener('click', () => currentExcelData && downloadBase64File(currentExcelData, 'LAURA_JAPAN_data.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'));
+    // ===== Generate =====
+    $('btn-generate').addEventListener('click',async()=>{
+        $('btn-generate').disabled=true;$('sp2').style.display='block';$('toast').style.display='none';
+        $('tbl-body').querySelectorAll('input').forEach(inp=>{const i=inp.dataset.i,k=inp.dataset.k;let v=inp.value;if(k==='unit_price')v=parseInt(v)||0;extractedItems[i][k]=v;});
+        let cn='';try{cn=JSON.parse($('sel-customer').value).name;}catch{cn=$('sel-customer').options[$('sel-customer').selectedIndex]?.textContent?.replace(/ \(\d+%\)/,'')||'取引先不明';}
+        const payload={customer_name:cn,discount_rate:parseInt($('inp-rate').value)||35,items:extractedItems};
+        try{
+            toast('PDF・Excelを生成中...','info');
+            const r=await fetch('/generate-documents',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+            if(!r.ok){const e=await r.json();throw new Error(e.detail);}
+            const d=await r.json();pdfData=d.pdf_base64;excelData=d.excel_base64;
+            $('inv-num-display').textContent=`伝票番号: ${d.invoice_number}`;
+            $('preview-card').style.display='none';$('dl-section').style.display='block';
+            toast('✨ 保存完了！','ok');
+        }catch(e){toast(e.message,'err');$('btn-generate').disabled=false;$('sp2').style.display='none';}
+    });
+
+    // ===== Download =====
+    function dl64(b64,fn,ct){try{const c=atob(b64.replace(/\s/g,''));const a=[];for(let o=0;o<c.length;o+=512){const s=c.slice(o,o+512);const n=new Array(s.length);for(let i=0;i<s.length;i++)n[i]=s.charCodeAt(i);a.push(new Uint8Array(n));}const b=new Blob(a,{type:ct});const u=URL.createObjectURL(b);const l=document.createElement('a');l.href=u;l.download=fn;l.click();URL.revokeObjectURL(u);}catch(e){toast('保存エラー: '+e.message,'err');}}
+    $('btn-pdf').addEventListener('click',()=>pdfData&&dl64(pdfData,'LAURA_JAPAN_invoice.pdf','application/pdf'));
+    $('btn-excel').addEventListener('click',()=>excelData&&dl64(excelData,'LAURA_JAPAN_data.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'));
+    $('btn-new').addEventListener('click',()=>{selectedFiles=[];extractedItems=[];pdfData=null;excelData=null;$('drop-area').style.display='';$('thumbs').innerHTML='';$('thumbs').style.display='';$('btn-analyze').style.display='';$('btn-analyze').disabled=true;$('btn-analyze-text').textContent='AIでデータを抽出する';$('sp1').style.display='none';$('preview-card').style.display='none';$('dl-section').style.display='none';$('toast').style.display='none';$('btn-generate').disabled=false;$('sp2').style.display='none';});
+
+    // ===== Init =====
+    loadCustomers();
     </script>
 </body>
 </html>
