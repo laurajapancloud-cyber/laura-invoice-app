@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>納品書</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 20mm;
+        }
+
+        body {
+            font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+            color: #333;
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 50px;
+            border-bottom: 2px solid #000;
+            padding-bottom: 10px;
+        }
+
+        .title {
+            font-size: 28px;
+            font-weight: bold;
+            letter-spacing: 5px;
+        }
+
+        .info-section {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 40px;
+        }
+
+        .customer-info {
+            font-size: 16px;
+        }
+
+        .customer-name {
+            font-size: 20px;
+            font-weight: bold;
+            border-bottom: 1px solid #333;
+            padding-bottom: 5px;
+            margin-bottom: 10px;
+            display: inline-block;
+            min-width: 250px;
+        }
+
+        .issuer-info {
+            text-align: right;
+            font-size: 12px;
+        }
+
+        .issuer-name {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .invoice-details {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 40px;
+        }
+
+        .invoice-details th {
+            background-color: #000;
+            color: #fff;
+            padding: 10px;
+            text-align: left;
+            font-size: 12px;
+            text-transform: uppercase;
+        }
+
+        .invoice-details td {
+            padding: 12px 10px;
+            border-bottom: 1px solid #eee;
+            font-size: 13px;
+        }
+
+        .summary-section {
+            float: right;
+            width: 250px;
+        }
+
+        .summary-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .summary-table td {
+            padding: 5px 0;
+        }
+
+        .summary-label {
+            text-align: left;
+            font-size: 12px;
+            color: #666;
+        }
+
+        .summary-value {
+            text-align: right;
+            font-size: 14px;
+        }
+
+        .total-row td {
+            border-top: 2px solid #000;
+            padding-top: 10px;
+            font-weight: bold;
+            font-size: 18px;
+        }
+
+        .footer {
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+            text-align: center;
+            font-size: 10px;
+            color: #999;
+            border-top: 1px solid #eee;
+            padding-top: 10px;
+        }
+
+        .amount-symbol {
+            font-size: 12px;
+            margin-right: 2px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="title">納品書</div>
+    </div>
+
+    <div class="info-section">
+        <div class="customer-info">
+            <div class="customer-name">{{ customer_name }}</div>
+            <div>下記のとおり納品申し上げます。</div>
+        </div>
+        <div class="issuer-info">
+            <div class="issuer-name">{{ issuer }}</div>
+            <div>〒123-4567 東京都港区サンプル1-2-3</div>
+            <div>TEL: 03-XXXX-XXXX</div>
+        </div>
+    </div>
+
+    <table class="invoice-details">
+        <thead>
+            <tr>
+                <th>品番 (Code)</th>
+                <th>カラー (Color)</th>
+                <th>サイズ (Size)</th>
+                <th style="text-align: center;">数量</th>
+                <th style="text-align: right;">単価</th>
+                <th style="text-align: center;">掛率</th>
+                <th style="text-align: right;">御請求額</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>{{ code }}</td>
+                <td>{{ color }}</td>
+                <td>{{ size }}</td>
+                <td style="text-align: center;">1</td>
+                <td style="text-align: right;">¥{{ "{:,}".format(unit_price) }}</td>
+                <td style="text-align: center;">35%</td>
+                <td style="text-align: right;">¥{{ "{:,}".format(net_amount) }}</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="summary-section">
+        <table class="summary-table">
+            <tr>
+                <td class="summary-label">小計 (税抜金額)</td>
+                <td class="summary-value">¥{{ "{:,}".format(net_amount) }}</td>
+            </tr>
+            <tr>
+                <td class="summary-label">消費税 (10%)</td>
+                <td class="summary-value">¥{{ "{:,}".format(tax_amount) }}</td>
+            </tr>
+            <tr class="total-row">
+                <td class="summary-label">合計金額</td>
+                <td class="summary-value">¥{{ "{:,}".format(grand_total) }}</td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="footer">
+        LAURA JAPAN Online Invoice System - Professional Delivery Slip
+    </div>
+</body>
+</html>

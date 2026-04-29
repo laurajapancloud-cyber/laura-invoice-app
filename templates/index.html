@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>LAURA JAPAN | 納品書作成</title>
+    <style>
+        :root {
+            --primary-color: #1a1a1a;
+            --accent-color: #666;
+            --bg-color: #f8f9fa;
+            --card-bg: #ffffff;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--primary-color);
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .container {
+            max-width: 400px;
+            width: 100%;
+            background: var(--card-bg);
+            padding: 40px 30px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+            text-align: center;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: 800;
+            letter-spacing: 0.2em;
+            margin-bottom: 40px;
+            text-transform: uppercase;
+        }
+
+        .upload-area {
+            border: 2px dashed #ddd;
+            border-radius: 15px;
+            padding: 40px 20px;
+            margin-bottom: 30px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .upload-area:active {
+            background-color: #f0f0f0;
+            border-color: var(--accent-color);
+        }
+
+        .upload-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+            display: block;
+        }
+
+        .upload-text {
+            font-size: 14px;
+            color: var(--accent-color);
+        }
+
+        #file-input {
+            display: none;
+        }
+
+        .btn {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            font-size: 16px;
+            font-weight: 600;
+            border-radius: 30px;
+            width: 100%;
+            cursor: pointer;
+            transition: transform 0.2s ease, opacity 0.2s ease;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .btn:active {
+            transform: scale(0.98);
+        }
+
+        .loading-spinner {
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-top: 3px solid #fff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+            display: none;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        #status-msg {
+            margin-top: 20px;
+            font-size: 14px;
+            min-height: 20px;
+        }
+
+        .preview-img {
+            max-width: 100%;
+            border-radius: 10px;
+            margin-top: 20px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">LAURA JAPAN</div>
+        
+        <div class="upload-area" onclick="document.getElementById('file-input').click()">
+            <span class="upload-icon">📸</span>
+            <span class="upload-text" id="file-label">タグを撮影または選択</span>
+            <input type="file" id="file-input" accept="image/*" capture="environment">
+            <img id="preview" class="preview-img">
+        </div>
+
+        <button id="upload-btn" class="btn" disabled>
+            <div class="loading-spinner" id="spinner"></div>
+            <span id="btn-text">納品書を作成する</span>
+        </button>
+
+        <div id="status-msg"></div>
+    </div>
+
+    <script>
+        const fileInput = document.getElementById('file-input');
+        const uploadBtn = document.getElementById('upload-btn');
+        const btnText = document.getElementById('btn-text');
+        const spinner = document.getElementById('spinner');
+        const statusMsg = document.getElementById('status-msg');
+        const fileLabel = document.getElementById('file-label');
+        const preview = document.getElementById('preview');
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files && e.target.files[0]) {
+                const file = e.target.files[0];
+                fileLabel.textContent = file.name;
+                uploadBtn.disabled = false;
+                
+                // Show preview
+                const reader = new FileReader();
+                reader.onload = (re) => {
+                    preview.src = re.target.result;
+                    preview.style.display = 'block';
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        uploadBtn.addEventListener('click', async () => {
+            const file = fileInput.files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            // UI State
+            uploadBtn.disabled = true;
+            spinner.style.display = 'block';
+            btnText.textContent = '解析中...';
+            statusMsg.textContent = 'AIがタグを読み取っています...';
+            statusMsg.style.color = '#666';
+
+            try {
+                const response = await fetch('/generate-pdf', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || 'PDFの生成に失敗しました');
+                }
+
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = 'LAURA_JAPAN_納品書.pdf';
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                
+                statusMsg.textContent = '成功しました！ダウンロードを開始します。';
+                statusMsg.style.color = 'green';
+            } catch (error) {
+                console.error(error);
+                statusMsg.textContent = `エラー: ${error.message}`;
+                statusMsg.style.color = 'red';
+            } finally {
+                uploadBtn.disabled = false;
+                spinner.style.display = 'none';
+                btnText.textContent = '納品書を作成する';
+            }
+        });
+    </script>
+</body>
+</html>
