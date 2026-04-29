@@ -205,6 +205,7 @@
                 <select id="ai-model">
                     <option value="gemini">Google Gemini 2.5 Flash</option>
                     <option value="openai">OpenAI GPT-4o-mini</option>
+                    <option value="vision">Google Cloud Vision API (高速OCR)</option>
                 </select>
             </div>
         </div>
@@ -413,7 +414,7 @@
                     let success = false;
                     let retries = 0;
                     
-                    while (!success && retries < 3) {
+                    while (!success && retries < 1) {
                         try {
                             const formData = new FormData();
                             formData.append('ai_model', aiModel);
@@ -436,14 +437,14 @@
                         } catch (error) {
                             if (error.message === '429') {
                                 retries++;
-                                showToast(`AIが混雑しています。10秒後に再試行します... (試行 ${retries}/3)`, 'error');
+                                showToast(`AIが混雑しています。10秒後に再試行します... (試行 ${retries}/1)`, 'error');
                                 await sleep(10000); // Wait 10s
                             } else {
                                 throw error; // Other errors abort the whole process
                             }
                         }
                     }
-                    if (!success) throw new Error("何度か再試行しましたが、AIの制限により中断しました。しばらく時間を空けてからやり直してください。");
+                    if (!success) throw new Error("無料枠の利用上限に完全に達しました。「設定パネル」から別のAIモデル（Cloud Vision等）に切り替えてやり直してください。");
                 }
                 
                 updateProgress(`AI解析完了！`, 100, 100);

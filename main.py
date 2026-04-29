@@ -18,6 +18,9 @@ from dotenv import load_dotenv
 import openpyxl
 from openpyxl.styles import PatternFill, Border, Side, Alignment, Font
 from pydantic import BaseModel
+import re
+from google.oauth2 import service_account
+from google.cloud import vision
 
 # Load environment variables
 load_dotenv()
@@ -27,6 +30,7 @@ APP_USERNAME = os.getenv("APP_USERNAME")
 APP_PASSWORD = os.getenv("APP_PASSWORD")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+GOOGLE_CREDENTIALS_JSON = os.getenv("GOOGLE_CREDENTIALS_JSON")
 
 if not all([APP_USERNAME, APP_PASSWORD, GEMINI_API_KEY]):
     print("Warning: Missing required environment variables.")
@@ -39,6 +43,15 @@ if OPENAI_API_KEY:
     openai_client = OpenAI(api_key=OPENAI_API_KEY)
 else:
     openai_client = None
+
+vision_client = None
+if GOOGLE_CREDENTIALS_JSON:
+    try:
+        creds_dict = json.loads(GOOGLE_CREDENTIALS_JSON)
+        creds = service_account.Credentials.from_service_account_info(creds_dict)
+        vision_client = vision.ImageAnnotatorClient(credentials=creds)
+    except Exception as e:
+        print(f"Warning: Cloud Vision init failed: {e}")
 
 # FastAPI App
 app = FastAPI()
@@ -102,7 +115,54 @@ async def analyze_images(
 
         items_data = []
 
-        if ai_model == "openai":
+        if ai_model == "vision":
+            if not vision_client:
+                raise HTTPException(status_code=500, detail="Google Cloud VisionのJSONキー（環境変数）が設定されていません。")
+            
+            for part in image_parts:
+                image = vision.Image(content=part["data"])
+                try:
+                    response = vision_client.text_detection(image=image)
+                    if response.error.message:
+                        raise HTTPException(status_code=500, detail=f"Vision API Error: {response.error.message}")
+                    
+                    raw_text = response.text_annotations[0].description if response.text_annotations else ""
+                    
+                    # Regex Parsing (Heuristics)
+                    code_match = re.search(r'[A-Za-z0-9]+-[A-Za-z0-9]+', raw_text)
+                    code = code_match.group(0) if code_match else "-"
+                    
+                    col_match = re.search(r'(?i)col(?:or)?[\s\.:]*(\d{1,3})', raw_text)
+                    color = col_match.group(1) if col_match else "-"
+                    
+                    sz_match = re.search(r'(?i)size[\s\.:]*([A-Za-z0-9]+)', raw_text)
+                    if not sz_match:
+                        sz_match = re.search(r'\b(3[68]|4[02468]|50)\b', raw_text)
+                    size = sz_match.group(1) if sz_match else "-"
+                    
+                    price_match = re.search(r'[¥￥]\s*([\d,]+)', raw_text)
+                    if not price_match:
+                        price_match = re.search(r'\b(\d{1,3}(?:,\d{3})+)\b', raw_text)
+                    
+                    unit_price = 0
+                    if price_match:
+                        try:
+                            unit_price = int(price_match.group(1).replace(',', ''))
+                        except:
+                            pass
+                    
+                    items_data.append({
+                        "code": code,
+                        "color": color,
+                        "size": size,
+                        "unit_price": unit_price
+                    })
+                except Exception as e:
+                    raise HTTPException(status_code=500, detail=f"Vision API Request Error: {e}")
+            
+            return JSONResponse({"items": items_data})
+            
+        elif ai_model == "openai":
             if not openai_client:
                 raise HTTPException(status_code=500, detail="OpenAI APIキーが設定されていません。")
             
