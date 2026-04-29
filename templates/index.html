@@ -451,22 +451,36 @@
 
         // --- ダウンロード処理 ---
         const downloadBase64File = (base64Data, filename, contentType) => {
-            const byteCharacters = atob(base64Data);
-            const byteNumbers = new Array(byteCharacters.length);
-            for (let i = 0; i < byteCharacters.length; i++) {
-                byteNumbers[i] = byteCharacters.charCodeAt(i);
+            try {
+                // Remove any whitespace that might cause atob to fail in Safari
+                const cleanBase64 = base64Data.replace(/\s/g, '');
+                const byteCharacters = atob(cleanBase64);
+                const byteArrays = [];
+                const sliceSize = 512;
+
+                for (let offset = 0; offset < byteCharacters.length; offset += sliceSize) {
+                    const slice = byteCharacters.slice(offset, offset + sliceSize);
+                    const byteNumbers = new Array(slice.length);
+                    for (let i = 0; i < slice.length; i++) {
+                        byteNumbers[i] = slice.charCodeAt(i);
+                    }
+                    const byteArray = new Uint8Array(byteNumbers);
+                    byteArrays.push(byteArray);
+                }
+
+                const blob = new Blob(byteArrays, {type: contentType});
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                window.setTimeout(() => window.URL.revokeObjectURL(url), 100);
+            } catch (e) {
+                console.error("Base64 Decode Error:", e);
+                showToast("ファイルの保存に失敗しました: " + e.message, 'error');
             }
-            const byteArray = new Uint8Array(byteNumbers);
-            const blob = new Blob([byteArray], {type: contentType});
-            
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.style.display = 'none';
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            window.setTimeout(() => window.URL.revokeObjectURL(url), 100);
         };
 
         btnDlPdf.addEventListener('click', () => {
