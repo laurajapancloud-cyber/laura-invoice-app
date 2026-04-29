@@ -3,7 +3,7 @@ import json
 import secrets
 from typing import Annotated
 
-from fastapi import FastAPI, UploadFile, File, Depends, HTTPException, status, Response
+from fastapi import FastAPI, UploadFile, File, Depends, HTTPException, status, Response, Request
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
@@ -32,6 +32,12 @@ security = HTTPBasic()
 templates = Jinja2Templates(directory="templates")
 
 def authenticate(credentials: Annotated[HTTPBasicCredentials, Depends(security)]):
+    if not APP_USERNAME or not APP_PASSWORD:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Server configuration error: Auth credentials not set."
+        )
+    
     current_username_bytes = credentials.username.encode("utf8")
     correct_username_bytes = APP_USERNAME.encode("utf8")
     is_correct_username = secrets.compare_digest(
@@ -51,9 +57,15 @@ def authenticate(credentials: Annotated[HTTPBasicCredentials, Depends(security)]
     return credentials.username
 
 @app.get("/", response_class=HTMLResponse)
-async def index(username: Annotated[str, Depends(authenticate)]):
-    return templates.TemplateResponse("index.html", {"request": {}})
+async def index(request: Request, username: Annotated[str, Depends(authenticate)]):
+    return templates.TemplateResponse("index.html", {"request": request})
 
+@app.post("/generate-pdf")
+async def generate_pdf(
+    request: Request,
+    file: UploadFile = File(...),
+    username: Annotated[str, Depends(authenticate)] = None
+):
     try:
         # 1. Read Image
         image_bytes = await file.read()
