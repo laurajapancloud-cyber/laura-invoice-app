@@ -40,6 +40,8 @@ APP_PASSWORD = os.getenv("APP_PASSWORD")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 GOOGLE_CREDENTIALS_JSON = os.getenv("GOOGLE_CREDENTIALS_JSON")
+AZURE_OPENAI_KEY = os.getenv("AZURE_OPENAI_KEY")
+AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT")
 
 if not all([APP_USERNAME, APP_PASSWORD, GEMINI_API_KEY]):
     print("Warning: Missing required environment variables.")
@@ -51,6 +53,14 @@ gemini_model = genai.GenerativeModel("gemini-2.5-flash")
 openai_client = None
 if OPENAI_API_KEY and OpenAI:
     openai_client = OpenAI(api_key=OPENAI_API_KEY)
+
+azure_client = None
+if AZURE_OPENAI_KEY and AZURE_OPENAI_ENDPOINT and OpenAI:
+    azure_client = OpenAI(
+        api_key=AZURE_OPENAI_KEY,
+        base_url=AZURE_OPENAI_ENDPOINT,
+        default_headers={"api-key": AZURE_OPENAI_KEY}
+    )
 
 vision_client = None
 if GOOGLE_CREDENTIALS_JSON and vision:
@@ -102,6 +112,12 @@ def init_db():
             net_amount INTEGER DEFAULT 0,
             FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE CASCADE
         );
+        CREATE TABLE IF NOT EXISTS api_usage (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ai_model TEXT NOT NULL,
+            image_count INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
     """)
     # Insert default customers if table is empty
     count = conn.execute("SELECT COUNT(*) FROM customers").fetchone()[0]
@@ -145,6 +161,55 @@ def authenticate(credentials: Annotated[HTTPBasicCredentials, Depends(security)]
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request, username: Annotated[str, Depends(authenticate)]):
     return templates.TemplateResponse(request=request, name="index.html")
+
+@app.get("/health")
+async def health():
+    return {"status": "alive", "time": datetime.datetime.now().isoformat()}
+
+# ==================== Dashboard API ====================
+@app.get("/api/dashboard")
+async def get_dashboard(username: Annotated[str, Depends(authenticate)]):
+    conn = get_db()
+    now = datetime.datetime.now()
+    month_start = now.strftime("%Y-%m-01")
+    
+    # This month stats
+    inv_stats = conn.execute(
+        "SELECT COUNT(*) as cnt, COALESCE(SUM(total_grand_total),0) as total FROM invoices WHERE created_at >= ?",
+        (month_start,)
+    ).fetchone()
+    
+    # Monthly history (last 6 months)
+    monthly = conn.execute(
+        "SELECT strftime('%Y-%m', created_at) as month, COUNT(*) as cnt, COALESCE(SUM(total_grand_total),0) as total FROM invoices GROUP BY month ORDER BY month DESC LIMIT 6"
+    ).fetchall()
+    
+    # API usage this month
+    usage = conn.execute(
+        "SELECT ai_model, COUNT(*) as cnt, COALESCE(SUM(image_count),0) as imgs FROM api_usage WHERE created_at >= ? GROUP BY ai_model",
+        (month_start,)
+    ).fetchall()
+    
+    conn.close()
+    
+    # Estimate costs
+    usage_list = []
+    for u in usage:
+        model = u["ai_model"]
+        imgs = u["imgs"]
+        if model == "gemini":
+            cost = round(imgs * 0.1, 1)  # ~0.1 yen per image
+        elif model in ["azure", "openai"]:
+            cost = round(imgs * 0.5, 1)
+        else:
+            cost = 0
+        usage_list.append({"model": model, "requests": u["cnt"], "images": imgs, "est_cost_yen": cost})
+    
+    return {
+        "this_month": {"invoices": inv_stats["cnt"], "total_amount": inv_stats["total"]},
+        "monthly": [dict(m) for m in monthly],
+        "api_usage": usage_list
+    }
 
 # ==================== Customer Master API ====================
 @app.get("/api/customers")
@@ -263,6 +328,15 @@ async def analyze_images(
                 })
             return JSONResponse({"items": items_data})
 
+        elif ai_model == "azure":
+            if not azure_client:
+                raise HTTPException(status_code=500, detail="Azure OpenAIのキー/エンドポイントが未設定です。")
+            content_list = [{"type": "text", "text": prompt}]
+            for part in image_parts:
+                content_list.append({"type": "image_url", "image_url": {"url": f"data:{part['mime_type']};base64,{part['base64']}"}})
+            response = azure_client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": content_list}], max_tokens=2000)
+            raw_text = response.choices[0].message.content.strip()
+
         elif ai_model == "openai":
             if not openai_client:
                 raise HTTPException(status_code=500, detail="OpenAI APIキーが未設定です。")
@@ -279,7 +353,8 @@ async def analyze_images(
                 raw_text = response.text.strip()
             except Exception as e:
                 error_str = str(e)
-                if "429" in error_str or "Quota" in error_str or "rate" in error_str:
+                print(f"[GEMINI ERROR] {error_str}")
+                if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str or "Quota exceeded" in error_str or "rate_limit" in error_str:
                     raise HTTPException(status_code=429, detail="Geminiの無料枠上限に達しました。設定からAIモデルを切り替えてください。")
                 raise HTTPException(status_code=500, detail=f"Gemini Error: {error_str}")
 
@@ -290,6 +365,15 @@ async def analyze_images(
         chunk_data = json.loads(raw_text)
         if not isinstance(chunk_data, list):
             chunk_data = [chunk_data]
+        
+        # Record API usage
+        try:
+            conn = get_db()
+            conn.execute("INSERT INTO api_usage (ai_model, image_count) VALUES (?, ?)", (ai_model, len(files)))
+            conn.commit()
+            conn.close()
+        except: pass
+        
         return JSONResponse({"items": chunk_data})
 
     except HTTPException:

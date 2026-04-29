@@ -69,6 +69,18 @@
         .empty-state { text-align:center; padding:40px 20px; color:var(--muted); font-size:13px; }
         .spinner { width:18px; height:18px; border:2px solid rgba(255,255,255,.3); border-top:2px solid #fff; border-radius:50%; animation:spin .8s linear infinite; display:none; }
         @keyframes spin { to{transform:rotate(360deg)} }
+        .stat-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px; }
+        .stat-box { background:#fafafa; border-radius:12px; padding:16px; text-align:center; }
+        .stat-val { font-size:24px; font-weight:800; color:var(--accent); }
+        .stat-label { font-size:11px; color:var(--muted); margin-top:4px; }
+        .bar-chart { display:flex; align-items:flex-end; gap:8px; height:120px; padding:8px 0; }
+        .bar-col { flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; }
+        .bar { width:100%; background:var(--accent); border-radius:4px 4px 0 0; min-height:4px; transition:height .5s; }
+        .bar-label { font-size:10px; color:var(--muted); }
+        .usage-row { display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border); font-size:13px; }
+        .usage-row:last-child { border:none; }
+        .share-btns { display:flex; gap:8px; margin-top:12px; }
+        .share-btns .btn { flex:1; font-size:13px; padding:10px; }
     </style>
 </head>
 <body>
@@ -76,8 +88,9 @@
         <div class="logo">LAURA JAPAN</div>
         <div class="logo-sub">INVOICE & DATA MANAGEMENT</div>
         <div class="tabs">
-            <div class="tab active" data-tab="create">📝 新規作成</div>
+            <div class="tab active" data-tab="create">✍️ 新規</div>
             <div class="tab" data-tab="history">📂 履歴</div>
+            <div class="tab" data-tab="dashboard">📊 分析</div>
             <div class="tab" data-tab="settings">⚙️ 設定</div>
         </div>
     </div>
@@ -94,6 +107,7 @@
                 <div class="form-group"><label>AIモデル</label>
                     <select id="sel-ai">
                         <option value="gemini">Gemini 2.5 Flash</option>
+                        <option value="azure">Azure GPT-4o (会社)</option>
                         <option value="openai">OpenAI GPT-4o-mini</option>
                         <option value="vision">Cloud Vision (高速OCR)</option>
                     </select>
@@ -131,6 +145,10 @@
                 <div style="font-size:12px;color:var(--muted);margin-bottom:16px">伝票が作成され、履歴に保存されました</div>
                 <button class="btn btn-red" id="btn-pdf">📄 納品書 (PDF) をダウンロード</button>
                 <button class="btn btn-green" id="btn-excel">📊 管理伝票 (Excel) をダウンロード</button>
+                <div class="share-btns">
+                    <button class="btn btn-sm" id="btn-line" style="background:#06c755;flex:1">📱 LINEで共有</button>
+                    <button class="btn btn-sm" id="btn-email" style="background:#6b7280;flex:1">✉️ メールで送信</button>
+                </div>
                 <button class="btn btn-dark" id="btn-new" style="margin-top:8px">＋ 新しい伝票を作成する</button>
             </div>
         </div>
@@ -144,7 +162,26 @@
         </div>
     </div>
 
-    <!-- ========== TAB 3: SETTINGS ========== -->
+    <!-- ========== TAB 3: DASHBOARD ========== -->
+    <div class="page" id="page-dashboard">
+        <div class="card">
+            <div class="card-title">📊 今月の実績</div>
+            <div class="stat-grid">
+                <div class="stat-box"><div class="stat-val" id="dash-inv-cnt">0</div><div class="stat-label">伝票数</div></div>
+                <div class="stat-box"><div class="stat-val" id="dash-inv-amt">¥0</div><div class="stat-label">合計金額</div></div>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-title">📈 月別推移</div>
+            <div class="bar-chart" id="bar-chart"><div class="empty-state">データがありません</div></div>
+        </div>
+        <div class="card">
+            <div class="card-title">🤖 AI利用状況（今月）</div>
+            <div id="usage-list"><div class="empty-state">まだ利用がありません</div></div>
+        </div>
+    </div>
+
+    <!-- ========== TAB 4: SETTINGS ========== -->
     <div class="page" id="page-settings">
         <div class="card">
             <div class="card-title">👤 取引先マスタ</div>
@@ -172,6 +209,7 @@
         $('page-'+t.dataset.tab).classList.add('active');
         if(t.dataset.tab==='history') loadHistory();
         if(t.dataset.tab==='settings') loadCustomers();
+        if(t.dataset.tab==='dashboard') loadDashboard();
     }));
 
     // ===== Toast =====
@@ -277,17 +315,63 @@
             const r=await fetch('/generate-documents',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
             if(!r.ok){const e=await r.json();throw new Error(e.detail);}
             const d=await r.json();pdfData=d.pdf_base64;excelData=d.excel_base64;
+            currentInvNum=d.invoice_number;
             $('inv-num-display').textContent=`伝票番号: ${d.invoice_number}`;
             $('preview-card').style.display='none';$('dl-section').style.display='block';
             toast('✨ 保存完了！','ok');
         }catch(e){toast(e.message,'err');$('btn-generate').disabled=false;$('sp2').style.display='none';}
     });
 
+    let currentInvNum = '';
+
     // ===== Download =====
     function dl64(b64,fn,ct){try{const c=atob(b64.replace(/\s/g,''));const a=[];for(let o=0;o<c.length;o+=512){const s=c.slice(o,o+512);const n=new Array(s.length);for(let i=0;i<s.length;i++)n[i]=s.charCodeAt(i);a.push(new Uint8Array(n));}const b=new Blob(a,{type:ct});const u=URL.createObjectURL(b);const l=document.createElement('a');l.href=u;l.download=fn;l.click();URL.revokeObjectURL(u);}catch(e){toast('保存エラー: '+e.message,'err');}}
     $('btn-pdf').addEventListener('click',()=>pdfData&&dl64(pdfData,'LAURA_JAPAN_invoice.pdf','application/pdf'));
     $('btn-excel').addEventListener('click',()=>excelData&&dl64(excelData,'LAURA_JAPAN_data.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'));
     $('btn-new').addEventListener('click',()=>{selectedFiles=[];extractedItems=[];pdfData=null;excelData=null;$('drop-area').style.display='';$('thumbs').innerHTML='';$('thumbs').style.display='';$('btn-analyze').style.display='';$('btn-analyze').disabled=true;$('btn-analyze-text').textContent='AIでデータを抽出する';$('sp1').style.display='none';$('preview-card').style.display='none';$('dl-section').style.display='none';$('toast').style.display='none';$('btn-generate').disabled=false;$('sp2').style.display='none';});
+
+    // ===== LINE / Email Share =====
+    $('btn-line').addEventListener('click',()=>{
+        const msg = `【LAURA JAPAN 納品書】\n伝票番号: ${currentInvNum}\n※ PDFはアプリからダウンロードしてください`;
+        window.open(`https://line.me/R/share?text=${encodeURIComponent(msg)}`);
+    });
+    $('btn-email').addEventListener('click',()=>{
+        const subj = `LAURA JAPAN 納品書 [${currentInvNum}]`;
+        const body = `伝票番号: ${currentInvNum}\n\n※ PDF/Excelはアプリからダウンロードしてください。`;
+        window.location.href = `mailto:?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(body)}`;
+    });
+
+    // ===== Dashboard =====
+    async function loadDashboard(){
+        try{
+            const r=await fetch('/api/dashboard');const d=await r.json();
+            $('dash-inv-cnt').textContent=d.this_month.invoices;
+            $('dash-inv-amt').textContent='¥'+d.this_month.total_amount.toLocaleString();
+            // Bar chart
+            const bc=$('bar-chart');bc.innerHTML='';
+            if(d.monthly.length){
+                const max=Math.max(...d.monthly.map(m=>m.total),1);
+                d.monthly.reverse().forEach(m=>{
+                    const col=document.createElement('div');col.className='bar-col';
+                    const h=Math.max(4,Math.round(m.total/max*100));
+                    col.innerHTML=`<div class="bar" style="height:${h}px"></div><div class="bar-label">${m.month.slice(5)}月</div>`;
+                    bc.appendChild(col);
+                });
+            } else { bc.innerHTML='<div class="empty-state">データがありません</div>'; }
+            // Usage
+            const ul=$('usage-list');ul.innerHTML='';
+            if(d.api_usage.length){
+                d.api_usage.forEach(u=>{
+                    const row=document.createElement('div');row.className='usage-row';
+                    row.innerHTML=`<span><strong>${u.model}</strong> (${u.requests}回 / ${u.images}枚)</span><span>推定 ¥${u.est_cost_yen}</span>`;
+                    ul.appendChild(row);
+                });
+            } else { ul.innerHTML='<div class="empty-state">まだ利用がありません</div>'; }
+        }catch(e){console.error(e);}
+    }
+
+    // ===== Keep-Alive (prevent Render free tier sleep) =====
+    setInterval(()=>{fetch('/health').catch(()=>{});}, 5*60*1000); // every 5 min
 
     // ===== Init =====
     loadCustomers();
