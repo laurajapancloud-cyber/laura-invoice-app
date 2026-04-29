@@ -5,3 +5,4 @@ google-generativeai
 weasyprint
 python-multipart
 python-dotenv
+openpyxl

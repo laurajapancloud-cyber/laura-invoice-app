@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>LAURA JAPAN | 納品書作成</title>
+    <title>LAURA JAPAN | 納品書・伝票作成</title>
     <style>
         :root {
             --primary-color: #1a1a1a;
@@ -86,6 +86,7 @@
             display: flex;
             justify-content: center;
             align-items: center;
+            margin-bottom: 10px;
         }
 
         .btn:disabled {
@@ -96,6 +97,9 @@
         .btn:active {
             transform: scale(0.98);
         }
+
+        .btn-pdf { background-color: #d32f2f; }
+        .btn-excel { background-color: #1d6f42; }
 
         .loading-spinner {
             width: 20px;
@@ -119,11 +123,24 @@
             min-height: 20px;
         }
 
-        .preview-img {
-            max-width: 100%;
-            border-radius: 10px;
+        .preview-container {
+            display: flex;
+            gap: 10px;
+            overflow-x: auto;
             margin-top: 20px;
+            padding-bottom: 10px;
+        }
+
+        .preview-img {
+            height: 80px;
+            width: auto;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        
+        #download-section {
             display: none;
+            margin-top: 20px;
         }
     </style>
 </head>
@@ -133,15 +150,20 @@
         
         <div class="upload-area" onclick="document.getElementById('file-input').click()">
             <span class="upload-icon">📸</span>
-            <span class="upload-text" id="file-label">タグを撮影または選択</span>
-            <input type="file" id="file-input" accept="image/*" capture="environment">
-            <img id="preview" class="preview-img">
+            <span class="upload-text" id="file-label">複数のタグを撮影または選択</span>
+            <input type="file" id="file-input" accept="image/*" capture="environment" multiple>
+            <div id="preview-container" class="preview-container"></div>
         </div>
 
         <button id="upload-btn" class="btn" disabled>
             <div class="loading-spinner" id="spinner"></div>
-            <span id="btn-text">納品書を作成する</span>
+            <span id="btn-text">データを作成する</span>
         </button>
+        
+        <div id="download-section">
+            <button id="btn-dl-pdf" class="btn btn-pdf">📄 納品書 (PDF) を保存</button>
+            <button id="btn-dl-excel" class="btn btn-excel">📊 管理伝票 (Excel) を保存</button>
+        </div>
 
         <div id="status-msg"></div>
     </div>
@@ -153,62 +175,101 @@
         const spinner = document.getElementById('spinner');
         const statusMsg = document.getElementById('status-msg');
         const fileLabel = document.getElementById('file-label');
-        const preview = document.getElementById('preview');
+        const previewContainer = document.getElementById('preview-container');
+        const downloadSection = document.getElementById('download-section');
+        const btnDlPdf = document.getElementById('btn-dl-pdf');
+        const btnDlExcel = document.getElementById('btn-dl-excel');
+
+        let currentPdfData = null;
+        let currentExcelData = null;
 
         fileInput.addEventListener('change', (e) => {
-            if (e.target.files && e.target.files[0]) {
-                const file = e.target.files[0];
-                fileLabel.textContent = file.name;
+            if (e.target.files && e.target.files.length > 0) {
+                const files = Array.from(e.target.files);
+                fileLabel.textContent = `${files.length}枚のタグを選択中`;
                 uploadBtn.disabled = false;
+                downloadSection.style.display = 'none';
+                statusMsg.textContent = '';
                 
-                // Show preview
-                const reader = new FileReader();
-                reader.onload = (re) => {
-                    preview.src = re.target.result;
-                    preview.style.display = 'block';
-                };
-                reader.readAsDataURL(file);
+                previewContainer.innerHTML = '';
+                
+                files.forEach(file => {
+                    const reader = new FileReader();
+                    reader.onload = (re) => {
+                        const img = document.createElement('img');
+                        img.src = re.target.result;
+                        img.className = 'preview-img';
+                        previewContainer.appendChild(img);
+                    };
+                    reader.readAsDataURL(file);
+                });
             }
         });
 
+        const downloadBase64File = (base64Data, filename, contentType) => {
+            const byteCharacters = atob(base64Data);
+            const byteNumbers = new Array(byteCharacters.length);
+            for (let i = 0; i < byteCharacters.length; i++) {
+                byteNumbers[i] = byteCharacters.charCodeAt(i);
+            }
+            const byteArray = new Uint8Array(byteNumbers);
+            const blob = new Blob([byteArray], {type: contentType});
+            
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+        };
+
+        btnDlPdf.addEventListener('click', () => {
+            if(currentPdfData) downloadBase64File(currentPdfData, 'LAURA_JAPAN_invoice.pdf', 'application/pdf');
+        });
+
+        btnDlExcel.addEventListener('click', () => {
+            if(currentExcelData) downloadBase64File(currentExcelData, 'LAURA_JAPAN_data.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        });
+
         uploadBtn.addEventListener('click', async () => {
-            const file = fileInput.files[0];
-            if (!file) return;
+            const files = fileInput.files;
+            if (files.length === 0) return;
 
             const formData = new FormData();
-            formData.append('file', file);
+            Array.from(files).forEach(file => {
+                formData.append('files', file);
+            });
 
-            // UI State
             uploadBtn.disabled = true;
             spinner.style.display = 'block';
-            btnText.textContent = '解析中...';
-            statusMsg.textContent = 'AIがタグを読み取っています...';
+            btnText.textContent = 'AIが解析中...';
+            statusMsg.textContent = '画像をサーバーに送信し、AIで読み取っています...（枚数が多いと数分かかります）';
             statusMsg.style.color = '#666';
+            downloadSection.style.display = 'none';
 
             try {
-                const response = await fetch('/generate-pdf', {
+                const response = await fetch('/generate-documents', {
                     method: 'POST',
                     body: formData
                 });
 
                 if (!response.ok) {
                     const errorData = await response.json();
-                    throw new Error(errorData.detail || 'PDFの生成に失敗しました');
+                    throw new Error(errorData.detail || 'ファイルの生成に失敗しました');
                 }
 
-                const blob = await response.blob();
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.style.display = 'none';
-                a.href = url;
-
-                a.download = 'LAURA_JAPAN_invoice.pdf';
-                document.body.appendChild(a);
-                a.click();
-                window.URL.revokeObjectURL(url);
+                const data = await response.json();
                 
-                statusMsg.textContent = '成功しました！ダウンロードを開始します。';
+                currentPdfData = data.pdf_base64;
+                currentExcelData = data.excel_base64;
+                
+                statusMsg.textContent = '成功しました！下のボタンから保存してください。';
                 statusMsg.style.color = 'green';
+                downloadSection.style.display = 'block';
+                uploadBtn.style.display = 'none';
+                
             } catch (error) {
                 console.error(error);
                 statusMsg.textContent = `エラー: ${error.message}`;
@@ -216,7 +277,10 @@
             } finally {
                 uploadBtn.disabled = false;
                 spinner.style.display = 'none';
-                btnText.textContent = '納品書を作成する';
+                btnText.textContent = 'データを作成する';
+                if(statusMsg.style.color !== 'green') {
+                    uploadBtn.style.display = 'flex';
+                }
             }
         });
     </script>
