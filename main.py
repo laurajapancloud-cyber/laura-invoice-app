@@ -54,11 +54,6 @@ def authenticate(credentials: Annotated[HTTPBasicCredentials, Depends(security)]
 async def index(username: Annotated[str, Depends(authenticate)]):
     return templates.TemplateResponse("index.html", {"request": {}})
 
-@app.post("/generate-pdf")
-async def generate_pdf(
-    file: UploadFile = File(...),
-    username: Annotated[str, Depends(authenticate)] = Depends(authenticate)
-):
     try:
         # 1. Read Image
         image_bytes = await file.read()
