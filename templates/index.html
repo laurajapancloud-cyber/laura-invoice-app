@@ -201,7 +201,8 @@
                 const a = document.createElement('a');
                 a.style.display = 'none';
                 a.href = url;
-                a.download = 'LAURA_JAPAN_納品書.pdf';
+
+                a.download = 'LAURA_JAPAN_invoice.pdf';
                 document.body.appendChild(a);
                 a.click();
                 window.URL.revokeObjectURL(url);
