@@ -526,7 +526,7 @@ async def generate_documents(
         current_row = start_row + 1
         for i, item in enumerate(processed_items):
             ws.row_dimensions[current_row].height = 40
-            ws[f"A{current_row}"] = f"{i+1} {item['code']}"
+            ws[f"A{current_row}"] = item['code']
             ws[f"B{current_row}"] = item["color"]
             ws[f"C{current_row}"] = item["size"]
             ws[f"D{current_row}"] = ""
