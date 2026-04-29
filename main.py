@@ -22,9 +22,10 @@ from pydantic import BaseModel
 
 # Conditional imports
 try:
-    from openai import OpenAI
+    from openai import OpenAI, AzureOpenAI
 except ImportError:
     OpenAI = None
+    AzureOpenAI = None
 
 try:
     from google.oauth2 import service_account
@@ -55,11 +56,17 @@ if OPENAI_API_KEY and OpenAI:
     openai_client = OpenAI(api_key=OPENAI_API_KEY)
 
 azure_client = None
-if AZURE_OPENAI_KEY and AZURE_OPENAI_ENDPOINT and OpenAI:
-    azure_client = OpenAI(
+if AZURE_OPENAI_KEY and AZURE_OPENAI_ENDPOINT and AzureOpenAI:
+    # URLの末尾が /openai の場合は自動調整 (AzureOpenAIが内部で付与するため)
+    base_endpoint = AZURE_OPENAI_ENDPOINT.rstrip('/')
+    if base_endpoint.endswith('/openai'):
+        base_endpoint = base_endpoint[:-7]
+        
+    azure_client = AzureOpenAI(
         api_key=AZURE_OPENAI_KEY,
-        base_url=AZURE_OPENAI_ENDPOINT,
-        default_headers={"api-key": AZURE_OPENAI_KEY}
+        api_version="2024-02-01",
+        azure_endpoint=base_endpoint,
+        default_headers={"Ocp-Apim-Subscription-Key": AZURE_OPENAI_KEY}
     )
 
 vision_client = None
