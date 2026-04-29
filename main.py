@@ -58,7 +58,7 @@ def authenticate(credentials: Annotated[HTTPBasicCredentials, Depends(security)]
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request, username: Annotated[str, Depends(authenticate)]):
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse(request=request, name="index.html")
 
 @app.post("/generate-pdf")
 async def generate_pdf(
