@@ -341,7 +341,7 @@ async def analyze_images(
             content_list = [{"type": "text", "text": prompt}]
             for part in image_parts:
                 content_list.append({"type": "image_url", "image_url": {"url": f"data:{part['mime_type']};base64,{part['base64']}"}})
-            response = azure_client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": content_list}], max_tokens=2000)
+            response = azure_client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": content_list}], max_completion_tokens=2000)
             raw_text = response.choices[0].message.content.strip()
 
         elif ai_model == "openai":
