@@ -24,7 +24,7 @@ if not all([APP_USERNAME, APP_PASSWORD, GEMINI_API_KEY]):
 
 # Gemini Initialization
 genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel("gemini-1.5-flash")
+model = genai.GenerativeModel("gemini-2.5-flash")
 
 # FastAPI App
 app = FastAPI()
