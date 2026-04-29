@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <title>納品書</title>
     <style>
-        body { font-family: "Hiragino Sans", "Meiryo", sans-serif; font-size: 12px; }
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap');
+        body { font-family: 'Noto Sans JP', sans-serif; font-size: 12px; }
         .invoice-box { max-width: 800px; margin: auto; padding: 30px; }
         .header { display: flex; justify-content: space-between; margin-bottom: 40px; }
         .title { font-size: 24px; font-weight: bold; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px;}
@@ -36,7 +37,7 @@
                     <th>カラー</th>
                     <th>サイズ</th>
                     <th>単価</th>
-                    <th>金額（掛率35%）</th>
+                    <th>金額（掛率{{ discount_rate }}%）</th>
                 </tr>
             </thead>
             <tbody>

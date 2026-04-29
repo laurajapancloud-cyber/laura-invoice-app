@@ -6,7 +6,7 @@ import base64
 from io import BytesIO
 import datetime
 
-from fastapi import FastAPI, UploadFile, File, Depends, HTTPException, status, Response, Request
+from fastapi import FastAPI, UploadFile, File, Depends, HTTPException, status, Response, Request, Form
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -69,7 +69,9 @@ async def index(request: Request, username: Annotated[str, Depends(authenticate)
 async def generate_documents(
     request: Request,
     username: Annotated[str, Depends(authenticate)],
-    files: List[UploadFile] = File(...)
+    files: List[UploadFile] = File(...),
+    customer_name: str = Form("株式会社 タム 御中"),
+    discount_rate: int = Form(35)
 ):
     try:
         # 1. Read all Images
@@ -86,7 +88,14 @@ async def generate_documents(
 """.strip()
 
         contents = [prompt] + image_parts
-        response = model.generate_content(contents)
+        
+        try:
+            response = model.generate_content(contents)
+        except Exception as e:
+            error_str = str(e)
+            if "429" in error_str or "Quota exceeded" in error_str or "rate limits" in error_str:
+                raise HTTPException(status_code=429, detail="AI（Gemini）の一時的な利用制限に達しました。しばらく（約30秒）待ってから再度お試しください。")
+            raise HTTPException(status_code=500, detail=f"Gemini API Request Error: {error_str}")
         
         # Extract JSON from response
         try:
@@ -112,7 +121,7 @@ async def generate_documents(
             unit_price = data.get("unit_price", 0)
             if isinstance(unit_price, str):
                 unit_price = int(unit_price.replace(',', '').replace('¥', '').strip())
-            net_amount = int(unit_price * 0.35)
+            net_amount = int(unit_price * (discount_rate / 100))
             tax_amount = int(net_amount * 0.1)
             grand_total = net_amount + tax_amount
             
@@ -131,7 +140,8 @@ async def generate_documents(
             total_grand_total += grand_total
         
         invoice_data = {
-            "customer_name": "株式会社 タム 御中",
+            "customer_name": customer_name,
+            "discount_rate": discount_rate,
             "items": processed_items,
             "total_net_amount": total_net_amount,
             "total_tax_amount": total_tax_amount,
@@ -162,7 +172,7 @@ async def generate_documents(
         ws["A5"] = "SZ2006"
         ws["A5"].fill = fill_yellow
         ws["C4"] = "店名"
-        ws["C5"] = "タム"
+        ws["C5"] = customer_name
         ws["C5"].fill = fill_yellow
         
         ws["F1"] = "No."
@@ -218,7 +228,7 @@ async def generate_documents(
             ws[f"G{current_row}"].number_format = '#,##0'
             ws[f"H{current_row}"] = item["net_amount"]
             ws[f"H{current_row}"].number_format = '#,##0'
-            ws[f"I{current_row}"] = "35%"
+            ws[f"I{current_row}"] = f"{discount_rate}%"
             
             for col in ['A', 'B', 'C', 'D', 'F', 'G', 'H', 'I']:
                 cell = ws[f"{col}{current_row}"]

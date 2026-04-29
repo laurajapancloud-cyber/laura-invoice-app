@@ -254,6 +254,35 @@
             color: var(--text-main);
             margin-bottom: 16px;
         }
+
+        .settings-panel {
+            background-color: #fafafa;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 24px;
+            display: flex;
+            gap: 16px;
+            text-align: left;
+        }
+        .setting-item {
+            flex: 1;
+        }
+        .setting-item label {
+            display: block;
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+            font-weight: 600;
+        }
+        .setting-item input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 14px;
+            font-family: inherit;
+        }
     </style>
 </head>
 <body>
@@ -271,7 +300,18 @@
 
         <div id="preview-container" class="preview-container"></div>
 
-        <button id="upload-btn" class="btn" disabled style="margin-top: 24px;">
+        <div class="settings-panel">
+            <div class="setting-item">
+                <label>取引先名</label>
+                <input type="text" id="customer-name" value="株式会社 タム 御中">
+            </div>
+            <div class="setting-item">
+                <label>掛率 (%)</label>
+                <input type="number" id="discount-rate" value="35" min="1" max="100">
+            </div>
+        </div>
+
+        <button id="upload-btn" class="btn" disabled style="margin-top: 8px;">
             <div class="loading-spinner" id="spinner"></div>
             <span id="btn-text">データを自動生成する</span>
         </button>
@@ -453,6 +493,8 @@
                 const compressedBlobs = await Promise.all(selectedFiles.map(file => compressImage(file)));
 
                 const formData = new FormData();
+                formData.append('customer_name', document.getElementById('customer-name').value);
+                formData.append('discount_rate', document.getElementById('discount-rate').value);
                 compressedBlobs.forEach((blob, index) => {
                     // JPEGとして送信
                     formData.append('files', blob, `image_${index}.jpg`);
