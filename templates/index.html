@@ -987,6 +987,9 @@
                 <div class="success-meta">伝票が作成され、履歴に保存されました</div>
                 <button class="btn btn-red" id="btn-pdf">📄 納品書 (PDF) をダウンロード</button>
                 <button class="btn btn-green" id="btn-excel">📊 管理伝票 (Excel) をダウンロード</button>
+                <button class="btn btn-blue" id="btn-drive">
+                    <div class="spinner" id="sp3"></div>☁️ Google Driveに保存
+                </button>
                 <div class="share-btns">
                     <button class="btn btn-sm btn-outline" id="btn-line" style="flex:1">📱 LINE</button>
                     <button class="btn btn-sm btn-outline" id="btn-email" style="flex:1">✉️ メール</button>
@@ -1057,7 +1060,7 @@
     <script>
         /* ===== JavaScript はそのまま流用（`btn-accent` クラスは新CSSの定義あり） ===== */
         let selectedFiles = [], extractedItems = [], pdfData = null, excelData = null;
-        let currentEditingInvId = null, allHistory = [], currentInvNum = '';
+        let currentEditingInvId = null, allHistory = [], currentInvNum = '', lastInvoiceId = null;
         const $ = id => document.getElementById(id);
 
         document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
@@ -1104,7 +1107,7 @@
             if (!data.length) { hl.innerHTML = '<div class="empty-state">伝票が見つかりません</div>'; return; }
             data.forEach(inv => {
                 const d = document.createElement('div'); d.className = 'hist-item';
-                d.innerHTML = `<div class="hist-info"><div class="hist-num">${inv.invoice_number}</div><div class="hist-meta">${inv.customer_name} · ${inv.item_count}点 · ${inv.created_at?.split('T')[0] || ''}</div><div class="hist-actions"><a href="/api/history/${inv.id}/pdf" class="btn btn-red btn-sm">PDF</a><a href="/api/history/${inv.id}/excel" class="btn btn-green btn-sm">Excel</a><button class="btn btn-accent btn-sm" onclick="editHist(${inv.id})">✎ 編集</button><button class="btn btn-outline btn-sm" onclick="delHist(${inv.id})">削除</button></div></div><div class="hist-amt">¥${(inv.total_grand_total || 0).toLocaleString()}</div>`;
+                d.innerHTML = `<div class="hist-info"><div class="hist-num">${inv.invoice_number}</div><div class="hist-meta">${inv.customer_name} · ${inv.item_count}点 · ${inv.created_at?.split('T')[0] || ''}</div><div class="hist-actions"><a href="/api/history/${inv.id}/pdf" class="btn btn-red btn-sm">PDF</a><a href="/api/history/${inv.id}/excel" class="btn btn-green btn-sm">Excel</a><button class="btn btn-blue btn-sm" onclick="uploadDrive(${inv.id}, this)">☁️ Drive</button><button class="btn btn-accent btn-sm" onclick="editHist(${inv.id})">✎ 編集</button><button class="btn btn-outline btn-sm" onclick="delHist(${inv.id})">削除</button></div></div><div class="hist-amt">¥${(inv.total_grand_total || 0).toLocaleString()}</div>`;
                 hl.appendChild(d);
             });
         }
@@ -1274,6 +1277,7 @@
                 if (!r.ok) { const e = await r.json(); throw new Error(e.detail); }
                 const d = await r.json(); pdfData = d.pdf_base64; excelData = d.excel_base64;
                 currentInvNum = d.invoice_number;
+                lastInvoiceId = d.invoice_id;
                 $('inv-num-display').textContent = `伝票番号: ${d.invoice_number}`;
                 $('preview-card').style.display = 'none'; $('dl-section').style.display = 'block';
                 toast('✦ 保存完了', 'ok');
@@ -1283,7 +1287,7 @@
         function dl64(b64, fn, ct) { try { const c = atob(b64.replace(/\s/g, '')); const a = []; for (let o = 0; o < c.length; o += 512) { const s = c.slice(o, o + 512); const n = new Array(s.length); for (let i = 0; i < s.length; i++)n[i] = s.charCodeAt(i); a.push(new Uint8Array(n)); } const b = new Blob(a, { type: ct }); const u = URL.createObjectURL(b); const l = document.createElement('a'); l.href = u; l.download = fn; l.click(); URL.revokeObjectURL(u); } catch (e) { toast('保存エラー: ' + e.message, 'err'); } }
         $('btn-pdf').addEventListener('click', () => pdfData && dl64(pdfData, 'LAURA_JAPAN_invoice.pdf', 'application/pdf'));
         $('btn-excel').addEventListener('click', () => excelData && dl64(excelData, 'LAURA_JAPAN_data.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'));
-        $('btn-new').addEventListener('click', () => { currentEditingInvId = null; selectedFiles = []; extractedItems = []; pdfData = null; excelData = null; $('drop-area').style.display = ''; $('thumbs').innerHTML = ''; $('thumbs').style.display = ''; $('btn-analyze').style.display = ''; $('btn-analyze').disabled = true; $('btn-analyze-text').textContent = 'AIでデータを抽出する'; $('sp1').style.display = 'none'; $('preview-card').style.display = 'none'; $('dl-section').style.display = 'none'; $('toast').style.display = 'none'; $('btn-generate').disabled = false; $('sp2').style.display = 'none'; });
+        $('btn-new').addEventListener('click', () => { currentEditingInvId = null; lastInvoiceId = null; selectedFiles = []; extractedItems = []; pdfData = null; excelData = null; $('drop-area').style.display = ''; $('thumbs').innerHTML = ''; $('thumbs').style.display = ''; $('btn-analyze').style.display = ''; $('btn-analyze').disabled = true; $('btn-analyze-text').textContent = 'AIでデータを抽出する'; $('sp1').style.display = 'none'; $('preview-card').style.display = 'none'; $('dl-section').style.display = 'none'; $('toast').style.display = 'none'; $('btn-generate').disabled = false; $('sp2').style.display = 'none'; });
 
         $('btn-line').addEventListener('click', () => {
             const msg = `【LAURA JAPAN 納品書】\n伝票番号: ${currentInvNum}\n※ PDFはアプリからダウンロードしてください`;
@@ -1320,6 +1324,36 @@
                 } else { ul.innerHTML = '<div class="empty-state">まだ利用がありません</div>'; }
             } catch (e) { console.error(e); }
         }
+
+        // ===== Google Drive Upload =====
+        async function uploadDriveCurrent() {
+            if (!lastInvoiceId) { toast('まず伝票を保存してください', 'err'); return; }
+            return uploadDrive(lastInvoiceId, $('btn-drive'));
+        }
+
+        async function uploadDrive(invId, btnEl) {
+            const sp = btnEl?.querySelector('.spinner');
+            if (sp) sp.style.display = 'block';
+            if (btnEl) btnEl.disabled = true;
+            try {
+                toast('Google Driveにアップロード中...', 'info');
+                const r = await fetch(`/api/history/${invId}/upload-drive`, { method: 'POST' });
+                if (!r.ok) { const e = await r.json(); throw new Error(e.detail); }
+                const d = await r.json();
+                const links = d.uploaded.map(u => `<a href="${u.url}" target="_blank" style="color:var(--gold-bright);text-decoration:underline">${u.type.toUpperCase()}</a>`).join(' / ');
+                const t = $('toast');
+                t.innerHTML = `✦ Driveに保存しました: ${links}`;
+                t.className = 'toast toast-ok';
+                t.style.display = 'block';
+            } catch (e) {
+                toast(`Drive保存失敗: ${e.message}`, 'err');
+            } finally {
+                if (sp) sp.style.display = 'none';
+                if (btnEl) btnEl.disabled = false;
+            }
+        }
+
+        $('btn-drive').addEventListener('click', uploadDriveCurrent);
 
         setInterval(() => { fetch('/health').catch(() => { }); }, 5 * 60 * 1000);
         loadCustomers();

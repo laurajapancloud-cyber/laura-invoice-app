@@ -10,3 +10,4 @@ openai
 google-cloud-vision
 python-barcode
 Pillow
+google-api-python-client

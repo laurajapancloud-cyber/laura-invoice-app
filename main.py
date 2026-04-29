@@ -20,6 +20,9 @@ from dotenv import load_dotenv
 import openpyxl
 from openpyxl.styles import PatternFill, Border, Side, Alignment, Font
 from openpyxl.drawing.image import Image as ExcelImage
+from openpyxl.utils.units import pixels_to_EMU
+from openpyxl.drawing.spreadsheet_drawing import OneCellAnchor, AnchorMarker
+from openpyxl.drawing.xdr import XDRPositiveSize2D
 import barcode
 from barcode.writer import ImageWriter
 from pydantic import BaseModel
@@ -37,8 +40,12 @@ except ImportError:
 try:
     from google.oauth2 import service_account
     from google.cloud import vision
+    from googleapiclient.discovery import build as gdrive_build
+    from googleapiclient.http import MediaInMemoryUpload
 except ImportError:
     vision = None
+    gdrive_build = None
+    MediaInMemoryUpload = None
 
 # Load environment variables
 load_dotenv()
@@ -50,6 +57,7 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 GOOGLE_CREDENTIALS_JSON = os.getenv("GOOGLE_CREDENTIALS_JSON")
 AZURE_OPENAI_KEY = os.getenv("AZURE_OPENAI_KEY")
 AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT")
+GDRIVE_FOLDER_ID = os.getenv("GDRIVE_FOLDER_ID")
 
 if not all([APP_USERNAME, APP_PASSWORD, GEMINI_API_KEY]):
     print("Warning: Missing required environment variables.")
@@ -84,6 +92,21 @@ if GOOGLE_CREDENTIALS_JSON and vision:
         vision_client = vision.ImageAnnotatorClient(credentials=creds)
     except Exception as e:
         print(f"Warning: Cloud Vision init failed: {e}")
+
+def get_drive_service():
+    """Google Drive API service (uses same service account JSON as Vision)."""
+    if not GOOGLE_CREDENTIALS_JSON or not gdrive_build:
+        return None
+    try:
+        creds_dict = json.loads(GOOGLE_CREDENTIALS_JSON)
+        creds = service_account.Credentials.from_service_account_info(
+            creds_dict,
+            scopes=["https://www.googleapis.com/auth/drive.file"]
+        )
+        return gdrive_build("drive", "v3", credentials=creds, cache_discovery=False)
+    except Exception as e:
+        print(f"Drive init failed: {e}")
+        return None
 
 # ==================== SQLite Database ====================
 DB_PATH = "invoices.db"
@@ -525,7 +548,7 @@ async def generate_documents(
 
         current_row = start_row + 1
         for i, item in enumerate(processed_items):
-            ws.row_dimensions[current_row].height = 40
+            ws.row_dimensions[current_row].height = 48
             ws[f"A{current_row}"] = item['code']
             ws[f"B{current_row}"] = item["color"]
             ws[f"C{current_row}"] = item["size"]
@@ -550,12 +573,26 @@ async def generate_documents(
             try:
                 code39 = barcode.get_barcode_class('code39')
                 bc_io = BytesIO()
-                code39(bc_str, writer=ImageWriter(), add_checksum=False).write(bc_io, options={"module_width":0.2, "module_height":5.0, "font_size":6, "text_distance":3, "quiet_zone":1})
+                code39(bc_str, writer=ImageWriter(), add_checksum=False).write(
+                    bc_io,
+                    options={"module_width":0.22, "module_height":6.0, "font_size":7, "text_distance":2.5, "quiet_zone":1}
+                )
                 bc_io.seek(0)
                 img = ExcelImage(bc_io)
-                img.width = 180
-                img.height = 40
-                ws.add_image(img, f"D{current_row}")
+                img_w_px, img_h_px = 175, 44
+
+                # D列(0-indexed=3) の current_row(0-indexed=current_row-1) にオフセット付きで配置
+                img.anchor = OneCellAnchor(
+                    _from=AnchorMarker(
+                        col=3, colOff=pixels_to_EMU(10),
+                        row=current_row - 1, rowOff=pixels_to_EMU(6)
+                    ),
+                    ext=XDRPositiveSize2D(
+                        cx=pixels_to_EMU(img_w_px),
+                        cy=pixels_to_EMU(img_h_px)
+                    )
+                )
+                ws.add_image(img)
             except Exception as e:
                 print(f"Barcode gen error: {e}")
                 
@@ -591,15 +628,59 @@ async def generate_documents(
         excel_b64 = base64.b64encode(excel_bytes).decode('utf-8')
 
         return JSONResponse({
+            "invoice_id": inv_id,
             "invoice_number": invoice_number,
             "pdf_base64": pdf_b64,
             "excel_base64": excel_b64
         })
 
+@app.post("/api/history/{inv_id}/upload-drive")
+async def upload_to_drive(inv_id: int, username: Annotated[str, Depends(authenticate)]):
+    service = get_drive_service()
+    if not service:
+        raise HTTPException(status_code=500, detail="Google Driveが未設定です。GOOGLE_CREDENTIALS_JSONを確認してください。")
+
+    conn = get_db()
+    row = conn.execute(
+        "SELECT invoice_number, customer_name, pdf_data, excel_data FROM invoices WHERE id = ?",
+        (inv_id,)
+    ).fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+
+    inv_num = row["invoice_number"]
+    cust = (row["customer_name"] or "").replace("/", "_").replace("\\", "_")
+    uploaded = []
+
+    def _upload(filename, mime, data):
+        meta = {"name": filename}
+        if GDRIVE_FOLDER_ID:
+            meta["parents"] = [GDRIVE_FOLDER_ID]
+        media = MediaInMemoryUpload(BytesIO(data), mimetype=mime, resumable=False)
+        f = service.files().create(
+            body=meta, media_body=media,
+            fields="id,name,webViewLink",
+            supportsAllDrives=True
+        ).execute()
+        return f
+
+    try:
+        if row["pdf_data"]:
+            f = _upload(f"{inv_num}_{cust}.pdf", "application/pdf", row["pdf_data"])
+            uploaded.append({"type": "pdf", "name": f["name"], "url": f.get("webViewLink"), "id": f["id"]})
+        if row["excel_data"]:
+            f = _upload(
+                f"{inv_num}_{cust}.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                row["excel_data"]
+            )
+            uploaded.append({"type": "excel", "name": f["name"], "url": f.get("webViewLink"), "id": f["id"]})
+
+        return {"status": "ok", "uploaded": uploaded, "folder_id": GDRIVE_FOLDER_ID}
     except Exception as e:
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+        import traceback; traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Drive upload error: {e}")
 
 if __name__ == "__main__":
     import uvicorn
