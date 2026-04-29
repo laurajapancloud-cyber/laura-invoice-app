@@ -55,7 +55,7 @@
         .data-table { width:100%; border-collapse:collapse; font-size:13px; }
         .data-table th { background:#fafafa; padding:8px; border:1px solid var(--border); font-size:11px; color:var(--muted); }
         .data-table td { padding:4px; border:1px solid var(--border); }
-        .data-table td input { width:100%; padding:6px; border:1px solid transparent; text-align:center; font-size:13px; border-radius:4px; }
+        .data-table td input { width:100%; padding:8px 4px; border:1px solid transparent; text-align:center; font-size:16px; border-radius:4px; }
         .data-table td input:focus { border-color:var(--accent); outline:none; background:#eff6ff; }
         .hist-item { display:flex; justify-content:space-between; align-items:center; padding:14px 0; border-bottom:1px solid var(--border); }
         .hist-item:last-child { border-bottom:none; }
@@ -132,8 +132,9 @@
             <div class="toast" id="toast"></div>
         </div>
         <div class="card" id="preview-card" style="display:none">
-            <div class="card-title">✏️ 読み取り結果（タップで修正可能）</div>
+            <div class="card-title" id="preview-title">✏️ 読み取り結果（タップで修正可能）</div>
             <div style="overflow-x:auto"><table class="data-table"><thead><tr><th>品番</th><th>カラー</th><th>サイズ</th><th>単価</th></tr></thead><tbody id="tbl-body"></tbody></table></div>
+            <button class="btn btn-sm" id="btn-add-row" style="background:var(--border);color:var(--primary);margin-top:8px;width:100%">＋ 空白行を追加</button>
             <div style="margin-top:16px">
                 <button class="btn btn-accent" id="btn-generate"><div class="spinner" id="sp2"></div>最終データを確定して保存</button>
             </div>
@@ -158,6 +159,7 @@
     <div class="page" id="page-history">
         <div class="card">
             <div class="card-title">📂 伝票履歴</div>
+            <div style="margin-bottom:16px"><input type="text" id="hist-search" placeholder="伝票番号や名前で検索..." style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:16px;background:#fafafa"></div>
             <div id="hist-list"><div class="empty-state">読込中...</div></div>
         </div>
     </div>
@@ -199,6 +201,8 @@
     <script>
     // ===== State =====
     let selectedFiles=[], extractedItems=[], pdfData=null, excelData=null;
+    let currentEditingInvId = null;
+    let allHistory = [];
     const $=id=>document.getElementById(id);
 
     // ===== Tabs =====
@@ -241,15 +245,46 @@
 
     // ===== History =====
     async function loadHistory(){
-        const r=await fetch('/api/history');const data=await r.json();const hl=$('hist-list');hl.innerHTML='';
-        if(!data.length){hl.innerHTML='<div class="empty-state">まだ伝票がありません</div>';return;}
+        const r=await fetch('/api/history');const data=await r.json();
+        allHistory = data;
+        renderHistory(allHistory);
+    }
+    function renderHistory(data){
+        const hl=$('hist-list');hl.innerHTML='';
+        if(!data.length){hl.innerHTML='<div class="empty-state">伝票が見つかりません</div>';return;}
         data.forEach(inv=>{
             const d=document.createElement('div');d.className='hist-item';
-            d.innerHTML=`<div class="hist-info"><div class="hist-num">${inv.invoice_number}</div><div class="hist-meta">${inv.customer_name} · ${inv.item_count}点 · ${inv.created_at?.split('T')[0]||''}</div><div class="hist-actions"><a href="/api/history/${inv.id}/pdf" class="btn btn-red btn-sm">PDF</a><a href="/api/history/${inv.id}/excel" class="btn btn-green btn-sm">Excel</a><button class="btn btn-sm" style="background:var(--muted)" onclick="delHist(${inv.id})">削除</button></div></div><div class="hist-amt">¥${(inv.total_grand_total||0).toLocaleString()}</div>`;
+            d.innerHTML=`<div class="hist-info"><div class="hist-num">${inv.invoice_number}</div><div class="hist-meta">${inv.customer_name} · ${inv.item_count}点 · ${inv.created_at?.split('T')[0]||''}</div><div class="hist-actions"><a href="/api/history/${inv.id}/pdf" class="btn btn-red btn-sm">PDF</a><a href="/api/history/${inv.id}/excel" class="btn btn-green btn-sm">Excel</a><button class="btn btn-accent btn-sm" onclick="editHist(${inv.id})">✏️ 編集</button><button class="btn btn-sm" style="background:var(--muted)" onclick="delHist(${inv.id})">削除</button></div></div><div class="hist-amt">¥${(inv.total_grand_total||0).toLocaleString()}</div>`;
             hl.appendChild(d);
         });
     }
+    $('hist-search').addEventListener('input', e=>{
+        const q=e.target.value.toLowerCase();
+        const f=allHistory.filter(i=>i.invoice_number.toLowerCase().includes(q)||i.customer_name.toLowerCase().includes(q));
+        renderHistory(f);
+    });
     async function delHist(id){if(confirm('この伝票を削除しますか？')){await fetch(`/api/history/${id}`,{method:'DELETE'});loadHistory();}}
+    
+    async function editHist(id){
+        try{
+            toast('データを読み込み中...','info');
+            const r=await fetch(`/api/history/${id}/items`);
+            if(!r.ok) throw new Error('読込失敗');
+            const d=await r.json();
+            
+            // Set state
+            currentEditingInvId = id;
+            extractedItems = d.items;
+            $('preview-title').textContent = `✏️ 再編集: ${d.invoice_number}`;
+            
+            // Switch tab
+            document.querySelectorAll('.tab')[0].click();
+            $('drop-area').style.display='none';$('thumbs').style.display='none';$('btn-analyze').style.display='none';
+            $('dl-section').style.display='none';
+            renderPreview();
+            toast('データを展開しました。修正して保存してください。','ok');
+        }catch(e){toast(e.message,'err');}
+    }
 
     // ===== File Upload =====
     $('drop-area').addEventListener('click',()=>$('file-input').click());
@@ -292,7 +327,9 @@
             }
             updProg('完了',1,1);toast(`🎉 ${total}枚の解析完了！内容を確認してください`,'ok');
             $('drop-area').style.display='none';$('thumbs').style.display='none';$('btn-analyze').style.display='none';
-            pw.style.display='none';renderPreview();
+            pw.style.display='none';
+            $('preview-title').textContent = '✏️ 読み取り結果（タップで修正可能）';
+            renderPreview();
         }catch(e){console.error(e);toast(e.message,'err');$('btn-analyze').disabled=false;$('sp1').style.display='none';$('btn-analyze-text').textContent='再試行';}
     });
     function updProg(label,cur,tot){$('prog-label').textContent=label;const p=Math.round(cur/tot*100);$('prog-pct').textContent=p+'%';$('prog-fill').style.width=p+'%';}
@@ -303,13 +340,19 @@
         extractedItems.forEach((it,i)=>{const tr=document.createElement('tr');tr.innerHTML=`<td><input value="${it.code||''}" data-i="${i}" data-k="code"></td><td><input value="${it.color||''}" data-i="${i}" data-k="color"></td><td><input value="${it.size||''}" data-i="${i}" data-k="size"></td><td><input type="number" value="${it.unit_price||0}" data-i="${i}" data-k="unit_price" style="width:70px"></td>`;tb.appendChild(tr);});
         $('preview-card').style.display='block';
     }
+    $('btn-add-row').addEventListener('click',()=>{
+        // Save current inputs to state before re-render
+        $('tbl-body').querySelectorAll('input').forEach(inp=>{const i=inp.dataset.i,k=inp.dataset.k;let v=inp.value;if(k==='unit_price')v=parseInt(v)||0;extractedItems[i][k]=v;});
+        extractedItems.push({code:'',color:'',size:'',unit_price:0});
+        renderPreview();
+    });
 
     // ===== Generate =====
     $('btn-generate').addEventListener('click',async()=>{
         $('btn-generate').disabled=true;$('sp2').style.display='block';$('toast').style.display='none';
         $('tbl-body').querySelectorAll('input').forEach(inp=>{const i=inp.dataset.i,k=inp.dataset.k;let v=inp.value;if(k==='unit_price')v=parseInt(v)||0;extractedItems[i][k]=v;});
         let cn='';try{cn=JSON.parse($('sel-customer').value).name;}catch{cn=$('sel-customer').options[$('sel-customer').selectedIndex]?.textContent?.replace(/ \(\d+%\)/,'')||'取引先不明';}
-        const payload={customer_name:cn,discount_rate:parseInt($('inp-rate').value)||35,items:extractedItems};
+        const payload={invoice_id:currentEditingInvId, customer_name:cn,discount_rate:parseInt($('inp-rate').value)||35,items:extractedItems};
         try{
             toast('PDF・Excelを生成中...','info');
             const r=await fetch('/generate-documents',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
@@ -328,7 +371,7 @@
     function dl64(b64,fn,ct){try{const c=atob(b64.replace(/\s/g,''));const a=[];for(let o=0;o<c.length;o+=512){const s=c.slice(o,o+512);const n=new Array(s.length);for(let i=0;i<s.length;i++)n[i]=s.charCodeAt(i);a.push(new Uint8Array(n));}const b=new Blob(a,{type:ct});const u=URL.createObjectURL(b);const l=document.createElement('a');l.href=u;l.download=fn;l.click();URL.revokeObjectURL(u);}catch(e){toast('保存エラー: '+e.message,'err');}}
     $('btn-pdf').addEventListener('click',()=>pdfData&&dl64(pdfData,'LAURA_JAPAN_invoice.pdf','application/pdf'));
     $('btn-excel').addEventListener('click',()=>excelData&&dl64(excelData,'LAURA_JAPAN_data.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'));
-    $('btn-new').addEventListener('click',()=>{selectedFiles=[];extractedItems=[];pdfData=null;excelData=null;$('drop-area').style.display='';$('thumbs').innerHTML='';$('thumbs').style.display='';$('btn-analyze').style.display='';$('btn-analyze').disabled=true;$('btn-analyze-text').textContent='AIでデータを抽出する';$('sp1').style.display='none';$('preview-card').style.display='none';$('dl-section').style.display='none';$('toast').style.display='none';$('btn-generate').disabled=false;$('sp2').style.display='none';});
+    $('btn-new').addEventListener('click',()=>{currentEditingInvId=null;selectedFiles=[];extractedItems=[];pdfData=null;excelData=null;$('drop-area').style.display='';$('thumbs').innerHTML='';$('thumbs').style.display='';$('btn-analyze').style.display='';$('btn-analyze').disabled=true;$('btn-analyze-text').textContent='AIでデータを抽出する';$('sp1').style.display='none';$('preview-card').style.display='none';$('dl-section').style.display='none';$('toast').style.display='none';$('btn-generate').disabled=false;$('sp2').style.display='none';});
 
     // ===== LINE / Email Share =====
     $('btn-line').addEventListener('click',()=>{

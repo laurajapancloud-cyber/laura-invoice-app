@@ -8,3 +8,5 @@ python-dotenv
 openpyxl
 openai
 google-cloud-vision
+python-barcode
+Pillow

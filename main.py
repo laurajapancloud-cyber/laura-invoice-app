@@ -6,6 +6,7 @@ from typing import Annotated, List, Dict, Any, Optional
 import base64
 from io import BytesIO
 import datetime
+from zoneinfo import ZoneInfo
 import time
 import re
 
@@ -18,7 +19,13 @@ from weasyprint import HTML
 from dotenv import load_dotenv
 import openpyxl
 from openpyxl.styles import PatternFill, Border, Side, Alignment, Font
+from openpyxl.drawing.image import Image as ExcelImage
+import barcode
+from barcode.writer import ImageWriter
 from pydantic import BaseModel
+
+def get_jst_now():
+    return datetime.datetime.now(ZoneInfo("Asia/Tokyo"))
 
 # Conditional imports
 try:
@@ -137,7 +144,7 @@ def init_db():
     conn.close()
 
 def generate_invoice_number():
-    now = datetime.datetime.now()
+    now = get_jst_now()
     prefix = f"LJ-{now.strftime('%Y%m')}"
     conn = get_db()
     row = conn.execute(
@@ -171,13 +178,13 @@ async def index(request: Request, username: Annotated[str, Depends(authenticate)
 
 @app.get("/health")
 async def health():
-    return {"status": "alive", "time": datetime.datetime.now().isoformat()}
+    return {"status": "alive", "time": get_jst_now().isoformat()}
 
 # ==================== Dashboard API ====================
 @app.get("/api/dashboard")
 async def get_dashboard(username: Annotated[str, Depends(authenticate)]):
     conn = get_db()
-    now = datetime.datetime.now()
+    now = get_jst_now()
     month_start = now.strftime("%Y-%m-01")
     
     # This month stats
@@ -272,6 +279,16 @@ async def download_history_excel(inv_id: int, username: Annotated[str, Depends(a
     return Response(content=row["excel_data"],
                     media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     headers={"Content-Disposition": f'attachment; filename="{row["invoice_number"]}.xlsx"'})
+
+@app.get("/api/history/{inv_id}/items")
+async def get_history_items(inv_id: int, username: Annotated[str, Depends(authenticate)]):
+    conn = get_db()
+    rows = conn.execute("SELECT code, color, size, unit_price FROM invoice_items WHERE invoice_id = ?", (inv_id,)).fetchall()
+    inv = conn.execute("SELECT invoice_number, customer_name, discount_rate FROM invoices WHERE id = ?", (inv_id,)).fetchone()
+    conn.close()
+    if not inv:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    return {"invoice_number": inv["invoice_number"], "customer_name": inv["customer_name"], "discount_rate": inv["discount_rate"], "items": [dict(r) for r in rows]}
 
 @app.delete("/api/history/{inv_id}")
 async def delete_history(inv_id: int, username: Annotated[str, Depends(authenticate)]):
@@ -392,6 +409,7 @@ async def analyze_images(
 
 # ==================== Document Generation API ====================
 class DocumentRequest(BaseModel):
+    invoice_id: Optional[int] = None
     customer_name: str
     discount_rate: int
     items: List[Dict[str, Any]]
@@ -406,7 +424,17 @@ async def generate_documents(
         items_data = payload.items
         customer_name = payload.customer_name
         discount_rate = payload.discount_rate
-        invoice_number = generate_invoice_number()
+        
+        conn = get_db()
+        if payload.invoice_id:
+            row = conn.execute("SELECT invoice_number FROM invoices WHERE id = ?", (payload.invoice_id,)).fetchone()
+            if not row:
+                conn.close()
+                raise HTTPException(status_code=404, detail="Invoice not found for update")
+            invoice_number = row["invoice_number"]
+        else:
+            invoice_number = generate_invoice_number()
+        conn.close()
 
         processed_items = []
         total_net_amount = 0
@@ -434,7 +462,7 @@ async def generate_documents(
             "discount_rate": discount_rate, "items": processed_items,
             "total_net_amount": total_net_amount, "total_tax_amount": total_tax_amount,
             "total_grand_total": total_grand_total, "issuer": "株式会社 ラウラジャパン",
-            "date": datetime.datetime.now().strftime("%Y年%m月%d日")
+            "date": get_jst_now().strftime("%Y年%m月%d日")
         }
 
         # Generate PDF
@@ -461,7 +489,7 @@ async def generate_documents(
         ws["F1"] = "No."
         ws["G1"] = invoice_number
         ws["G1"].fill = fill_yellow
-        now = datetime.datetime.now()
+        now = get_jst_now()
         reiwa_year = now.year - 2018
         ws["F3"] = "日付"
         ws["F3"].fill = fill_yellow
@@ -495,7 +523,7 @@ async def generate_documents(
             ws[f"A{current_row}"] = f"{i+1} {item['code']}"
             ws[f"B{current_row}"] = item["color"]
             ws[f"C{current_row}"] = item["size"]
-            ws[f"D{current_row}"] = item["code"]
+            ws[f"D{current_row}"] = ""
             ws[f"F{current_row}"] = 1
             ws[f"G{current_row}"] = item["unit_price"]
             ws[f"G{current_row}"].number_format = '#,##0'
@@ -508,7 +536,23 @@ async def generate_documents(
                 cell.alignment = Alignment(vertical="center", horizontal="center" if col not in ["A", "D"] else "left")
                 if col in ['A', 'B', 'C', 'F', 'G', 'I']: cell.fill = fill_yellow
                 if col == 'H': cell.fill = fill_blue
-                if col == 'D': cell.font = Font(name="Code39", size=24)
+            
+            # Generate Barcode Image
+            bc_str = f"{item['code']}{item['color']}{item['size']}".replace('-', '').upper()
+            bc_str = re.sub(r'[^A-Z0-9\-\.\ \$\/\+\%]', '', bc_str)
+            if not bc_str: bc_str = "000"
+            try:
+                code39 = barcode.get_barcode_class('code39')
+                bc_io = BytesIO()
+                code39(bc_str, writer=ImageWriter(), add_checksum=False).write(bc_io, options={"module_width":0.2, "module_height":5.0, "font_size":6, "text_distance":3, "quiet_zone":1})
+                bc_io.seek(0)
+                img = ExcelImage(bc_io)
+                img.width = 180
+                img.height = 40
+                ws.add_image(img, f"D{current_row}")
+            except Exception as e:
+                print(f"Barcode gen error: {e}")
+                
             current_row += 1
 
         excel_io = BytesIO()
@@ -517,11 +561,20 @@ async def generate_documents(
 
         # Save to SQLite
         conn = get_db()
-        cursor = conn.execute(
-            "INSERT INTO invoices (invoice_number, customer_name, discount_rate, total_net_amount, total_tax_amount, total_grand_total, item_count, pdf_data, excel_data) VALUES (?,?,?,?,?,?,?,?,?)",
-            (invoice_number, customer_name, discount_rate, total_net_amount, total_tax_amount, total_grand_total, len(processed_items), pdf_bytes, excel_bytes)
-        )
-        inv_id = cursor.lastrowid
+        if payload.invoice_id:
+            conn.execute(
+                "UPDATE invoices SET customer_name=?, discount_rate=?, total_net_amount=?, total_tax_amount=?, total_grand_total=?, item_count=?, pdf_data=?, excel_data=?, created_at=CURRENT_TIMESTAMP WHERE id=?",
+                (customer_name, discount_rate, total_net_amount, total_tax_amount, total_grand_total, len(processed_items), pdf_bytes, excel_bytes, payload.invoice_id)
+            )
+            conn.execute("DELETE FROM invoice_items WHERE invoice_id=?", (payload.invoice_id,))
+            inv_id = payload.invoice_id
+        else:
+            cursor = conn.execute(
+                "INSERT INTO invoices (invoice_number, customer_name, discount_rate, total_net_amount, total_tax_amount, total_grand_total, item_count, pdf_data, excel_data) VALUES (?,?,?,?,?,?,?,?,?)",
+                (invoice_number, customer_name, discount_rate, total_net_amount, total_tax_amount, total_grand_total, len(processed_items), pdf_bytes, excel_bytes)
+            )
+            inv_id = cursor.lastrowid
+            
         for item in processed_items:
             conn.execute("INSERT INTO invoice_items (invoice_id, code, color, size, unit_price, net_amount) VALUES (?,?,?,?,?,?)",
                          (inv_id, item["code"], item["color"], item["size"], item["unit_price"], item["net_amount"]))
