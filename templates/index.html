@@ -488,17 +488,15 @@
             downloadSection.style.display = 'none';
 
             try {
-                // すべての画像を並列で圧縮する
-                showToast('画像を軽量化しています...', 'info');
-                const compressedBlobs = await Promise.all(selectedFiles.map(file => compressImage(file)));
-
                 const formData = new FormData();
                 formData.append('customer_name', document.getElementById('customer-name').value);
                 formData.append('discount_rate', document.getElementById('discount-rate').value);
-                compressedBlobs.forEach((blob, index) => {
-                    // JPEGとして送信
-                    formData.append('files', blob, `image_${index}.jpg`);
-                });
+                
+                for (let i = 0; i < selectedFiles.length; i++) {
+                    showToast(`画像を最適化しています... (${i + 1}/${selectedFiles.length}枚)`, 'info');
+                    const blob = await compressImage(selectedFiles[i]);
+                    formData.append('files', blob, `image_${i}.jpg`);
+                }
 
                 showToast('AIが解析しています。少しお待ちください...', 'info');
 

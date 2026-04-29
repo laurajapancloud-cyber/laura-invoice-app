@@ -5,6 +5,7 @@ from typing import Annotated, List
 import base64
 from io import BytesIO
 import datetime
+import time
 
 from fastapi import FastAPI, UploadFile, File, Depends, HTTPException, status, Response, Request, Form
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
@@ -80,36 +81,52 @@ async def generate_documents(
             image_bytes = await file.read()
             image_parts.append({"mime_type": file.content_type or "image/jpeg", "data": image_bytes})
         
-        # 2. Gemini API Request
+        # 2. Gemini API Request (Chunked)
         prompt = """
 あなたはアパレルブランドのデータ入力アシスタントです。提供された複数の商品タグの画像からそれぞれの情報を抽出し、厳密にJSON配列（リスト）の形式のみで出力してください。マークダウンの装飾(```jsonなど)は含めないでください。
 スキーマ: [{"code": "品番(例:148-3101)", "color": "カラー(例:24)", "size": "サイズ(例:46)", "unit_price": 単価の数値(例:38000)}, ...]
 複数の商品がある場合は、配列内に複数のオブジェクトを含めてください。
 """.strip()
 
-        contents = [prompt] + image_parts
-        
-        try:
-            response = model.generate_content(contents)
-        except Exception as e:
-            error_str = str(e)
-            if "429" in error_str or "Quota exceeded" in error_str or "rate limits" in error_str:
-                raise HTTPException(status_code=429, detail="AI（Gemini）の一時的な利用制限に達しました。しばらく（約30秒）待ってから再度お試しください。")
-            raise HTTPException(status_code=500, detail=f"Gemini API Request Error: {error_str}")
-        
-        # Extract JSON from response
-        try:
-            raw_text = response.text.strip()
-            if raw_text.startswith("```json"):
-                raw_text = raw_text.replace("```json", "", 1).replace("```", "", 1).strip()
-            elif raw_text.startswith("```"):
-                raw_text = raw_text.replace("```", "", 2).strip()
+        items_data = []
+        chunk_size = 10
+        for i in range(0, len(image_parts), chunk_size):
+            chunk = image_parts[i:i + chunk_size]
+            contents = [prompt] + chunk
             
-            items_data = json.loads(raw_text)
-            if not isinstance(items_data, list):
-                items_data = [items_data]
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Gemini output parsing failed: {str(e)}\nRaw: {response.text}")
+            # Retry logic for 429
+            max_retries = 2
+            for attempt in range(max_retries + 1):
+                try:
+                    response = model.generate_content(contents)
+                    
+                    # Extract JSON from response
+                    raw_text = response.text.strip()
+                    if raw_text.startswith("```json"):
+                        raw_text = raw_text.replace("```json", "", 1).replace("```", "", 1).strip()
+                    elif raw_text.startswith("```"):
+                        raw_text = raw_text.replace("```", "", 2).strip()
+                    
+                    chunk_data = json.loads(raw_text)
+                    if not isinstance(chunk_data, list):
+                        chunk_data = [chunk_data]
+                    
+                    items_data.extend(chunk_data)
+                    break # Success, break retry loop
+                    
+                except Exception as e:
+                    error_str = str(e)
+                    if "429" in error_str or "Quota exceeded" in error_str or "rate limits" in error_str:
+                        if attempt < max_retries:
+                            time.sleep(15) # Wait 15 seconds
+                            continue
+                        else:
+                            raise HTTPException(status_code=429, detail="AI（Gemini）の利用制限に達しました。処理枚数が多すぎるか、短期間にリクエストが集中しています。数分待ってから再度お試しください。")
+                    else:
+                        raise HTTPException(status_code=500, detail=f"Gemini API Error at batch {i//chunk_size + 1}: {error_str}")
+        
+        if not items_data:
+            raise HTTPException(status_code=500, detail="タグのデータを正しく抽出できませんでした。")
 
         # 3. Calculation Logic for all items
         processed_items = []
