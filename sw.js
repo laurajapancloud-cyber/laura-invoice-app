@@ -1,4 +1,4 @@
-const CACHE_NAME = 'laura-v2';
+const CACHE_NAME = 'laura-v3';
 const ASSETS_TO_CACHE = [
   '/',
   '/static/icons/icon-192.png',
