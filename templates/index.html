@@ -1211,16 +1211,118 @@
 }
 
 .kbd { display: none; padding: 2px 6px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 4px; font-family: monospace; font-size: 10px; color: var(--text-muted); margin-left: 8px; }
+
+/* ===== Generation Overlay (PDF/Excel生成中の全画面オーバーレイ) ===== */
+.gen-overlay {
+  position: fixed; inset: 0;
+  background: rgba(10,10,10,0.92);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  z-index: 99999; display: none;
+  align-items: center; justify-content: center;
+  animation: fadeIn .3s ease-out;
+}
+.gen-overlay.active { display: flex; }
+.gen-box {
+  background: var(--bg-card);
+  border: 1px solid var(--border-strong);
+  border-radius: 20px;
+  padding: 36px 32px;
+  width: min(420px, 90vw);
+  text-align: center;
+  position: relative; overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 0 40px rgba(201,169,97,0.15);
+}
+.gen-box::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--gold-bright), transparent);
+}
+.gen-crest {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 28px; color: var(--gold-bright);
+  letter-spacing: 0.3em; margin-bottom: 6px;
+  animation: shimmer 2s ease-in-out infinite;
+}
+@keyframes shimmer {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; text-shadow: 0 0 20px rgba(232,196,104,0.4); }
+}
+.gen-sub {
+  font-size: 10px; color: var(--text-muted);
+  letter-spacing: 0.4em; margin-bottom: 24px;
+}
+.gen-progress-bar {
+  width: 100%; height: 3px;
+  background: var(--bg-input);
+  border-radius: 2px; overflow: hidden;
+  margin-bottom: 14px;
+}
+.gen-progress-fill {
+  height: 100%; width: 0%;
+  background: linear-gradient(90deg, var(--gold-deep), var(--gold-bright), var(--gold));
+  transition: width .3s ease-out;
+  box-shadow: 0 0 10px rgba(201,169,97,0.5);
+}
+.gen-status {
+  font-size: 12px; color: var(--text-secondary);
+  letter-spacing: 0.05em; min-height: 18px;
+}
+.gen-pct {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 36px; color: var(--gold-bright);
+  letter-spacing: 0.05em; margin-top: 8px;
+  font-variant-numeric: tabular-nums;
+}
+.gen-steps {
+  display: flex; justify-content: space-between;
+  margin-top: 20px; padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.gen-step {
+  flex: 1; font-size: 9px;
+  color: var(--text-muted);
+  letter-spacing: 0.1em; text-transform: uppercase;
+  position: relative; transition: color .3s;
+}
+.gen-step.done { color: var(--green); }
+.gen-step.active { color: var(--gold-bright); }
+.gen-step::before {
+  content: '○'; display: block;
+  font-size: 14px; margin-bottom: 4px;
+}
+.gen-step.done::before { content: '✓'; }
+.gen-step.active::before { content: '◐'; animation: spin 1s linear infinite; }
     </style>
 </head>
 
 <body>
+    <!-- 生成中オーバーレイ -->
+    <div id="gen-overlay" class="gen-overlay">
+      <div class="gen-box">
+        <div class="gen-crest">LAURA</div>
+        <div class="gen-sub">GENERATING DOCUMENTS</div>
+        <div class="gen-progress-bar"><div class="gen-progress-fill" id="gen-fill"></div></div>
+        <div class="gen-pct" id="gen-pct">0%</div>
+        <div class="gen-status" id="gen-status">準備中...</div>
+        <div class="gen-steps">
+          <div class="gen-step active" id="gen-step-1">データ整形</div>
+          <div class="gen-step" id="gen-step-2">PDF生成</div>
+          <div class="gen-step" id="gen-step-3">Excel生成</div>
+          <div class="gen-step" id="gen-step-4">完了</div>
+        </div>
+      </div>
+    </div>
+
     <!-- プレビューモーダル -->
     <div id="modal-preview" class="modal-overlay">
       <div class="modal-content">
         <div class="modal-header">
           <div style="font-weight:700; color:var(--gold-bright)" id="modal-title">📄 ドキュメントプレビュー</div>
-          <button class="btn btn-outline btn-sm" onclick="closePreviewModal()">✕ 閉じる</button>
+          <div style="display:flex; gap:8px">
+            <button class="btn btn-blue btn-sm" id="modal-btn-drive" style="display:none">
+              <div class="spinner" id="modal-sp-drive"></div> ☁️ Drive保存
+            </button>
+            <button class="btn btn-outline btn-sm" onclick="closePreviewModal()">✕ 閉じる</button>
+          </div>
         </div>
         <div class="modal-body">
           <div class="preview-tabs" data-target-prefix="m-ppane-">
@@ -1512,6 +1614,61 @@
           } catch (e) { toast('保存エラー: ' + e.message, 'err'); } 
         }
 
+        // ===== Generation Progress (疑似プログレス) =====
+        let genTimer = null;
+        function showGenProgress(estimatedSec = 6) {
+          $('gen-overlay').classList.add('active');
+          $('gen-fill').style.width = '0%';
+          $('gen-pct').textContent = '0%';
+          $('gen-status').textContent = 'データを整形しています...';
+          ['gen-step-1','gen-step-2','gen-step-3','gen-step-4'].forEach(id => {
+            $(id).classList.remove('done','active');
+          });
+          $('gen-step-1').classList.add('active');
+          
+          let progress = 0;
+          const target = 92; // 92%まで進めて、完了時に100%へ
+          const totalMs = estimatedSec * 1000;
+          const startTime = Date.now();
+          
+          genTimer = setInterval(() => {
+            const elapsed = Date.now() - startTime;
+            // イージング: 最初速く→ゆっくり (1 - (1-x)^3)
+            const t = Math.min(elapsed / totalMs, 1);
+            progress = target * (1 - Math.pow(1 - t, 3));
+            
+            $('gen-fill').style.width = progress + '%';
+            $('gen-pct').textContent = Math.floor(progress) + '%';
+            
+            // ステップ切り替え
+            if (progress < 25) {
+              $('gen-status').textContent = 'データを整形しています...';
+            } else if (progress < 55) {
+              $('gen-step-1').classList.remove('active'); $('gen-step-1').classList.add('done');
+              $('gen-step-2').classList.add('active');
+              $('gen-status').textContent = '納品書PDFをレンダリング中...';
+            } else if (progress < 85) {
+              $('gen-step-2').classList.remove('active'); $('gen-step-2').classList.add('done');
+              $('gen-step-3').classList.add('active');
+              $('gen-status').textContent = 'Excel管理伝票を組み立て中...';
+            } else {
+              $('gen-status').textContent = '仕上げ中...';
+            }
+          }, 100);
+        }
+
+        function hideGenProgress() {
+          if (genTimer) { clearInterval(genTimer); genTimer = null; }
+          $('gen-fill').style.width = '100%';
+          $('gen-pct').textContent = '100%';
+          $('gen-status').textContent = '✦ 完了';
+          ['gen-step-2','gen-step-3'].forEach(id => {
+            $(id).classList.remove('active'); $(id).classList.add('done');
+          });
+          $('gen-step-4').classList.add('done');
+          setTimeout(() => $('gen-overlay').classList.remove('active'), 600);
+        }
+
         function setupPreviews(payload, d) {
           $('pdf-frame').src = b64ToBlobUrl(pdfData, 'application/pdf');
           $('detail-frame').src = b64ToBlobUrl(detailPdfData, 'application/pdf');
@@ -1530,6 +1687,15 @@
             document.querySelector('.btn-dl-xl').onclick = () => dl64(d.excel_base64, `納品書_${d.invoice_number}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
             document.querySelector('.btn-dl-dpdf').onclick = () => dl64(d.detail_pdf_base64, `明細表_${d.invoice_number}.pdf`, 'application/pdf');
             document.querySelector('.btn-dl-dxl').onclick = () => dl64(d.detail_excel_base64, `明細表_${d.invoice_number}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+
+            // 履歴から開いた場合（idあり）はDriveボタン表示
+            const driveBtn = $('modal-btn-drive');
+            if (d.id) {
+                driveBtn.style.display = 'inline-flex';
+                driveBtn.onclick = () => uploadDrive(d.id, driveBtn);
+            } else {
+                driveBtn.style.display = 'none';
+            }
         }
 
         function closePreviewModal() {
@@ -1611,6 +1777,7 @@
                 : `<button class="btn btn-gold btn-sm" data-tip="確定して保存" onclick="lockHist(${inv.id})">確定</button>`;
 
                 if (isDesktop) {
+                    const driveBtn = inv.status === 'locked' ? `<button class="btn btn-blue btn-sm" data-tip="Driveに保存" onclick="uploadDrive(${inv.id}, this)">☁️</button>` : '';
                     d.innerHTML = `
                         <div class="hist-num">${inv.invoice_number}</div>
                         <div>
@@ -1622,11 +1789,13 @@
                         <div style="display:flex; gap:6px; justify-content:flex-end">
                         <button class="btn btn-gold btn-sm" data-tip="プレビュー表示" onclick="quickPreview(${inv.id})">👁</button>
                         ${lockBtn}
+                        ${driveBtn}
                         <button class="btn btn-outline btn-sm" data-tip="編集する" onclick="editHist(${inv.id})">✎</button>
                         <button class="btn btn-red btn-sm" data-tip="削除する" onclick="delHist(${inv.id})">✕</button>
                         </div>
                     `;
                 } else {
+                    const driveBtn = inv.status === 'locked' ? `<button class="btn btn-blue btn-sm" onclick="uploadDrive(${inv.id}, this)">☁️ Drive</button>` : '';
                     d.innerHTML = `
                         <div class="hist-info">
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px">
@@ -1637,6 +1806,7 @@
                         <div class="hist-actions-row">
                             <button class="btn btn-gold btn-sm" onclick="quickPreview(${inv.id})">👁 プレビュー</button>
                             ${lockBtn}
+                            ${driveBtn}
                             <button class="btn btn-outline btn-sm" onclick="editHist(${inv.id})">✎</button>
                             <button class="btn btn-red btn-sm" onclick="delHist(${inv.id})">✕</button>
                         </div>
@@ -1656,13 +1826,18 @@
         });
         async function quickPreview(id) {
             try {
-                toast('プレビューを取得中...', 'info');
+                showGenProgress(3);
                 const r = await fetch(`/api/history/${id}/data`);
                 if (!r.ok) throw new Error('データ取得に失敗しました');
                 const d = await r.json();
+                d.id = id; 
                 const payload = { customer_name: d.customer_name, discount_rate: d.discount_rate, items: d.items };
-                openPreviewModal(d, payload);
-            } catch (e) { toast('エラー: ' + e.message, 'err'); }
+                hideGenProgress();
+                setTimeout(() => openPreviewModal(d, payload), 500);
+            } catch (e) { 
+                hideGenProgress();
+                toast('エラー: ' + e.message, 'err'); 
+            }
         }
 
         async function editHist(id) {
@@ -1697,11 +1872,16 @@
             const cn = getCustomerName();
             const payload = { customer_name: cn, discount_rate: parseInt($('inp-rate').value) || 0, items: extractedItems };
             try {
-                toast('プレビュー生成中...', 'info');
+                showGenProgress(5);
                 const r = await fetch('/api/preview', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                if (!r.ok) throw new Error('プレビュー生成失敗');
                 const d = await r.json();
-                openPreviewModal(d, payload);
-            } catch (e) { toast(e.message, 'err'); }
+                hideGenProgress();
+                setTimeout(() => openPreviewModal(d, payload), 700);
+            } catch (e) { 
+                hideGenProgress();
+                toast(e.message, 'err'); 
+            }
         });
 
         async function lockHist(id) {
@@ -1814,6 +1994,7 @@
             const cn = getCustomerName();
             const payload = { invoice_id: currentEditingInvId, customer_name: cn, discount_rate: getRate(), items: extractedItems };
             try {
+                showGenProgress(6);
                 const r = await fetch('/generate-documents', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                 if (!r.ok) { const e = await r.json(); throw new Error(e.detail); }
                 const d = await r.json();
@@ -1823,8 +2004,12 @@
                 $('preview-card').style.display = 'none'; 
                 $('dl-section').style.display = 'block';
                 setupPreviews(payload, d);
+                hideGenProgress();
                 toast('✦ 保存完了（下書き）', 'ok');
-            } catch (e) { toast(e.message, 'err'); }
+            } catch (e) { 
+                hideGenProgress();
+                toast(e.message, 'err'); 
+            }
             finally { $('btn-generate').disabled = false; $('sp2').style.display = 'none'; }
         });
 
