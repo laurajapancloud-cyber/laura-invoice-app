@@ -179,9 +179,9 @@ def generate_invoice_number():
     prefix = f"LJ-{now.strftime('%Y%m')}"
     conn = get_db()
     with conn.cursor() as cur:
-        cur.execute("SELECT COUNT(*) FROM invoices WHERE invoice_number LIKE %s", (f"{prefix}%",))
+        cur.execute("SELECT COUNT(*) AS cnt FROM invoices WHERE invoice_number LIKE %s", (f"{prefix}%",))
         row = cur.fetchone()
-        seq = (row['count'] or 0) + 1
+        seq = (row['cnt'] or 0) + 1
     conn.close()
     return f"{prefix}-{seq:04d}"
 
@@ -291,16 +291,20 @@ async def delete_customer(cid: int, username: Annotated[str, Depends(authenticat
 @app.get("/api/history")
 async def get_history(username: Annotated[str, Depends(authenticate)]):
     conn = get_db()
-    rows = conn.execute(
-        "SELECT id, invoice_number, customer_name, total_grand_total, item_count, created_at FROM invoices ORDER BY id DESC"
-    ).fetchall()
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT id, invoice_number, customer_name, total_grand_total, item_count, to_char(created_at, 'YYYY-MM-DD\"T\"HH24:MI:SS') as created_at FROM invoices ORDER BY id DESC"
+        )
+        rows = cur.fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
 @app.get("/api/history/{inv_id}/pdf")
 async def download_history_pdf(inv_id: int, username: Annotated[str, Depends(authenticate)]):
     conn = get_db()
-    row = conn.execute("SELECT pdf_data, invoice_number FROM invoices WHERE id = ?", (inv_id,)).fetchone()
+    with conn.cursor() as cur:
+        cur.execute("SELECT pdf_data, invoice_number FROM invoices WHERE id = %s", (inv_id,))
+        row = cur.fetchone()
     conn.close()
     if not row or not row["pdf_data"]:
         raise HTTPException(status_code=404, detail="PDF not found")
@@ -310,7 +314,9 @@ async def download_history_pdf(inv_id: int, username: Annotated[str, Depends(aut
 @app.get("/api/history/{inv_id}/excel")
 async def download_history_excel(inv_id: int, username: Annotated[str, Depends(authenticate)]):
     conn = get_db()
-    row = conn.execute("SELECT excel_data, invoice_number FROM invoices WHERE id = ?", (inv_id,)).fetchone()
+    with conn.cursor() as cur:
+        cur.execute("SELECT excel_data, invoice_number FROM invoices WHERE id = %s", (inv_id,))
+        row = cur.fetchone()
     conn.close()
     if not row or not row["excel_data"]:
         raise HTTPException(status_code=404, detail="Excel not found")
@@ -321,7 +327,9 @@ async def download_history_excel(inv_id: int, username: Annotated[str, Depends(a
 @app.get("/api/history/{inv_id}/detail-pdf")
 async def download_detail_pdf(inv_id: int, username: Annotated[str, Depends(authenticate)]):
     conn = get_db()
-    row = conn.execute("SELECT detail_pdf_data, invoice_number FROM invoices WHERE id = ?", (inv_id,)).fetchone()
+    with conn.cursor() as cur:
+        cur.execute("SELECT detail_pdf_data, invoice_number FROM invoices WHERE id = %s", (inv_id,))
+        row = cur.fetchone()
     conn.close()
     if not row or not row["detail_pdf_data"]:
         raise HTTPException(status_code=404, detail="Detail PDF not found")
@@ -331,7 +339,9 @@ async def download_detail_pdf(inv_id: int, username: Annotated[str, Depends(auth
 @app.get("/api/history/{inv_id}/detail-excel")
 async def download_detail_excel(inv_id: int, username: Annotated[str, Depends(authenticate)]):
     conn = get_db()
-    row = conn.execute("SELECT detail_excel_data, invoice_number FROM invoices WHERE id = ?", (inv_id,)).fetchone()
+    with conn.cursor() as cur:
+        cur.execute("SELECT detail_excel_data, invoice_number FROM invoices WHERE id = %s", (inv_id,))
+        row = cur.fetchone()
     conn.close()
     if not row or not row["detail_excel_data"]:
         raise HTTPException(status_code=404, detail="Detail Excel not found")
