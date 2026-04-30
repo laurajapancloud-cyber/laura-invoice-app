@@ -857,41 +857,47 @@ async def delete_history(inv_id: int, username: Annotated[str, Depends(authentic
 @app.post("/api/history/{inv_id}/upload-drive")
 async def upload_to_drive(inv_id: int, username: Annotated[str, Depends(authenticate)]):
     if not GDRIVE_WEBHOOK_URL: raise HTTPException(500, "GDRIVE_WEBHOOK_URLが未設定です")
-    conn = get_db()
-    with conn.cursor() as cur:
-        cur.execute("SELECT * FROM invoices WHERE id=%s", (inv_id,))
-        inv = cur.fetchone()
-        cur.execute("SELECT code,color,size,unit_price,quantity FROM invoice_items WHERE invoice_id=%s", (inv_id,))
-        items = [dict(r) for r in cur.fetchall()]
-    conn.close()
-    if not inv: raise HTTPException(404, "Not found")
-
-    if inv["status"] == "locked" and inv.get("pdf_storage_path"):
-        files = {
-            "pdf": storage_download(inv["pdf_storage_path"]),
-            "excel": storage_download(inv["excel_storage_path"]),
-            "detail_pdf": storage_download(inv["detail_pdf_storage_path"]),
-            "detail_excel": storage_download(inv["detail_excel_storage_path"]),
-        }
-    else:
-        # 割引率がNULLの場合は100%として扱う
-        dr = inv.get("discount_rate")
-        if dr is None: dr = 100
-        inv_data = assemble_invoice_data(dict(inv), items, dr)
-        files = build_all_files(inv_data)
-
-    inv_num = inv["invoice_number"]
-    cust = (inv["customer_name"] or "無名").replace("/", "_").replace("\\", "_")
-    uploaded = []
-
-    def _up_sync(fn, mime, data):
-        resp = requests.post(GDRIVE_WEBHOOK_URL, json={
-            "folderId": GDRIVE_FOLDER_ID, "filename": fn, "mime": mime, "base64": base64.b64encode(data).decode()
-        }, timeout=30)
-        if resp.status_code != 200: raise Exception(f"GAS error: {resp.text}")
-        return resp.json()
-
     try:
+        conn = get_db()
+        with conn.cursor() as cur:
+            cur.execute("SELECT * FROM invoices WHERE id=%s", (inv_id,))
+            inv = cur.fetchone()
+            cur.execute("SELECT code,color,size,unit_price,quantity FROM invoice_items WHERE invoice_id=%s", (inv_id,))
+            items = [dict(r) for r in cur.fetchall()]
+        conn.close()
+        if not inv: raise HTTPException(404, "Not found")
+
+        # ファイル準備（StorageにあればDL、なければ生成）
+        files = None
+        if inv["status"] == "locked" and inv.get("pdf_storage_path"):
+            try:
+                files = {
+                    "pdf": storage_download(inv["pdf_storage_path"]),
+                    "excel": storage_download(inv["excel_storage_path"]),
+                    "detail_pdf": storage_download(inv["detail_pdf_storage_path"]),
+                    "detail_excel": storage_download(inv["detail_excel_storage_path"]),
+                }
+            except Exception as e:
+                print(f"Locked files missing in storage, falling back to generation: {e}")
+                files = None
+
+        if not files:
+            dr = inv.get("discount_rate") or 100
+            inv_data = assemble_invoice_data(dict(inv), items, dr)
+            files = build_all_files(inv_data)
+
+        inv_num = inv["invoice_number"]
+        cust = (inv["customer_name"] or "無名").replace("/", "_").replace("\\", "_")
+        uploaded = []
+
+        def _up_sync(fn, mime, data):
+            resp = requests.post(GDRIVE_WEBHOOK_URL, json={
+                "folderId": GDRIVE_FOLDER_ID, "filename": fn, "mime": mime, "base64": base64.b64encode(data).decode()
+            }, timeout=30)
+            if resp.status_code != 200:
+                raise Exception(f"GAS Error {resp.status_code}: {resp.text}")
+            return resp.json()
+
         targets = [
             ("pdf", f"{inv_num}_{cust}_伝票.pdf", "application/pdf", files["pdf"]),
             ("excel", f"{inv_num}_{cust}_伝票.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", files["excel"]),
@@ -903,9 +909,11 @@ async def upload_to_drive(inv_id: int, username: Annotated[str, Depends(authenti
             uploaded.append({"type": typ, "name": fn, "url": res.get("url")})
 
         return {"status": "ok", "uploaded": uploaded}
+    except HTTPException: raise
     except Exception as e:
         import traceback; traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Drive保存失敗(GAS): {e}")
+        # エラーメッセージをJSONで返す（これで Unexpected token 'I' は出なくなる）
+        return JSONResponse(status_code=500, content={"detail": f"Drive保存失敗: {str(e)}"})
 
 if __name__ == "__main__":
     import uvicorn
