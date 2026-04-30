@@ -10,6 +10,8 @@ import datetime
 from zoneinfo import ZoneInfo
 import time
 import re
+import requests
+from supabase import create_client, Client as SupabaseClient
 
 from fastapi import FastAPI, UploadFile, File, Depends, HTTPException, status, Response, Request, Form
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
@@ -61,7 +63,31 @@ AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT")
 GDRIVE_FOLDER_ID = os.getenv("GDRIVE_FOLDER_ID")
 GDRIVE_WEBHOOK_URL = os.getenv("GDRIVE_WEBHOOK_URL")
 
-if not all([APP_USERNAME, APP_PASSWORD, GEMINI_API_KEY]):
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
+STORAGE_BUCKET = "invoices"
+
+supabase_client: Optional[SupabaseClient] = None
+if SUPABASE_URL and SUPABASE_SERVICE_KEY:
+    supabase_client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+
+def storage_upload(path: str, data: bytes, mime: str) -> str:
+    """Supabase Storage にアップロードし、保存パスを返す"""
+    if not supabase_client:
+        raise Exception("Supabase Storage が未設定です")
+    try:
+        supabase_client.storage.from_(STORAGE_BUCKET).remove([path])
+    except: pass
+    supabase_client.storage.from_(STORAGE_BUCKET).upload(
+        path, data, file_options={"content-type": mime, "upsert": "true"}
+    )
+    return path
+
+def storage_download(path: str) -> bytes:
+    """Storage から bytes を取得"""
+    if not supabase_client:
+        raise Exception("Supabase Storage が未設定です")
+    return supabase_client.storage.from_(STORAGE_BUCKET).download(path)
     print("Warning: Missing required environment variables.")
 
 # AI Initialization
@@ -557,99 +583,123 @@ def build_detail_excel(invoice_number: str, customer_name: str, items: list) -> 
             if item:
                 ws[f"B{r}"] = item.get("code", "")
                 ws[f"C{r}"] = item.get("quantity", 0)
-                ws[f"D{r}"] = item.get("unit_price", 0)
-                ws[f"D{r}"].number_format = '#,##0'
-                ws[f"E{r}"] = item.get("color", "")
-                size_str = str(item.get("size", "")).strip()
-                size_to_col = {"44":"F", "46":"G", "48":"H", "50":"I", "52":"J"}
-                if size_str in size_to_col:
-                    sc = size_to_col[size_str]
-                    ws[f"{sc}{r}"] = item.get("quantity", 0)
-                    ws[f"{sc}{r}"].fill = fill_meta
-                elif size_str:
-                    ws[f"K{r}"] = f"SIZE:{size_str}"
+    ws.title = "伝票"
+    fill_yellow = PatternFill(start_color="FFE699", end_color="FFE699", fill_type="solid")
+    fill_blue = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
+    border_thin = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
+    
+    ws.merge_cells("A1:I1")
+    ws["A1"] = "御 納 品 書"
+    ws["A1"].font = Font(size=24, bold=True)
+    ws["A1"].alignment = Alignment(horizontal="center")
+    
+    ws["F1"] = "No."
+    ws["G1"] = invoice_data['invoice_number']
+    ws["G1"].fill = fill_yellow
+    ws["F3"] = "日付"
+    ws["G3"] = invoice_data['date']
+    ws["A4"] = "店名"
+    ws["A5"] = invoice_data['customer_name']
+    ws["A5"].font = Font(size=14, bold=True)
+    ws["A5"].fill = fill_yellow
 
-            for col in ['A','B','C','D','E','F','G','H','I','J','K']:
-                cell = ws[f"{col}{r}"]
-                cell.border = border_thin
-                if not cell.alignment or cell.alignment.horizontal is None:
-                    cell.alignment = Alignment(horizontal="center", vertical="center")
-                if col in ['B','K']:
-                    cell.alignment = Alignment(horizontal="left", vertical="center", indent=1)
+    headers = ["品番", "カラー", "サイズ", "バーコード", "", "数量", "単価", "金額", "掛率"]
+    h_cols = ["A", "B", "C", "D", "E", "F", "G", "H", "I"]
+    start_row = 8
+    for col, txt in zip(h_cols, headers):
+        if not txt: continue
+        cell = ws[f"{col}{start_row}"]
+        cell.value = txt
+        cell.fill = fill_blue
+        cell.border = border_thin
+        cell.alignment = Alignment(horizontal="center")
 
-        section_start = header_row + ROWS_PER_SECTION + 2
+    ws.column_dimensions['A'].width = 15
+    ws.column_dimensions['B'].width = 10
+    ws.column_dimensions['C'].width = 10
+    ws.column_dimensions['D'].width = 30
+    ws.column_dimensions['F'].width = 10
+    ws.column_dimensions['G'].width = 15
+    ws.column_dimensions['H'].width = 15
+
+    for i, item in enumerate(invoice_data["items"]):
+        r = start_row + 1 + i
+        ws.row_dimensions[r].height = 45
+        ws[f"A{r}"] = item["code"]
+        ws[f"B{r}"] = item["color"]
+        ws[f"C{r}"] = item["size"]
+        ws[f"F{r}"] = item["quantity"]
+        ws[f"G{r}"] = item["unit_price"]
+        ws[f"G{r}"].number_format = '#,##0'
+        ws[f"H{r}"] = item["net_amount"]
+        ws[f"H{r}"].number_format = '#,##0'
+        ws[f"I{r}"] = f"{invoice_data['discount_rate']}%"
+        
+        for col in ["A","B","C","D","F","G","H","I"]:
+            ws[f"{col}{r}"].border = border_thin
+        
+        # 簡易バーコード
+        try:
+            bc_str = str(item["code"])
+            ean = barcode.get('code128', bc_str, writer=ImageWriter())
+            bc_io = BytesIO()
+            ean.write(bc_io)
+            img = ExcelImage(bc_io)
+            img.width, img.height = 120, 30
+            marker = AnchorMarker(col=3, colOff=pixels_to_EMU(10), row=r-1, rowOff=pixels_to_EMU(5))
+            img.anchor = OneCellAnchor(_marker=marker, ext=XDRPositiveSize2D(cx=pixels_to_EMU(120), cy=pixels_to_EMU(30)))
+            ws.add_image(img)
+        except: pass
+
+    last_r = start_row + len(invoice_data["items"]) + 2
+    ws.cell(row=last_r, column=7, value="小計")
+    ws.cell(row=last_r, column=8, value=invoice_data["total_net_amount"])
+    ws.cell(row=last_r+1, column=7, value="消費税")
+    ws.cell(row=last_r+1, column=8, value=invoice_data["total_tax_amount"])
+    ws.cell(row=last_r+2, column=7, value="合計金額")
+    ws.cell(row=last_r+2, column=8, value=invoice_data["total_grand_total"])
 
     out = BytesIO()
     wb.save(out)
     return out.getvalue()
 
-def build_detail_pdf(invoice_number: str, customer_name: str, items: list) -> bytes:
-    """商品明細表 PDF (HTML生成)"""
-    now = get_jst_now()
-    reiwa = now.year - 2018
-    sections = []
-    for s in range(0, max(len(items), 5), 5):
-        chunk = items[s:s+5]
-        while len(chunk) < 5: chunk.append(None)
-        sections.append(chunk)
+def build_all_files(invoice_data: dict) -> dict:
+    """4ファイルまとめて生成"""
+    return {
+        "pdf": build_invoice_pdf(invoice_data),
+        "excel": build_invoice_excel(invoice_data),
+        "detail_pdf": build_detail_pdf(invoice_data["invoice_number"], invoice_data["customer_name"], invoice_data["items"]),
+        "detail_excel": build_detail_excel(invoice_data["invoice_number"], invoice_data["customer_name"], invoice_data["items"]),
+    }
 
-    html = f"""
-    <html><head>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
-    <style>
-        body {{ font-family: 'Noto Sans JP', sans-serif; font-size: 11px; color: #333; }}
-        .page {{ padding: 20px; }}
-        .header {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }}
-        h1 {{ font-size: 20px; margin: 0; letter-spacing: 0.3em; }}
-        .info {{ font-size: 12px; }}
-        .section {{ margin-bottom: 30px; position: relative; }}
-        .date-line {{ text-align: right; margin-bottom: 5px; font-size: 10px; }}
-        table {{ width: 100%; border-collapse: collapse; table-layout: fixed; }}
-        th, td {{ border: 1px solid #888; height: 28px; text-align: center; }}
-        th {{ background: #f9f4e8; font-weight: bold; font-size: 10px; }}
-        .col-no {{ width: 30px; color: #888; font-size: 9px; }}
-        .col-code {{ width: 100px; text-align: left; padding-left: 5px; }}
-        .col-qty {{ width: 45px; }}
-        .col-price {{ width: 65px; }}
-        .col-color {{ width: 45px; }}
-        .col-size {{ width: 35px; background: #fffcf5; }}
-        .col-note {{ text-align: left; padding-left: 5px; }}
-    </style></head><body>
-    <div class="page">
-        <div class="header">
-            <h1>商 品 明 細 表</h1>
-            <div class="info">伝票番号: {invoice_number}<br>取引先: {customer_name}</div>
-        </div>
-    """
-    for sec in sections:
-        html += f"""
-        <div class="section">
-            <div class="date-line">{reiwa}年 &nbsp; {now.month}月 &nbsp; {now.day}日</div>
-            <table>
-                <thead><tr>
-                    <th class="col-no">No.</th><th class="col-code">品番</th><th class="col-qty">枚数</th><th class="col-price">上代</th>
-                    <th class="col-color">カラー</th><th class="col-size">44</th><th class="col-size">46</th><th class="col-size">48</th>
-                    <th class="col-size">50</th><th class="col-size">52</th><th>備考</th>
-                </tr></thead>
-                <tbody>
-        """
-        for i, item in enumerate(sec):
-            if item:
-                sz = str(item.get("size", "")).strip()
-                p = f"{item.get('unit_price',0):,}"
-                c = item.get("color", "")
-                q = item.get("quantity", 0)
-                note = "" if sz in ["44","46","48","50","52"] else f"SIZE:{sz}"
-                html += f"<tr><td class='col-no'>{i+1}</td><td class='col-code'>{item.get('code','')}</td><td>{q}</td><td>{p}</td><td>{c}</td>"
-                for s_col in ["44","46","48","50","52"]:
-                    html += f"<td class='col-size'>{q if sz==s_col else ''}</td>"
-                html += f"<td class='col-note'>{note}</td></tr>"
-            else:
-                html += "<tr><td class='col-no'>{}</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>".format(i+1)
-        html += "</tbody></table></div>"
+def assemble_invoice_data(inv_info: dict, items_input: list, discount_rate: int) -> dict:
+    """生成用データ準備"""
+    processed = []
+    total_net = total_tax = total_grand = 0
+    for it in items_input:
+        up = it.get("unit_price", 0)
+        if isinstance(up, str): up = int(up.replace(',','').replace('¥','').strip() or '0')
+        qty = max(1, int(it.get("quantity") or 1))
+        net = int(up * (discount_rate / 100) * qty)
+        tax = int(net * 0.1)
+        grand = net + tax
+        processed.append({
+            "code": it.get("code") or "-", "color": it.get("color") or "-", "size": it.get("size") or "-",
+            "unit_price": up, "quantity": qty, "net_amount": net, "tax_amount": tax, "grand_total": grand
+        })
+        total_net += net; total_tax += tax; total_grand += grand
     
-    html += "</div></body></html>"
-    return HTML(string=html).write_pdf()
+    dt = inv_info.get("locked_at") or inv_info.get("created_at") or get_jst_now()
+    if isinstance(dt, str):
+        try: dt = datetime.datetime.fromisoformat(dt.replace("Z", "+00:00"))
+        except: dt = get_jst_now()
+
+    return {
+        "invoice_number": inv_info["invoice_number"], "customer_name": inv_info["customer_name"],
+        "discount_rate": discount_rate, "items": processed,
+        "total_net_amount": total_net, "total_tax_amount": total_tax, "total_grand_total": total_grand,
+        "issuer": "株式会社 ラウラジャパン", "date": dt.strftime("%Y年%m月%d日")
+    }
 
 # ==================== Document Generation API ====================
 class DocumentRequest(BaseModel):
@@ -659,271 +709,214 @@ class DocumentRequest(BaseModel):
     items: List[Dict[str, Any]]
 
 @app.post("/generate-documents")
-async def generate_documents(
-    request: Request,
-    username: Annotated[str, Depends(authenticate)],
-    payload: DocumentRequest
-):
+async def generate_documents(request: Request, username: Annotated[str, Depends(authenticate)], payload: DocumentRequest):
     try:
-        items_data = payload.items
-        customer_name = payload.customer_name
-        discount_rate = payload.discount_rate
-        
         conn = get_db()
         with conn.cursor() as cur:
             if payload.invoice_id:
-                cur.execute("SELECT invoice_number FROM invoices WHERE id = %s", (payload.invoice_id,))
+                cur.execute("SELECT invoice_number, status FROM invoices WHERE id = %s", (payload.invoice_id,))
                 row = cur.fetchone()
-                if not row:
-                    conn.close()
-                    raise HTTPException(status_code=404, detail="Invoice not found for update")
+                if not row: raise HTTPException(404, "Invoice not found")
+                if row["status"] == "locked": raise HTTPException(400, "確定済みの伝票は編集できません。")
                 invoice_number = row["invoice_number"]
             else:
                 invoice_number = generate_invoice_number()
-        conn.close()
 
-        processed_items = []
-        total_net_amount = 0
-        total_tax_amount = 0
-        total_grand_total = 0
+            inv_data = assemble_invoice_data({"invoice_number": invoice_number, "customer_name": payload.customer_name}, payload.items, payload.discount_rate)
 
-        for data in items_data:
-            unit_price = data.get("unit_price", 0)
-            if isinstance(unit_price, str):
-                unit_price = int(unit_price.replace(',', '').replace('¥', '').strip() or '0')
-            quantity = data.get("quantity", 1)
-            if isinstance(quantity, str):
-                quantity = int(quantity or '1')
-            if quantity < 1: quantity = 1
-            net_amount = int(unit_price * (discount_rate / 100) * quantity)
-            tax_amount = int(net_amount * 0.1)
-            grand_total = net_amount + tax_amount
-            processed_items.append({
-                "code": data.get("code", "-"), "color": data.get("color", "-"),
-                "size": data.get("size", "-"), "unit_price": unit_price,
-                "quantity": quantity,
-                "net_amount": net_amount, "tax_amount": tax_amount, "grand_total": grand_total
-            })
-            total_net_amount += net_amount
-            total_tax_amount += tax_amount
-            total_grand_total += grand_total
-
-        invoice_data = {
-            "invoice_number": invoice_number, "customer_name": customer_name,
-            "discount_rate": discount_rate, "items": processed_items,
-            "total_net_amount": total_net_amount, "total_tax_amount": total_tax_amount,
-            "total_grand_total": total_grand_total, "issuer": "株式会社 ラウラジャパン",
-            "date": get_jst_now().strftime("%Y年%m月%d日")
-        }
-
-        # Generate PDF
-        html_content = templates.get_template("invoice_template.html").render(invoice_data)
-        pdf_bytes = HTML(string=html_content).write_pdf()
-
-        # Generate Excel
-        wb = openpyxl.Workbook()
-        ws = wb.active
-        ws.title = "伝票"
-        fill_yellow = PatternFill(start_color="FFE699", end_color="FFE699", fill_type="solid")
-        fill_blue = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
-        border_thin = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
-
-        ws["A1"] = "伝票"
-        ws["A1"].font = Font(bold=True, size=14)
-        ws["B2"] = "1売上"
-        ws["A4"] = "コード"
-        ws["A5"] = "SZ2006"
-        ws["A5"].fill = fill_yellow
-        ws["C4"] = "店名"
-        ws["C5"] = customer_name
-        ws["C5"].fill = fill_yellow
-        ws["F1"] = "No."
-        ws["G1"] = invoice_number
-        ws["G1"].fill = fill_yellow
-        now = get_jst_now()
-        reiwa_year = now.year - 2018
-        ws["F3"] = "日付"
-        ws["F3"].fill = fill_yellow
-        ws["G3"] = f"{reiwa_year}年"
-        ws["G3"].fill = fill_yellow
-        ws["H3"] = f"{now.month}月"
-        ws["H3"].fill = fill_yellow
-        ws["I3"] = f"{now.day}日"
-        ws["I3"].fill = fill_yellow
-
-        start_row = 8
-        for col, text in {"A": "品番", "B": "カラー", "C": "サイズ", "D": "バーコード", "F": "数量", "G": "単価", "H": "金額", "I": "掛率"}.items():
-            cell = ws[f"{col}{start_row}"]
-            cell.value = text
-            cell.border = border_thin
-            cell.alignment = Alignment(horizontal="center")
-
-        ws.column_dimensions['A'].width = 15
-        ws.column_dimensions['B'].width = 10
-        ws.column_dimensions['C'].width = 10
-        ws.column_dimensions['D'].width = 30
-        ws.column_dimensions['E'].width = 2
-        ws.column_dimensions['F'].width = 10
-        ws.column_dimensions['G'].width = 15
-        ws.column_dimensions['H'].width = 15
-        ws.column_dimensions['I'].width = 10
-
-        current_row = start_row + 1
-        for i, item in enumerate(processed_items):
-            ws.row_dimensions[current_row].height = 48
-            ws[f"A{current_row}"] = item['code']
-            ws[f"B{current_row}"] = item["color"]
-            ws[f"C{current_row}"] = item["size"]
-            ws[f"D{current_row}"] = ""
-            ws[f"F{current_row}"] = item["quantity"]
-            ws[f"G{current_row}"] = item["unit_price"]
-            ws[f"G{current_row}"].number_format = '#,##0'
-            ws[f"H{current_row}"] = item["net_amount"]
-            ws[f"H{current_row}"].number_format = '#,##0'
-            ws[f"I{current_row}"] = f"{discount_rate}%"
-            for col in ['A', 'B', 'C', 'D', 'F', 'G', 'H', 'I']:
-                cell = ws[f"{col}{current_row}"]
-                cell.border = border_thin
-                cell.alignment = Alignment(vertical="center", horizontal="center" if col not in ["A", "D"] else "left")
-                if col in ['A', 'B', 'C', 'F', 'G', 'I']: cell.fill = fill_yellow
-                if col == 'H': cell.fill = fill_blue
-            
-            # Generate Barcode Image
-            bc_str = f"{item['code']}{item['color']}{item['size']}".replace('-', '').upper()
-            bc_str = re.sub(r'[^A-Z0-9\-\.\ \$\/\+\%]', '', bc_str)
-            if not bc_str: bc_str = "000"
-            try:
-                code39 = barcode.get_barcode_class('code39')
-                bc_io = BytesIO()
-                code39(bc_str, writer=ImageWriter(), add_checksum=False).write(
-                    bc_io,
-                    options={"module_width":0.22, "module_height":6.0, "font_size":7, "text_distance":2.5, "quiet_zone":1}
-                )
-                bc_io.seek(0)
-                img = ExcelImage(bc_io)
-                img_w_px, img_h_px = 175, 44
-
-                # D列(0-indexed=3) の current_row(0-indexed=current_row-1) にオフセット付きで配置
-                img.anchor = OneCellAnchor(
-                    _from=AnchorMarker(
-                        col=3, colOff=pixels_to_EMU(10),
-                        row=current_row - 1, rowOff=pixels_to_EMU(6)
-                    ),
-                    ext=XDRPositiveSize2D(
-                        cx=pixels_to_EMU(img_w_px),
-                        cy=pixels_to_EMU(img_h_px)
-                    )
-                )
-                ws.add_image(img)
-            except Exception as e:
-                print(f"Barcode gen error: {e}")
-                
-            current_row += 1
-
-        out = BytesIO()
-        wb.save(out)
-        excel_bytes = out.getvalue()
-
-        # Build Detail Sheet
-        detail_excel_bytes = build_detail_excel(invoice_number, customer_name, processed_items)
-        detail_pdf_bytes = build_detail_pdf(invoice_number, customer_name, processed_items)
-
-        # Save to PostgreSQL
-        conn = get_db()
-        with conn.cursor() as cur:
             if payload.invoice_id:
-                cur.execute(
-                    "UPDATE invoices SET customer_name=%s, discount_rate=%s, total_net_amount=%s, total_tax_amount=%s, total_grand_total=%s, item_count=%s, pdf_data=%s, excel_data=%s, detail_pdf_data=%s, detail_excel_data=%s, created_at=CURRENT_TIMESTAMP WHERE id=%s",
-                    (customer_name, discount_rate, total_net_amount, total_tax_amount, total_grand_total, len(processed_items), pdf_bytes, excel_bytes, detail_pdf_bytes, detail_excel_bytes, payload.invoice_id)
-                )
+                cur.execute("""
+                    UPDATE invoices SET customer_name=%s, discount_rate=%s, total_net_amount=%s, total_tax_amount=%s, total_grand_total=%s, 
+                    item_count=%s, status='draft', locked_at=NULL,
+                    pdf_storage_path=NULL, excel_storage_path=NULL, detail_pdf_storage_path=NULL, detail_excel_storage_path=NULL,
+                    created_at=CURRENT_TIMESTAMP WHERE id=%s
+                """, (payload.customer_name, payload.discount_rate, inv_data["total_net_amount"], inv_data["total_tax_amount"], inv_data["total_grand_total"], len(inv_data["items"]), payload.invoice_id))
                 cur.execute("DELETE FROM invoice_items WHERE invoice_id=%s", (payload.invoice_id,))
                 inv_id = payload.invoice_id
             else:
-                cur.execute(
-                    "INSERT INTO invoices (invoice_number, customer_name, discount_rate, total_net_amount, total_tax_amount, total_grand_total, item_count, pdf_data, excel_data, detail_pdf_data, detail_excel_data) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id",
-                    (invoice_number, customer_name, discount_rate, total_net_amount, total_tax_amount, total_grand_total, len(processed_items), pdf_bytes, excel_bytes, detail_pdf_bytes, detail_excel_bytes)
-                )
+                cur.execute("""
+                    INSERT INTO invoices (invoice_number, customer_name, discount_rate, total_net_amount, total_tax_amount, total_grand_total, item_count, status) 
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,'draft') RETURNING id
+                """, (invoice_number, payload.customer_name, payload.discount_rate, inv_data["total_net_amount"], inv_data["total_tax_amount"], inv_data["total_grand_total"], len(inv_data["items"])))
                 inv_id = cur.fetchone()['id']
             
-            for item in processed_items:
+            for item in inv_data["items"]:
                 cur.execute("INSERT INTO invoice_items (invoice_id, code, color, size, unit_price, quantity, net_amount) VALUES (%s,%s,%s,%s,%s,%s,%s)",
                              (inv_id, item["code"], item["color"], item["size"], item["unit_price"], item["quantity"], item["net_amount"]))
         conn.commit()
         conn.close()
 
-        pdf_b64 = base64.b64encode(pdf_bytes).decode('utf-8')
-        excel_b64 = base64.b64encode(excel_bytes).decode('utf-8')
-        detail_pdf_b64 = base64.b64encode(detail_pdf_bytes).decode('utf-8')
-        detail_excel_b64 = base64.b64encode(detail_excel_bytes).decode('utf-8')
-
+        files = build_all_files(inv_data)
         return JSONResponse({
-            "invoice_id": inv_id,
-            "invoice_number": invoice_number,
-            "pdf_base64": pdf_b64,
-            "excel_base64": excel_b64,
-            "detail_pdf_base64": detail_pdf_b64,
-            "detail_excel_base64": detail_excel_b64
+            "invoice_id": inv_id, "invoice_number": invoice_number, "status": "draft",
+            "pdf_base64": base64.b64encode(files["pdf"]).decode(), "excel_base64": base64.b64encode(files["excel"]).decode(),
+            "detail_pdf_base64": base64.b64encode(files["detail_pdf"]).decode(), "detail_excel_base64": base64.b64encode(files["detail_excel"]).decode(),
         })
+    except HTTPException: raise
     except Exception as e:
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+        import traceback; traceback.print_exc()
+        raise HTTPException(500, str(e))
+
+@app.post("/api/history/{inv_id}/lock")
+async def lock_invoice(inv_id: int, username: Annotated[str, Depends(authenticate)]):
+    conn = get_db()
+    with conn.cursor() as cur:
+        cur.execute("SELECT * FROM invoices WHERE id=%s", (inv_id,))
+        inv = cur.fetchone()
+        if not inv: raise HTTPException(404, "Not found")
+        if inv["status"] == "locked": return {"status": "already_locked"}
+        cur.execute("SELECT code,color,size,unit_price,quantity FROM invoice_items WHERE invoice_id=%s", (inv_id,))
+        items = [dict(r) for r in cur.fetchall()]
+    
+    inv_data = assemble_invoice_data(dict(inv), items, inv["discount_rate"])
+    files = build_all_files(inv_data)
+    
+    base = f"locked/{inv['invoice_number']}"
+    p = {
+        "pdf": storage_upload(f"{base}/invoice.pdf", files["pdf"], "application/pdf"),
+        "excel": storage_upload(f"{base}/invoice.xlsx", files["excel"], "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+        "detail_pdf": storage_upload(f"{base}/detail.pdf", files["detail_pdf"], "application/pdf"),
+        "detail_excel": storage_upload(f"{base}/detail.xlsx", files["detail_excel"], "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+    }
+    
+    with conn.cursor() as cur:
+        cur.execute("""
+            UPDATE invoices SET status='locked', locked_at=NOW(),
+            pdf_storage_path=%s, excel_storage_path=%s, detail_pdf_storage_path=%s, detail_excel_storage_path=%s
+            WHERE id=%s
+        """, (p["pdf"], p["excel"], p["detail_pdf"], p["detail_excel"], inv_id))
+        conn.commit()
+    conn.close()
+    return {"status": "locked"}
+
+@app.post("/api/history/{inv_id}/unlock")
+async def unlock_invoice(inv_id: int, username: Annotated[str, Depends(authenticate)]):
+    conn = get_db()
+    with conn.cursor() as cur:
+        cur.execute("UPDATE invoices SET status='draft', locked_at=NULL WHERE id=%s", (inv_id,))
+        conn.commit()
+    conn.close()
+    return {"status": "draft"}
+
+# ==================== History & Serving API ====================
+@app.get("/api/history")
+async def get_history(username: Annotated[str, Depends(authenticate)]):
+    conn = get_db()
+    with conn.cursor() as cur:
+        cur.execute("""
+            SELECT id, invoice_number, customer_name, total_grand_total, item_count, status, 
+            to_char(locked_at, 'YYYY-MM-DD"T"HH24:MI:SS') as locked_at, 
+            to_char(created_at, 'YYYY-MM-DD\"T\"HH24:MI:SS') as created_at FROM invoices ORDER BY id DESC
+        """)
+        rows = cur.fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+def _serve_file(inv_id: int, kind: str):
+    conn = get_db()
+    with conn.cursor() as cur:
+        cur.execute("SELECT * FROM invoices WHERE id=%s", (inv_id,))
+        inv = cur.fetchone()
+        if not inv: raise HTTPException(404, "Not found")
+        cur.execute("SELECT code,color,size,unit_price,quantity FROM invoice_items WHERE invoice_id=%s", (inv_id,))
+        items = [dict(r) for r in cur.fetchall()]
+    conn.close()
+    
+    path_field = f"{kind.replace('-','_')}_storage_path"
+    mime_map = {
+        "pdf": ("application/pdf", "pdf"),
+        "excel": ("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "xlsx"),
+        "detail-pdf": ("application/pdf", "pdf"),
+        "detail-excel": ("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "xlsx"),
+    }
+    mime, ext = mime_map[kind]
+    
+    if inv["status"] == "locked" and inv.get(path_field):
+        try:
+            data = storage_download(inv[path_field])
+            return Response(content=data, media_type=mime, headers={"Content-Disposition": f'attachment; filename="{inv["invoice_number"]}_{kind}.{ext}"'})
+        except: pass
+    
+    # Draft or Storage missing -> Re-generate
+    inv_data = assemble_invoice_data(dict(inv), items, inv["discount_rate"])
+    files = build_all_files(inv_data)
+    key = kind.replace("-", "_")
+    return Response(content=files[key], media_type=mime, headers={"Content-Disposition": f'attachment; filename="{inv["invoice_number"]}_{kind}.{ext}"'})
+
+@app.get("/api/history/{inv_id}/pdf")
+async def dl_pdf(inv_id: int, username: Annotated[str, Depends(authenticate)]): return _serve_file(inv_id, "pdf")
+@app.get("/api/history/{inv_id}/excel")
+async def dl_excel(inv_id: int, username: Annotated[str, Depends(authenticate)]): return _serve_file(inv_id, "excel")
+@app.get("/api/history/{inv_id}/detail-pdf")
+async def dl_dpdf(inv_id: int, username: Annotated[str, Depends(authenticate)]): return _serve_file(inv_id, "detail-pdf")
+@app.get("/api/history/{inv_id}/detail-excel")
+async def dl_dxl(inv_id: int, username: Annotated[str, Depends(authenticate)]): return _serve_file(inv_id, "detail-excel")
+
+@app.get("/api/history/{inv_id}/items")
+async def get_history_items(inv_id: int, username: Annotated[str, Depends(authenticate)]):
+    conn = get_db()
+    with conn.cursor() as cur:
+        cur.execute("SELECT code, color, size, unit_price, quantity FROM invoice_items WHERE invoice_id = %s", (inv_id,))
+        rows = cur.fetchall()
+        cur.execute("SELECT invoice_number, customer_name, discount_rate FROM invoices WHERE id = %s", (inv_id,))
+        inv = cur.fetchone()
+    conn.close()
+    if not inv: raise HTTPException(status_code=404, detail="Invoice not found")
+    return {"invoice_number": inv["invoice_number"], "customer_name": inv["customer_name"], "discount_rate": inv["discount_rate"], "items": [dict(r) for r in rows]}
+
+@app.delete("/api/history/{inv_id}")
+async def delete_history(inv_id: int, username: Annotated[str, Depends(authenticate)]):
+    conn = get_db()
+    with conn.cursor() as cur:
+        cur.execute("DELETE FROM invoice_items WHERE invoice_id = %s", (inv_id,))
+        cur.execute("DELETE FROM invoices WHERE id = %s", (inv_id,))
+    conn.commit()
+    conn.close()
+    return {"status": "ok"}
 
 @app.post("/api/history/{inv_id}/upload-drive")
 async def upload_to_drive(inv_id: int, username: Annotated[str, Depends(authenticate)]):
-    if not GDRIVE_WEBHOOK_URL:
-        raise HTTPException(status_code=500, detail="GDRIVE_WEBHOOK_URLが未設定です。Renderの設定を確認してください。")
-
+    if not GDRIVE_WEBHOOK_URL: raise HTTPException(500, "GDRIVE_WEBHOOK_URLが未設定です")
     conn = get_db()
     with conn.cursor() as cur:
-        cur.execute(
-            "SELECT invoice_number, customer_name, pdf_data, excel_data, detail_pdf_data, detail_excel_data FROM invoices WHERE id = %s",
-            (inv_id,)
-        )
-        row = cur.fetchone()
+        cur.execute("SELECT * FROM invoices WHERE id=%s", (inv_id,))
+        inv = cur.fetchone()
+        cur.execute("SELECT code,color,size,unit_price,quantity FROM invoice_items WHERE invoice_id=%s", (inv_id,))
+        items = [dict(r) for r in cur.fetchall()]
     conn.close()
-    if not row:
-        raise HTTPException(status_code=404, detail="Invoice not found")
+    if not inv: raise HTTPException(404, "Not found")
 
-    inv_num = row["invoice_number"]
-    cust = (row["customer_name"] or "").replace("/", "_").replace("\\", "_")
-    uploaded = []
-
-    async def _upload_via_gas(filename, mime, data):
-        import base64
-        import requests
-        payload = {
-            "folderId": GDRIVE_FOLDER_ID,
-            "filename": filename,
-            "mime": mime,
-            "base64": base64.b64encode(data).decode('utf-8')
+    if inv["status"] == "locked" and inv.get("pdf_storage_path"):
+        files = {
+            "pdf": storage_download(inv["pdf_storage_path"]),
+            "excel": storage_download(inv["excel_storage_path"]),
+            "detail_pdf": storage_download(inv["detail_pdf_storage_path"]),
+            "detail_excel": storage_download(inv["detail_excel_storage_path"]),
         }
-        resp = requests.post(GDRIVE_WEBHOOK_URL, json=payload, timeout=30)
-        if resp.status_code != 200:
-            raise Exception(f"GAS error: {resp.status_code} - {resp.text}")
+    else:
+        inv_data = assemble_invoice_data(dict(inv), items, inv["discount_rate"])
+        files = build_all_files(inv_data)
+
+    inv_num = inv["invoice_number"]
+    cust = (inv["customer_name"] or "").replace("/", "_").replace("\\", "_")
+    uploaded = []
+    async def _up(fn, mime, data):
+        resp = requests.post(GDRIVE_WEBHOOK_URL, json={
+            "folderId": GDRIVE_FOLDER_ID, "filename": fn, "mime": mime, "base64": base64.b64encode(data).decode()
+        }, timeout=30)
+        if resp.status_code != 200: raise Exception(f"GAS error: {resp.text}")
         return resp.json()
 
     try:
-        if row["pdf_data"]:
-            res = await _upload_via_gas(f"{inv_num}_{cust}_伝票.pdf", "application/pdf", row["pdf_data"])
-            uploaded.append({"type": "pdf", "name": f"{inv_num}_{cust}_伝票.pdf", "url": res.get("url")})
-        if row["excel_data"]:
-            res = await _upload_via_gas(
-                f"{inv_num}_{cust}_伝票.xlsx",
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                row["excel_data"]
-            )
-            uploaded.append({"type": "excel", "name": f"{inv_num}_{cust}_伝票.xlsx", "url": res.get("url")})
-        if row["detail_pdf_data"]:
-            res = await _upload_via_gas(f"{inv_num}_{cust}_明細表.pdf", "application/pdf", row["detail_pdf_data"])
-            uploaded.append({"type": "detail_pdf", "name": f"{inv_num}_{cust}_明細表.pdf", "url": res.get("url")})
-        if row["detail_excel_data"]:
-            res = await _upload_via_gas(
-                f"{inv_num}_{cust}_明細表.xlsx",
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                row["detail_excel_data"]
-            )
-            uploaded.append({"type": "detail_excel", "name": f"{inv_num}_{cust}_明細表.xlsx", "url": res.get("url")})
+        targets = [
+            ("pdf", f"{inv_num}_{cust}_伝票.pdf", "application/pdf", files["pdf"]),
+            ("excel", f"{inv_num}_{cust}_伝票.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", files["excel"]),
+            ("detail_pdf", f"{inv_num}_{cust}_明細表.pdf", "application/pdf", files["detail_pdf"]),
+            ("detail_excel", f"{inv_num}_{cust}_明細表.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", files["detail_excel"]),
+        ]
+        for typ, fn, mime, data in targets:
+            res = await _up(fn, mime, data)
+            uploaded.append({"type": typ, "name": fn, "url": res.get("url")})
 
         return {"status": "ok", "uploaded": uploaded}
     except Exception as e:

@@ -931,6 +931,17 @@
             flex: 1;
             margin-bottom: 0;
         }
+        .badge {
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin-left: 8px;
+            font-weight: 700;
+        }
+        .badge-locked { background: #ffd700; color: #000; }
+        .badge-draft { background: #444; color: #ccc; }
+        .btn-gold { background: linear-gradient(135deg, #ffd700, #ff8c00); color: #000; font-weight: 700; border: none; }
+        .btn-gold:hover { transform: translateY(-2px); box-shadow: 0 4px 15px rgba(255, 215, 0, 0.4); }
     </style>
 </head>
 
@@ -1143,29 +1154,66 @@
             allHistory = data; renderHistory(allHistory);
         }
         function renderHistory(data) {
-            const hl = $('hist-list'); hl.innerHTML = '';
-            if (!data.length) { hl.innerHTML = '<div class="empty-state">伝票が見つかりません</div>'; return; }
+            const list = $('hist-list'); list.innerHTML = '';
+            if (!data.length) { list.innerHTML = '<div class="empty-state">伝票が見つかりません</div>'; return; }
             data.forEach(inv => {
-                const d = document.createElement('div'); d.className = 'hist-item';
+                const d = document.createElement('div');
+                d.className = 'hist-item';
+                
+                const statusBadge = inv.status === 'locked' 
+                    ? '<span class="badge badge-locked">LOCKED</span>' 
+                    : '<span class="badge badge-draft">DRAFT</span>';
+
+                const lockBtn = inv.status === 'locked'
+                    ? `<button class="btn btn-outline btn-sm" onclick="unlockHist(${inv.id})">解除</button>`
+                    : `<button class="btn btn-gold btn-sm" onclick="lockHist(${inv.id})">確定</button>`;
+
                 d.innerHTML = `
                     <div class="hist-info">
-                        <div class="hist-num">${inv.invoice_number}</div>
+                        <div class="hist-num">${inv.invoice_number} ${statusBadge}</div>
                         <div class="hist-meta">${inv.customer_name} · ${inv.item_count}点 · ${inv.created_at?.split('T')[0] || ''}</div>
                         <div class="hist-actions">
                             <a href="/api/history/${inv.id}/pdf" class="btn btn-red btn-sm">伝票PDF</a>
                             <a href="/api/history/${inv.id}/excel" class="btn btn-green btn-sm">伝票XL</a>
                             <a href="/api/history/${inv.id}/detail-pdf" class="btn btn-red btn-sm">明細PDF</a>
                             <a href="/api/history/${inv.id}/detail-excel" class="btn btn-green btn-sm">明細XL</a>
-                            <button class="btn btn-blue btn-sm" onclick="uploadDrive(${inv.id}, this)">☁️ Drive</button>
-                            <button class="btn btn-accent btn-sm" onclick="editHist(${inv.id})">✎</button>
+                            <button class="btn btn-blue btn-sm" onclick="uploadDrive(${inv.id}, this)">
+                                <span class="icon">☁</span> Drive
+                            </button>
+                            ${lockBtn}
+                            <button class="btn btn-accent btn-sm" onclick="editHist(${inv.id})" ${inv.status === 'locked' ? 'disabled title="ロック解除してから編集してください"' : ''}>✎</button>
                             <button class="btn btn-outline btn-sm" onclick="delHist(${inv.id})">削除</button>
                         </div>
                     </div>
                     <div class="hist-amt">¥${(inv.total_grand_total || 0).toLocaleString()}</div>
                 `;
-                hl.appendChild(d);
+                list.appendChild(d);
             });
         }
+        async function lockHist(id) {
+            if (!confirm('この伝票を確定しますか？\n（確定後はファイルが固定化され、編集不可になります）')) return;
+            try {
+                const r = await fetch(`/api/history/${id}/lock`, { method: 'POST' });
+                if (r.ok) {
+                    toast('✦ 確定しました', 'ok');
+                    loadHistory();
+                } else {
+                    const err = await r.json();
+                    toast(err.detail, 'err');
+                }
+            } catch (e) { toast(e.message, 'err'); }
+        }
+        async function unlockHist(id) {
+            if (!confirm('ロック解除しますか？\n再編集できるようになります。')) return;
+            try {
+                const r = await fetch(`/api/history/${id}/unlock`, { method: 'POST' });
+                if (r.ok) {
+                    toast('解除しました', 'ok');
+                    loadHistory();
+                }
+            } catch (e) { toast(e.message, 'err'); }
+        }
+
         $('hist-search').addEventListener('input', e => {
             const q = e.target.value.toLowerCase();
             const f = allHistory.filter(i => i.invoice_number.toLowerCase().includes(q) || i.customer_name.toLowerCase().includes(q));
@@ -1336,16 +1384,40 @@
                 currentInvNum = d.invoice_number;
                 lastInvoiceId = d.invoice_id;
                 $('inv-num-display').textContent = `伝票番号: ${d.invoice_number}`;
+                
+                const dlSection = $('download-section');
+                dlSection.innerHTML = `
+                    <div class="btn-group" style="margin-bottom:15px; display:grid; grid-template-columns:1fr 1fr; gap:5px">
+                        <button class="btn btn-red" onclick="downloadBlob('pdf')">伝票PDF</button>
+                        <button class="btn btn-green" onclick="downloadBlob('excel')">伝票XL</button>
+                        <button class="btn btn-red" onclick="downloadBlob('detail-pdf')">明細PDF</button>
+                        <button class="btn btn-green" onclick="downloadBlob('detail-excel')">明細XL</button>
+                    </div>
+                    <button class="btn btn-gold" id="btn-lock-final" style="width:100%">
+                        ✦ この内容で確定して保存（固定化）
+                    </button>
+                `;
+                
+                $('btn-lock-final').addEventListener('click', async () => {
+                    if (!lastInvoiceId) return;
+                    await lockHist(lastInvoiceId);
+                    $('result-section').style.display = 'none';
+                    loadHistory();
+                });
+                
                 $('preview-card').style.display = 'none'; $('dl-section').style.display = 'block';
                 toast('✦ 保存完了', 'ok');
             } catch (e) { toast(e.message, 'err'); $('btn-generate').disabled = false; $('sp2').style.display = 'none'; }
         });
 
+        function downloadBlob(type) {
+            if (type === 'pdf') dl64(pdfData, `納品書_${currentInvNum}.pdf`, 'application/pdf');
+            if (type === 'excel') dl64(excelData, `管理伝票_${currentInvNum}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            if (type === 'detail-pdf') dl64(detailPdfData, `商品明細表_${currentInvNum}.pdf`, 'application/pdf');
+            if (type === 'detail-excel') dl64(detailExcelData, `商品明細表_${currentInvNum}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        }
+
         function dl64(b64, fn, ct) { try { const c = atob(b64.replace(/\s/g, '')); const a = []; for (let o = 0; o < c.length; o += 512) { const s = c.slice(o, o + 512); const n = new Array(s.length); for (let i = 0; i < s.length; i++)n[i] = s.charCodeAt(i); a.push(new Uint8Array(n)); } const b = new Blob(a, { type: ct }); const u = URL.createObjectURL(b); const l = document.createElement('a'); l.href = u; l.download = fn; l.click(); URL.revokeObjectURL(u); } catch (e) { toast('保存エラー: ' + e.message, 'err'); } }
-        $('btn-pdf').addEventListener('click', () => pdfData && dl64(pdfData, `納品書_${currentInvNum}.pdf`, 'application/pdf'));
-        $('btn-excel').addEventListener('click', () => excelData && dl64(excelData, `管理伝票_${currentInvNum}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'));
-        $('btn-detail-pdf').addEventListener('click', () => detailPdfData && dl64(detailPdfData, `商品明細表_${currentInvNum}.pdf`, 'application/pdf'));
-        $('btn-detail-excel').addEventListener('click', () => detailExcelData && dl64(detailExcelData, `商品明細表_${currentInvNum}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'));
 
         $('btn-new').addEventListener('click', () => { 
             currentEditingInvId = null; lastInvoiceId = null; selectedFiles = []; extractedItems = []; 

@@ -12,3 +12,4 @@ python-barcode
 Pillow
 google-api-python-client
 psycopg2-binary
+supabase==2.7.4
