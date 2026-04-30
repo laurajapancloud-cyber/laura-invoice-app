@@ -677,6 +677,23 @@ class DocumentRequest(BaseModel):
     discount_rate: int
     items: List[Dict[str, Any]]
 
+@app.post("/api/preview")
+async def preview_documents(username: Annotated[str, Depends(authenticate)], payload: DocumentRequest):
+    """保存せず、PDF/Excelだけ生成して返す"""
+    inv_data = assemble_invoice_data(
+        {"invoice_number": "PREVIEW-" + get_jst_now().strftime("%H%M%S"), "customer_name": payload.customer_name},
+        payload.items, payload.discount_rate
+    )
+    files = build_all_files(inv_data)
+    return {
+        "invoice_number": inv_data["invoice_number"],
+        "pdf_base64": base64.b64encode(files["pdf"]).decode(),
+        "excel_base64": base64.b64encode(files["excel"]).decode(),
+        "detail_pdf_base64": base64.b64encode(files["detail_pdf"]).decode(),
+        "detail_excel_base64": base64.b64encode(files["detail_excel"]).decode(),
+    }
+
+
 @app.post("/generate-documents")
 async def generate_documents(request: Request, username: Annotated[str, Depends(authenticate)], payload: DocumentRequest):
     try:
@@ -956,6 +973,35 @@ async def upload_to_drive(inv_id: int, username: Annotated[str, Depends(authenti
         import traceback; traceback.print_exc()
         # エラーメッセージをJSONで返す（これで Unexpected token 'I' は出なくなる）
         return JSONResponse(status_code=500, content={"detail": f"Drive保存失敗: {str(e)}"})
+
+@app.get("/api/history/{inv_id}/data")
+async def get_history_data(inv_id: int, username: Annotated[str, Depends(authenticate)]):
+    conn = get_db()
+    with conn.cursor() as cur:
+        cur.execute("SELECT * FROM invoices WHERE id=%s", (inv_id,))
+        row = cur.fetchone()
+        if not row:
+            conn.close()
+            raise HTTPException(404, "Not found")
+        inv = dict(row)
+        cur.execute("SELECT code,color,size,unit_price,quantity FROM invoice_items WHERE invoice_id=%s", (inv_id,))
+        items = [dict(r) for r in cur.fetchall()]
+    conn.close()
+
+    inv_data = assemble_invoice_data(inv, items, inv["discount_rate"])
+    files = build_all_files(inv_data)
+    return {
+        "invoice_number": inv["invoice_number"],
+        "customer_name": inv["customer_name"],
+        "discount_rate": inv["discount_rate"],
+        "status": inv["status"],
+        "items": items,
+        "pdf_base64": base64.b64encode(files["pdf"]).decode(),
+        "excel_base64": base64.b64encode(files["excel"]).decode(),
+        "detail_pdf_base64": base64.b64encode(files["detail_pdf"]).decode(),
+        "detail_excel_base64": base64.b64encode(files["detail_excel"]).decode(),
+    }
+
 
 if __name__ == "__main__":
     import uvicorn
