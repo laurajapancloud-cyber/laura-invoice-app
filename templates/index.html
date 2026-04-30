@@ -1472,10 +1472,18 @@
     margin-top: 10px; letter-spacing: 0.1em;
   }
   
-  .item-cards {
+  .item-cards-grid {
     display: grid !important;
     grid-template-columns: 1fr 1fr;
     gap: 12px;
+  }
+  .item-table-container {
+    width: 100%;
+    overflow-x: auto;
+    background: var(--bg-elevated);
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    margin-top: 10px;
   }
   .pdf-preview-frame { height: 70vh; min-height: 580px; }
   
@@ -1635,6 +1643,11 @@
   .pc-item-table input:focus { border-color: var(--gold); outline: none; }
   .pc-item-table .qty-stepper { border-radius: 6px; }
   .pc-item-table .qty-stepper input { border: none !important; padding: 8px 2px !important; }
+}
+
+@media (max-width: 600px) {
+  .search-bar-wrap { flex-direction: column !important; }
+  #hist-month-filter { width: 100% !important; }
 }
 
 @media (min-width: 1440px) {
@@ -2050,7 +2063,7 @@
     <div class="page" id="page-history">
         <div class="card">
             <div class="card-title">⌘ 伝票履歴</div>
-            <div style="display:flex; gap:10px; margin-bottom:14px">
+            <div class="search-bar-wrap" style="display:flex; gap:10px; margin-bottom:14px">
                 <input type="text" id="hist-search" placeholder="伝票番号や名前で検索..." style="flex:1" />
                 <select id="hist-month-filter" style="width:140px; padding:12px; background:var(--bg-input); border:1px solid var(--border); border-radius:10px; color:var(--text-primary); font-size:14px">
                     <option value="">すべての月</option>
@@ -2777,9 +2790,12 @@
 
         function renderPreview() {
             const container = $('item-cards'); container.innerHTML = '';
-            const isDesktop = window.matchMedia('(min-width: 1024px)').matches;
+            // テーブル表示は1200px以上の広い画面のみに制限
+            const isDesktop = window.matchMedia('(min-width: 1200px)').matches;
             
             if (isDesktop) {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'item-table-container';
                 const table = document.createElement('table');
                 table.className = 'pc-item-table';
                 table.innerHTML = `
@@ -2797,7 +2813,8 @@
                     </thead>
                     <tbody id="pc-item-body"></tbody>
                 `;
-                container.appendChild(table);
+                wrapper.appendChild(table);
+                container.appendChild(wrapper);
                 const tbody = $('pc-item-body');
                 
                 extractedItems.forEach((it, i) => {
@@ -2822,6 +2839,7 @@
                     tbody.appendChild(tr);
                 });
             } else {
+                container.className = isDesktop ? 'item-cards' : 'item-cards item-cards-grid'; // PC(1024-1200)でもカード2列
                 extractedItems.forEach((it, i) => {
                     const amt = calcItemAmount(it);
                     const card = document.createElement('div'); card.className = 'item-card';
