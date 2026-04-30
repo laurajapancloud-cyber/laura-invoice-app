@@ -313,89 +313,6 @@ async def delete_customer(cid: int, username: Annotated[str, Depends(authenticat
     conn.close()
     return {"status": "ok"}
 
-# ==================== History API ====================
-@app.get("/api/history")
-async def get_history(username: Annotated[str, Depends(authenticate)]):
-    conn = get_db()
-    with conn.cursor() as cur:
-        cur.execute(
-            "SELECT id, invoice_number, customer_name, total_grand_total, item_count, to_char(created_at, 'YYYY-MM-DD\"T\"HH24:MI:SS') as created_at FROM invoices ORDER BY id DESC"
-        )
-        rows = cur.fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
-
-@app.get("/api/history/{inv_id}/pdf")
-async def download_history_pdf(inv_id: int, username: Annotated[str, Depends(authenticate)]):
-    conn = get_db()
-    with conn.cursor() as cur:
-        cur.execute("SELECT pdf_data, invoice_number FROM invoices WHERE id = %s", (inv_id,))
-        row = cur.fetchone()
-    conn.close()
-    if not row or not row["pdf_data"]:
-        raise HTTPException(status_code=404, detail="PDF not found")
-    return Response(content=row["pdf_data"], media_type="application/pdf",
-                    headers={"Content-Disposition": f'attachment; filename="{row["invoice_number"]}.pdf"'})
-
-@app.get("/api/history/{inv_id}/excel")
-async def download_history_excel(inv_id: int, username: Annotated[str, Depends(authenticate)]):
-    conn = get_db()
-    with conn.cursor() as cur:
-        cur.execute("SELECT excel_data, invoice_number FROM invoices WHERE id = %s", (inv_id,))
-        row = cur.fetchone()
-    conn.close()
-    if not row or not row["excel_data"]:
-        raise HTTPException(status_code=404, detail="Excel not found")
-    return Response(content=row["excel_data"],
-                    media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    headers={"Content-Disposition": f'attachment; filename="{row["invoice_number"]}.xlsx"'})
-
-@app.get("/api/history/{inv_id}/detail-pdf")
-async def download_detail_pdf(inv_id: int, username: Annotated[str, Depends(authenticate)]):
-    conn = get_db()
-    with conn.cursor() as cur:
-        cur.execute("SELECT detail_pdf_data, invoice_number FROM invoices WHERE id = %s", (inv_id,))
-        row = cur.fetchone()
-    conn.close()
-    if not row or not row["detail_pdf_data"]:
-        raise HTTPException(status_code=404, detail="Detail PDF not found")
-    return Response(content=row["detail_pdf_data"], media_type="application/pdf",
-                    headers={"Content-Disposition": f'attachment; filename="{row["invoice_number"]}_detail.pdf"'})
-
-@app.get("/api/history/{inv_id}/detail-excel")
-async def download_detail_excel(inv_id: int, username: Annotated[str, Depends(authenticate)]):
-    conn = get_db()
-    with conn.cursor() as cur:
-        cur.execute("SELECT detail_excel_data, invoice_number FROM invoices WHERE id = %s", (inv_id,))
-        row = cur.fetchone()
-    conn.close()
-    if not row or not row["detail_excel_data"]:
-        raise HTTPException(status_code=404, detail="Detail Excel not found")
-    return Response(content=row["detail_excel_data"], media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    headers={"Content-Disposition": f'attachment; filename="{row["invoice_number"]}_detail.xlsx"'})
-
-@app.get("/api/history/{inv_id}/items")
-async def get_history_items(inv_id: int, username: Annotated[str, Depends(authenticate)]):
-    conn = get_db()
-    with conn.cursor() as cur:
-        cur.execute("SELECT code, color, size, unit_price, quantity FROM invoice_items WHERE invoice_id = %s", (inv_id,))
-        rows = cur.fetchall()
-        cur.execute("SELECT invoice_number, customer_name, discount_rate FROM invoices WHERE id = %s", (inv_id,))
-        inv = cur.fetchone()
-    conn.close()
-    if not inv:
-        raise HTTPException(status_code=404, detail="Invoice not found")
-    return {"invoice_number": inv["invoice_number"], "customer_name": inv["customer_name"], "discount_rate": inv["discount_rate"], "items": [dict(r) for r in rows]}
-
-@app.delete("/api/history/{inv_id}")
-async def delete_history(inv_id: int, username: Annotated[str, Depends(authenticate)]):
-    conn = get_db()
-    with conn.cursor() as cur:
-        cur.execute("DELETE FROM invoice_items WHERE invoice_id = %s", (inv_id,))
-        cur.execute("DELETE FROM invoices WHERE id = %s", (inv_id,))
-    conn.commit()
-    conn.close()
-    return {"status": "ok"}
 
 # ==================== AI Analysis API ====================
 @app.post("/analyze-images")
@@ -562,8 +479,8 @@ def build_detail_excel(invoice_number: str, customer_name: str, items: list) -> 
 
         header_row = section_start + 1
         ws.row_dimensions[header_row].height = 22
-        headers = {'A':'No.', 'B':'品番', 'C':'枚数', 'D':'上代', 'E':'カラー', 'F':'44', 'G':'46', 'H':'48', 'I':'50', 'J':'52', 'K':'備考'}
-        for col, label in headers.items():
+        headers_d = {'A':'No.', 'B':'品番', 'C':'枚数', 'D':'上代', 'E':'カラー', 'F':'44', 'G':'46', 'H':'48', 'I':'50', 'J':'52', 'K':'備考'}
+        for col, label in headers_d.items():
             cell = ws[f"{col}{header_row}"]
             cell.value = label
             cell.fill = fill_header
@@ -583,6 +500,54 @@ def build_detail_excel(invoice_number: str, customer_name: str, items: list) -> 
             if item:
                 ws[f"B{r}"] = item.get("code", "")
                 ws[f"C{r}"] = item.get("quantity", 0)
+                ws[f"D{r}"] = item.get("unit_price", 0)
+                ws[f"D{r}"].number_format = '#,##0'
+                ws[f"E{r}"] = item.get("color", "")
+                size_val = str(item.get("size", ""))
+                for si, sc in enumerate(SIZE_COLUMNS):
+                    if size_val == sc:
+                        ws[f"{chr(70+si)}{r}"] = item.get("quantity", 1)
+
+            for col in list('ABCDEFGHIJK'):
+                ws[f"{col}{r}"].border = border_thin
+
+        section_start = header_row + 1 + ROWS_PER_SECTION + 2
+
+    out = BytesIO()
+    wb.save(out)
+    return out.getvalue()
+
+def build_detail_pdf(invoice_number: str, customer_name: str, items: list) -> bytes:
+    """商品明細表 PDF"""
+    from jinja2 import Template
+    rows_html = ""
+    for i, item in enumerate(items):
+        rows_html += f"<tr><td>{i+1}</td><td>{item.get('code','')}</td><td>{item.get('color','')}</td><td>{item.get('size','')}</td><td>{item.get('quantity',0)}</td><td>¥{item.get('unit_price',0):,}</td></tr>"
+    html_str = f"""<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8">
+    <style>@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap');
+    body{{font-family:'Noto Sans JP',sans-serif;font-size:12px;}}
+    .title{{font-size:20px;font-weight:bold;text-align:center;margin-bottom:10px;}}
+    .meta{{margin-bottom:15px;}}
+    table{{width:100%;border-collapse:collapse;}} th,td{{border:1px solid #ccc;padding:6px;text-align:center;}}
+    th{{background:#f4ecd8;}}</style></head><body>
+    <div class="title">商品明細表</div>
+    <div class="meta"><span>伝票番号: {invoice_number}</span><br><span>取引先: {customer_name}</span></div>
+    <table><thead><tr><th>No.</th><th>品番</th><th>カラー</th><th>サイズ</th><th>枚数</th><th>上代</th></tr></thead>
+    <tbody>{rows_html}</tbody></table></body></html>"""
+    return HTML(string=html_str).write_pdf()
+
+def build_invoice_pdf(invoice_data: dict) -> bytes:
+    """納品書 PDF (HTMLテンプレートから生成)"""
+    from jinja2 import Environment, FileSystemLoader
+    env = Environment(loader=FileSystemLoader("templates"))
+    template = env.get_template("invoice_template.html")
+    html_str = template.render(**invoice_data)
+    return HTML(string=html_str).write_pdf()
+
+def build_invoice_excel(invoice_data: dict) -> bytes:
+    """納品書 Excel (バーコード付き)"""
+    wb = openpyxl.Workbook()
+    ws = wb.active
     ws.title = "伝票"
     fill_yellow = PatternFill(start_color="FFE699", end_color="FFE699", fill_type="solid")
     fill_blue = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
