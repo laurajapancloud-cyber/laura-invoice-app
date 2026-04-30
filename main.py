@@ -138,6 +138,8 @@ def init_db():
             item_count INTEGER DEFAULT 0,
             pdf_data BLOB,
             excel_data BLOB,
+            detail_pdf_data BLOB,
+            detail_excel_data BLOB,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
         CREATE TABLE IF NOT EXISTS invoice_items (
@@ -158,6 +160,13 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
     """)
+    # 既存DBへの後方互換マイグレーション
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(invoices)").fetchall()]
+    if "detail_pdf_data" not in cols:
+        conn.execute("ALTER TABLE invoices ADD COLUMN detail_pdf_data BLOB")
+    if "detail_excel_data" not in cols:
+        conn.execute("ALTER TABLE invoices ADD COLUMN detail_excel_data BLOB")
+    
     # Insert default customers if table is empty
     count = conn.execute("SELECT COUNT(*) FROM customers").fetchone()[0]
     if count == 0:
@@ -305,6 +314,26 @@ async def download_history_excel(inv_id: int, username: Annotated[str, Depends(a
                     media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     headers={"Content-Disposition": f'attachment; filename="{row["invoice_number"]}.xlsx"'})
 
+@app.get("/api/history/{inv_id}/detail-pdf")
+async def download_detail_pdf(inv_id: int, username: Annotated[str, Depends(authenticate)]):
+    conn = get_db()
+    row = conn.execute("SELECT detail_pdf_data, invoice_number FROM invoices WHERE id = ?", (inv_id,)).fetchone()
+    conn.close()
+    if not row or not row["detail_pdf_data"]:
+        raise HTTPException(status_code=404, detail="Detail PDF not found")
+    return Response(content=row["detail_pdf_data"], media_type="application/pdf",
+                    headers={"Content-Disposition": f'attachment; filename="{row["invoice_number"]}_detail.pdf"'})
+
+@app.get("/api/history/{inv_id}/detail-excel")
+async def download_detail_excel(inv_id: int, username: Annotated[str, Depends(authenticate)]):
+    conn = get_db()
+    row = conn.execute("SELECT detail_excel_data, invoice_number FROM invoices WHERE id = ?", (inv_id,)).fetchone()
+    conn.close()
+    if not row or not row["detail_excel_data"]:
+        raise HTTPException(status_code=404, detail="Detail Excel not found")
+    return Response(content=row["detail_excel_data"], media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={"Content-Disposition": f'attachment; filename="{row["invoice_number"]}_detail.xlsx"'})
+
 @app.get("/api/history/{inv_id}/items")
 async def get_history_items(inv_id: int, username: Annotated[str, Depends(authenticate)]):
     conn = get_db()
@@ -431,6 +460,175 @@ async def analyze_images(
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
+# ==================== Product Detail Sheet Logic ====================
+SIZE_COLUMNS = ["44", "46", "48", "50", "52"]
+
+def build_detail_excel(invoice_number: str, customer_name: str, items: list) -> bytes:
+    """商品明細表 Excel (サイズ別内訳)"""
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "商品明細表"
+
+    fill_header = PatternFill(start_color="F4ECD8", end_color="F4ECD8", fill_type="solid")
+    fill_meta = PatternFill(start_color="FFF8E7", end_color="FFF8E7", fill_type="solid")
+    border_thin = Border(
+        left=Side(style='thin', color='888888'),
+        right=Side(style='thin', color='888888'),
+        top=Side(style='thin', color='888888'),
+        bottom=Side(style='thin', color='888888')
+    )
+
+    # 列幅
+    widths = {'A': 4, 'B': 14, 'C': 7, 'D': 9, 'E': 7, 'F': 5, 'G': 5, 'H': 5, 'I': 5, 'J': 5, 'K': 14}
+    for col, w in widths.items():
+        ws.column_dimensions[col].width = w
+
+    now = get_jst_now()
+    reiwa = now.year - 2018
+
+    # タイトル
+    ws["A1"] = "商 品 明 細 表"
+    ws["A1"].font = Font(bold=True, size=14)
+    ws.merge_cells("A1:E1")
+    ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
+
+    ws["G1"] = f"伝票番号: {invoice_number}"
+    ws["G1"].font = Font(size=10, color="555555")
+    ws.merge_cells("G1:K1")
+    ws["G1"].alignment = Alignment(horizontal="right", vertical="center")
+
+    ws["A2"] = f"取引先: {customer_name}"
+    ws["A2"].font = Font(size=11)
+    ws.merge_cells("A2:E2")
+
+    ROWS_PER_SECTION = 5
+    sections = max(1, (len(items) + ROWS_PER_SECTION - 1) // ROWS_PER_SECTION)
+
+    section_start = 4
+    for s in range(sections):
+        date_row = section_start
+        ws[f"I{date_row}"] = f"{reiwa}年"
+        ws[f"J{date_row}"] = f"{now.month}月"
+        ws[f"K{date_row}"] = f"{now.day}日"
+        for c in ['I','J','K']:
+            ws[f"{c}{date_row}"].alignment = Alignment(horizontal="center")
+            ws[f"{c}{date_row}"].font = Font(size=9, color="555555")
+
+        header_row = section_start + 1
+        ws.row_dimensions[header_row].height = 22
+        headers = {'A':'No.', 'B':'品番', 'C':'枚数', 'D':'上代', 'E':'カラー', 'F':'44', 'G':'46', 'H':'48', 'I':'50', 'J':'52', 'K':'備考'}
+        for col, label in headers.items():
+            cell = ws[f"{col}{header_row}"]
+            cell.value = label
+            cell.fill = fill_header
+            cell.font = Font(bold=True, size=10)
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+            cell.border = border_thin
+
+        for i in range(ROWS_PER_SECTION):
+            r = header_row + 1 + i
+            ws.row_dimensions[r].height = 22
+            item_idx = s * ROWS_PER_SECTION + i
+            item = items[item_idx] if item_idx < len(items) else None
+            ws[f"A{r}"] = i + 1
+            ws[f"A{r}"].alignment = Alignment(horizontal="center", vertical="center")
+            ws[f"A{r}"].font = Font(size=9, color="888888")
+
+            if item:
+                ws[f"B{r}"] = item.get("code", "")
+                ws[f"C{r}"] = item.get("quantity", 0)
+                ws[f"D{r}"] = item.get("unit_price", 0)
+                ws[f"D{r}"].number_format = '#,##0'
+                ws[f"E{r}"] = item.get("color", "")
+                size_str = str(item.get("size", "")).strip()
+                size_to_col = {"44":"F", "46":"G", "48":"H", "50":"I", "52":"J"}
+                if size_str in size_to_col:
+                    sc = size_to_col[size_str]
+                    ws[f"{sc}{r}"] = item.get("quantity", 0)
+                    ws[f"{sc}{r}"].fill = fill_meta
+                elif size_str:
+                    ws[f"K{r}"] = f"SIZE:{size_str}"
+
+            for col in ['A','B','C','D','E','F','G','H','I','J','K']:
+                cell = ws[f"{col}{r}"]
+                cell.border = border_thin
+                if not cell.alignment or cell.alignment.horizontal is None:
+                    cell.alignment = Alignment(horizontal="center", vertical="center")
+                if col in ['B','K']:
+                    cell.alignment = Alignment(horizontal="left", vertical="center", indent=1)
+
+        section_start = header_row + ROWS_PER_SECTION + 2
+
+    out = BytesIO()
+    wb.save(out)
+    return out.getvalue()
+
+def build_detail_pdf(invoice_number: str, customer_name: str, items: list) -> bytes:
+    """商品明細表 PDF (HTML生成)"""
+    now = get_jst_now()
+    reiwa = now.year - 2018
+    sections = []
+    for s in range(0, max(len(items), 5), 5):
+        chunk = items[s:s+5]
+        while len(chunk) < 5: chunk.append(None)
+        sections.append(chunk)
+
+    html = f"""
+    <html><head><style>
+        body {{ font-family: sans-serif; font-size: 11px; color: #333; }}
+        .page {{ padding: 20px; }}
+        .header {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }}
+        h1 {{ font-size: 20px; margin: 0; letter-spacing: 0.3em; }}
+        .info {{ font-size: 12px; }}
+        .section {{ margin-bottom: 30px; position: relative; }}
+        .date-line {{ text-align: right; margin-bottom: 5px; font-size: 10px; }}
+        table {{ width: 100%; border-collapse: collapse; table-layout: fixed; }}
+        th, td {{ border: 1px solid #888; height: 28px; text-align: center; }}
+        th {{ background: #f9f4e8; font-weight: bold; font-size: 10px; }}
+        .col-no {{ width: 30px; color: #888; font-size: 9px; }}
+        .col-code {{ width: 100px; text-align: left; padding-left: 5px; }}
+        .col-qty {{ width: 45px; }}
+        .col-price {{ width: 65px; }}
+        .col-color {{ width: 45px; }}
+        .col-size {{ width: 35px; background: #fffcf5; }}
+        .col-note {{ text-align: left; padding-left: 5px; }}
+    </style></head><body>
+    <div class="page">
+        <div class="header">
+            <h1>商 品 明 細 表</h1>
+            <div class="info">伝票番号: {invoice_number}<br>取引先: {customer_name}</div>
+        </div>
+    """
+    for sec in sections:
+        html += f"""
+        <div class="section">
+            <div class="date-line">{reiwa}年 &nbsp; {now.month}月 &nbsp; {now.day}日</div>
+            <table>
+                <thead><tr>
+                    <th class="col-no">No.</th><th class="col-code">品番</th><th class="col-qty">枚数</th><th class="col-price">上代</th>
+                    <th class="col-color">カラー</th><th class="col-size">44</th><th class="col-size">46</th><th class="col-size">48</th>
+                    <th class="col-size">50</th><th class="col-size">52</th><th>備考</th>
+                </tr></thead>
+                <tbody>
+        """
+        for i, item in enumerate(sec):
+            if item:
+                sz = str(item.get("size", "")).strip()
+                p = f"{item.get('unit_price',0):,}"
+                c = item.get("color", "")
+                q = item.get("quantity", 0)
+                note = "" if sz in ["44","46","48","50","52"] else f"SIZE:{sz}"
+                html += f"<tr><td class='col-no'>{i+1}</td><td class='col-code'>{item.get('code','')}</td><td>{q}</td><td>{p}</td><td>{c}</td>"
+                for s_col in ["44","46","48","50","52"]:
+                    html += f"<td class='col-size'>{q if sz==s_col else ''}</td>"
+                html += f"<td class='col-note'>{note}</td></tr>"
+            else:
+                html += "<tr><td class='col-no'>{}</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>".format(i+1)
+        html += "</tbody></table></div>"
+    
+    html += "</div></body></html>"
+    return HTML(string=html).write_pdf()
 
 # ==================== Document Generation API ====================
 class DocumentRequest(BaseModel):
@@ -599,23 +797,27 @@ async def generate_documents(
                 
             current_row += 1
 
-        excel_io = BytesIO()
-        wb.save(excel_io)
-        excel_bytes = excel_io.getvalue()
+        out = BytesIO()
+        wb.save(out)
+        excel_bytes = out.getvalue()
+
+        # Build Detail Sheet
+        detail_excel_bytes = build_detail_excel(invoice_number, customer_name, processed_items)
+        detail_pdf_bytes = build_detail_pdf(invoice_number, customer_name, processed_items)
 
         # Save to SQLite
         conn = get_db()
         if payload.invoice_id:
             conn.execute(
-                "UPDATE invoices SET customer_name=?, discount_rate=?, total_net_amount=?, total_tax_amount=?, total_grand_total=?, item_count=?, pdf_data=?, excel_data=?, created_at=CURRENT_TIMESTAMP WHERE id=?",
-                (customer_name, discount_rate, total_net_amount, total_tax_amount, total_grand_total, len(processed_items), pdf_bytes, excel_bytes, payload.invoice_id)
+                "UPDATE invoices SET customer_name=?, discount_rate=?, total_net_amount=?, total_tax_amount=?, total_grand_total=?, item_count=?, pdf_data=?, excel_data=?, detail_pdf_data=?, detail_excel_data=?, created_at=CURRENT_TIMESTAMP WHERE id=?",
+                (customer_name, discount_rate, total_net_amount, total_tax_amount, total_grand_total, len(processed_items), pdf_bytes, excel_bytes, detail_pdf_bytes, detail_excel_bytes, payload.invoice_id)
             )
             conn.execute("DELETE FROM invoice_items WHERE invoice_id=?", (payload.invoice_id,))
             inv_id = payload.invoice_id
         else:
             cursor = conn.execute(
-                "INSERT INTO invoices (invoice_number, customer_name, discount_rate, total_net_amount, total_tax_amount, total_grand_total, item_count, pdf_data, excel_data) VALUES (?,?,?,?,?,?,?,?,?)",
-                (invoice_number, customer_name, discount_rate, total_net_amount, total_tax_amount, total_grand_total, len(processed_items), pdf_bytes, excel_bytes)
+                "INSERT INTO invoices (invoice_number, customer_name, discount_rate, total_net_amount, total_tax_amount, total_grand_total, item_count, pdf_data, excel_data, detail_pdf_data, detail_excel_data) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                (invoice_number, customer_name, discount_rate, total_net_amount, total_tax_amount, total_grand_total, len(processed_items), pdf_bytes, excel_bytes, detail_pdf_bytes, detail_excel_bytes)
             )
             inv_id = cursor.lastrowid
             
@@ -627,12 +829,16 @@ async def generate_documents(
 
         pdf_b64 = base64.b64encode(pdf_bytes).decode('utf-8')
         excel_b64 = base64.b64encode(excel_bytes).decode('utf-8')
+        detail_pdf_b64 = base64.b64encode(detail_pdf_bytes).decode('utf-8')
+        detail_excel_b64 = base64.b64encode(detail_excel_bytes).decode('utf-8')
 
         return JSONResponse({
             "invoice_id": inv_id,
             "invoice_number": invoice_number,
             "pdf_base64": pdf_b64,
-            "excel_base64": excel_b64
+            "excel_base64": excel_b64,
+            "detail_pdf_base64": detail_pdf_b64,
+            "detail_excel_base64": detail_excel_b64
         })
     except Exception as e:
         import traceback
@@ -646,7 +852,7 @@ async def upload_to_drive(inv_id: int, username: Annotated[str, Depends(authenti
 
     conn = get_db()
     row = conn.execute(
-        "SELECT invoice_number, customer_name, pdf_data, excel_data FROM invoices WHERE id = ?",
+        "SELECT invoice_number, customer_name, pdf_data, excel_data, detail_pdf_data, detail_excel_data FROM invoices WHERE id = ?",
         (inv_id,)
     ).fetchone()
     conn.close()
@@ -673,15 +879,25 @@ async def upload_to_drive(inv_id: int, username: Annotated[str, Depends(authenti
 
     try:
         if row["pdf_data"]:
-            res = await _upload_via_gas(f"{inv_num}_{cust}.pdf", "application/pdf", row["pdf_data"])
-            uploaded.append({"type": "pdf", "name": f"{inv_num}_{cust}.pdf", "url": res.get("url")})
+            res = await _upload_via_gas(f"{inv_num}_{cust}_伝票.pdf", "application/pdf", row["pdf_data"])
+            uploaded.append({"type": "pdf", "name": f"{inv_num}_{cust}_伝票.pdf", "url": res.get("url")})
         if row["excel_data"]:
             res = await _upload_via_gas(
-                f"{inv_num}_{cust}.xlsx",
+                f"{inv_num}_{cust}_伝票.xlsx",
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 row["excel_data"]
             )
-            uploaded.append({"type": "excel", "name": f"{inv_num}_{cust}.xlsx", "url": res.get("url")})
+            uploaded.append({"type": "excel", "name": f"{inv_num}_{cust}_伝票.xlsx", "url": res.get("url")})
+        if row["detail_pdf_data"]:
+            res = await _upload_via_gas(f"{inv_num}_{cust}_明細表.pdf", "application/pdf", row["detail_pdf_data"])
+            uploaded.append({"type": "detail_pdf", "name": f"{inv_num}_{cust}_明細表.pdf", "url": res.get("url")})
+        if row["detail_excel_data"]:
+            res = await _upload_via_gas(
+                f"{inv_num}_{cust}_明細表.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                row["detail_excel_data"]
+            )
+            uploaded.append({"type": "detail_excel", "name": f"{inv_num}_{cust}_明細表.xlsx", "url": res.get("url")})
 
         return {"status": "ok", "uploaded": uploaded}
     except Exception as e:

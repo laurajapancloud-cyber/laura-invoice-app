@@ -909,6 +909,28 @@
             background: var(--gold-deep);
             border-radius: 3px;
         }
+        .dl-group {
+            margin-top: 16px;
+            padding-top: 14px;
+            border-top: 1px solid var(--border);
+        }
+        .dl-group:first-of-type { border-top: none; padding-top: 0; }
+        .dl-group-title {
+            font-family: 'Cormorant Garamond', serif;
+            font-size: 13px;
+            color: var(--gold);
+            letter-spacing: 0.15em;
+            margin-bottom: 10px;
+            text-align: left;
+        }
+        .dl-row {
+            display: flex;
+            gap: 10px;
+        }
+        .dl-row .btn {
+            flex: 1;
+            margin-bottom: 0;
+        }
     </style>
 </head>
 
@@ -985,16 +1007,33 @@
                 <div class="success-icon">✦</div>
                 <div class="success-num" id="inv-num-display"></div>
                 <div class="success-meta">伝票が作成され、履歴に保存されました</div>
-                <button class="btn btn-red" id="btn-pdf">📄 納品書 (PDF) をダウンロード</button>
-                <button class="btn btn-green" id="btn-excel">📊 管理伝票 (Excel) をダウンロード</button>
-                <button class="btn btn-blue" id="btn-drive">
-                    <div class="spinner" id="sp3"></div>☁️ Google Driveに保存
-                </button>
-                <div class="share-btns">
-                    <button class="btn btn-sm btn-outline" id="btn-line" style="flex:1">📱 LINE</button>
-                    <button class="btn btn-sm btn-outline" id="btn-email" style="flex:1">✉️ メール</button>
+                
+                <div class="dl-group">
+                    <div class="dl-group-title">━━ 📄 伝票 ━━</div>
+                    <div class="dl-row">
+                        <button class="btn btn-red" id="btn-pdf">PDF</button>
+                        <button class="btn btn-green" id="btn-excel">Excel</button>
+                    </div>
                 </div>
-                <button class="btn btn-dark" id="btn-new" style="margin-top:10px">＋ 新しい伝票を作成する</button>
+                
+                <div class="dl-group">
+                    <div class="dl-group-title">━━ 📋 商品明細表 ━━</div>
+                    <div class="dl-row">
+                        <button class="btn btn-red" id="btn-detail-pdf">PDF</button>
+                        <button class="btn btn-green" id="btn-detail-excel">Excel</button>
+                    </div>
+                </div>
+
+                <button class="btn btn-blue" id="btn-drive" style="margin-top:14px; width:100%">
+                    <div class="spinner" id="sp3"></div> ☁️ Google Driveに4ファイル保存
+                </button>
+                
+                <div class="share-btns" style="display:flex; gap:10px; margin-top:10px;">
+                    <button class="btn btn-sm btn-outline" id="btn-line" style="flex:1">LINE</button>
+                    <button class="btn btn-sm btn-outline" id="btn-email" style="flex:1">メール</button>
+                </div>
+                
+                <button class="btn btn-dark" id="btn-new" style="margin-top:10px; width:100%">＋ 新しい伝票を作成する</button>
             </div>
         </div>
     </div>
@@ -1060,6 +1099,7 @@
     <script>
         /* ===== JavaScript はそのまま流用（`btn-accent` クラスは新CSSの定義あり） ===== */
         let selectedFiles = [], extractedItems = [], pdfData = null, excelData = null;
+        let detailPdfData = null, detailExcelData = null;
         let currentEditingInvId = null, allHistory = [], currentInvNum = '', lastInvoiceId = null;
         const $ = id => document.getElementById(id);
 
@@ -1107,7 +1147,22 @@
             if (!data.length) { hl.innerHTML = '<div class="empty-state">伝票が見つかりません</div>'; return; }
             data.forEach(inv => {
                 const d = document.createElement('div'); d.className = 'hist-item';
-                d.innerHTML = `<div class="hist-info"><div class="hist-num">${inv.invoice_number}</div><div class="hist-meta">${inv.customer_name} · ${inv.item_count}点 · ${inv.created_at?.split('T')[0] || ''}</div><div class="hist-actions"><a href="/api/history/${inv.id}/pdf" class="btn btn-red btn-sm">PDF</a><a href="/api/history/${inv.id}/excel" class="btn btn-green btn-sm">Excel</a><button class="btn btn-blue btn-sm" onclick="uploadDrive(${inv.id}, this)">☁️ Drive</button><button class="btn btn-accent btn-sm" onclick="editHist(${inv.id})">✎ 編集</button><button class="btn btn-outline btn-sm" onclick="delHist(${inv.id})">削除</button></div></div><div class="hist-amt">¥${(inv.total_grand_total || 0).toLocaleString()}</div>`;
+                d.innerHTML = `
+                    <div class="hist-info">
+                        <div class="hist-num">${inv.invoice_number}</div>
+                        <div class="hist-meta">${inv.customer_name} · ${inv.item_count}点 · ${inv.created_at?.split('T')[0] || ''}</div>
+                        <div class="hist-actions">
+                            <a href="/api/history/${inv.id}/pdf" class="btn btn-red btn-sm">伝票PDF</a>
+                            <a href="/api/history/${inv.id}/excel" class="btn btn-green btn-sm">伝票XL</a>
+                            <a href="/api/history/${inv.id}/detail-pdf" class="btn btn-red btn-sm">明細PDF</a>
+                            <a href="/api/history/${inv.id}/detail-excel" class="btn btn-green btn-sm">明細XL</a>
+                            <button class="btn btn-blue btn-sm" onclick="uploadDrive(${inv.id}, this)">☁️ Drive</button>
+                            <button class="btn btn-accent btn-sm" onclick="editHist(${inv.id})">✎</button>
+                            <button class="btn btn-outline btn-sm" onclick="delHist(${inv.id})">削除</button>
+                        </div>
+                    </div>
+                    <div class="hist-amt">¥${(inv.total_grand_total || 0).toLocaleString()}</div>
+                `;
                 hl.appendChild(d);
             });
         }
@@ -1275,7 +1330,9 @@
                 toast('PDF・Excelを生成中...', 'info');
                 const r = await fetch('/generate-documents', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                 if (!r.ok) { const e = await r.json(); throw new Error(e.detail); }
-                const d = await r.json(); pdfData = d.pdf_base64; excelData = d.excel_base64;
+                const d = await r.json();
+                pdfData = d.pdf_base64; excelData = d.excel_base64;
+                detailPdfData = d.detail_pdf_base64; detailExcelData = d.detail_excel_base64;
                 currentInvNum = d.invoice_number;
                 lastInvoiceId = d.invoice_id;
                 $('inv-num-display').textContent = `伝票番号: ${d.invoice_number}`;
@@ -1285,9 +1342,19 @@
         });
 
         function dl64(b64, fn, ct) { try { const c = atob(b64.replace(/\s/g, '')); const a = []; for (let o = 0; o < c.length; o += 512) { const s = c.slice(o, o + 512); const n = new Array(s.length); for (let i = 0; i < s.length; i++)n[i] = s.charCodeAt(i); a.push(new Uint8Array(n)); } const b = new Blob(a, { type: ct }); const u = URL.createObjectURL(b); const l = document.createElement('a'); l.href = u; l.download = fn; l.click(); URL.revokeObjectURL(u); } catch (e) { toast('保存エラー: ' + e.message, 'err'); } }
-        $('btn-pdf').addEventListener('click', () => pdfData && dl64(pdfData, 'LAURA_JAPAN_invoice.pdf', 'application/pdf'));
-        $('btn-excel').addEventListener('click', () => excelData && dl64(excelData, 'LAURA_JAPAN_data.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'));
-        $('btn-new').addEventListener('click', () => { currentEditingInvId = null; lastInvoiceId = null; selectedFiles = []; extractedItems = []; pdfData = null; excelData = null; $('drop-area').style.display = ''; $('thumbs').innerHTML = ''; $('thumbs').style.display = ''; $('btn-analyze').style.display = ''; $('btn-analyze').disabled = true; $('btn-analyze-text').textContent = 'AIでデータを抽出する'; $('sp1').style.display = 'none'; $('preview-card').style.display = 'none'; $('dl-section').style.display = 'none'; $('toast').style.display = 'none'; $('btn-generate').disabled = false; $('sp2').style.display = 'none'; });
+        $('btn-pdf').addEventListener('click', () => pdfData && dl64(pdfData, `納品書_${currentInvNum}.pdf`, 'application/pdf'));
+        $('btn-excel').addEventListener('click', () => excelData && dl64(excelData, `管理伝票_${currentInvNum}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'));
+        $('btn-detail-pdf').addEventListener('click', () => detailPdfData && dl64(detailPdfData, `商品明細表_${currentInvNum}.pdf`, 'application/pdf'));
+        $('btn-detail-excel').addEventListener('click', () => detailExcelData && dl64(detailExcelData, `商品明細表_${currentInvNum}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'));
+
+        $('btn-new').addEventListener('click', () => { 
+            currentEditingInvId = null; lastInvoiceId = null; selectedFiles = []; extractedItems = []; 
+            pdfData = null; excelData = null; detailPdfData = null; detailExcelData = null; 
+            $('drop-area').style.display = ''; $('thumbs').innerHTML = ''; $('thumbs').style.display = ''; 
+            $('btn-analyze').style.display = ''; $('btn-analyze').disabled = true; $('btn-analyze-text').textContent = 'AIでデータを抽出する'; 
+            $('sp1').style.display = 'none'; $('preview-card').style.display = 'none'; $('dl-section').style.display = 'none'; 
+            $('toast').style.display = 'none'; $('btn-generate').disabled = false; $('sp2').style.display = 'none'; 
+        });
 
         $('btn-line').addEventListener('click', () => {
             const msg = `【LAURA JAPAN 納品書】\n伝票番号: ${currentInvNum}\n※ PDFはアプリからダウンロードしてください`;
