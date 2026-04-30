@@ -915,7 +915,7 @@ async def upload_to_drive(inv_id: int, username: Annotated[str, Depends(authenti
             ("detail_excel", f"{inv_num}_{cust}_明細表.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", files["detail_excel"]),
         ]
         for typ, fn, mime, data in targets:
-            res = await _up(fn, mime, data)
+            res = _up_sync(fn, mime, data)
             uploaded.append({"type": typ, "name": fn, "url": res.get("url")})
 
         return {"status": "ok", "uploaded": uploaded}
