@@ -1153,14 +1153,14 @@
           <button class="btn btn-outline btn-sm" onclick="closePreviewModal()">✕ 閉じる</button>
         </div>
         <div class="modal-body">
-          <div class="preview-tabs">
+          <div class="preview-tabs" data-target-prefix="m-ppane-">
             <div class="preview-tab active" data-ptab="pdf">📄 納品書</div>
             <div class="preview-tab" data-ptab="excel">📊 Excel表</div>
             <div class="preview-tab" data-ptab="detail">📋 明細表</div>
             <div class="preview-tab" data-ptab="summary">⚜ 概要</div>
           </div>
 
-          <div class="preview-pane active" id="ppane-pdf">
+          <div class="preview-pane active" id="m-ppane-pdf">
             <iframe id="modal-pdf-frame" class="pdf-preview-frame"></iframe>
             <div class="preview-actions">
               <button class="btn btn-red btn-dl-pdf">📄 PDF保存</button>
@@ -1168,11 +1168,11 @@
             </div>
           </div>
 
-          <div class="preview-pane" id="ppane-excel">
+          <div class="preview-pane" id="m-ppane-excel">
             <div id="excel-preview-grid" class="excel-preview-container"></div>
           </div>
 
-          <div class="preview-pane" id="ppane-detail">
+          <div class="preview-pane" id="m-ppane-detail">
             <iframe id="modal-detail-frame" class="pdf-preview-frame"></iframe>
             <div class="preview-actions">
               <button class="btn btn-red btn-dl-dpdf">📄 PDF保存</button>
@@ -1180,7 +1180,7 @@
             </div>
           </div>
 
-          <div class="preview-pane" id="ppane-summary">
+          <div class="preview-pane" id="m-ppane-summary">
             <div id="modal-summary-content"></div>
           </div>
         </div>
@@ -1266,8 +1266,7 @@
             <div class="success-num" id="inv-num-display"></div>
             <div class="success-meta">伝票が作成され、履歴に保存されました</div>
 
-            <!-- ★ プレビュータブ -->
-            <div class="preview-tabs">
+            <div class="preview-tabs" data-target-prefix="ppane-">
               <div class="preview-tab active" data-ptab="pdf">📄 納品書</div>
               <div class="preview-tab" data-ptab="detail">📋 明細表</div>
               <div class="preview-tab" data-ptab="summary">⚜ 概要</div>
@@ -1367,7 +1366,6 @@
     </div>
 
     <script>
-        /* ===== JavaScript はそのまま流用（`btn-accent` クラスは新CSSの定義あり） ===== */
         let selectedFiles = [], extractedItems = [], pdfData = null, excelData = null;
         let detailPdfData = null, detailExcelData = null;
         let currentEditingInvId = null, allHistory = [], currentInvNum = '', lastInvoiceId = null;
@@ -1385,6 +1383,25 @@
 
         const toast = (msg, type) => { const t = $('toast'); t.textContent = msg; t.className = 'toast toast-' + type; t.style.display = 'block'; };
 
+        /* ===== Tab Control ===== */
+        function initTabSwitchers() {
+          document.querySelectorAll('.preview-tabs').forEach(container => {
+            const prefix = container.dataset.targetPrefix;
+            const tabs = container.querySelectorAll('.preview-tab');
+            const parent = container.parentElement;
+            tabs.forEach(tab => {
+              tab.onclick = () => {
+                tabs.forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                const targetId = prefix + tab.dataset.ptab;
+                parent.querySelectorAll('.preview-pane').forEach(pane => {
+                  pane.classList.toggle('active', pane.id === targetId);
+                });
+              };
+            });
+          });
+        }
+
         /* ===== Preview Helpers ===== */
         function b64ToBlobUrl(b64, mime){
           try {
@@ -1394,27 +1411,18 @@
             return URL.createObjectURL(new Blob([arr], {type: mime}));
           } catch(e){ return ''; }
         }
-        /* ===== Preview Logic ===== */
-        let previewData = {};
 
+        /* ===== Preview Logic ===== */
         function openPreviewModal(d, payload) {
-          previewData = d;
           $('modal-title').textContent = `📄 ${d.invoice_number || 'PREVIEW'} - プレビュー`;
           $('modal-preview').style.display = 'flex';
           
-          // PDF
-          const u1 = b64ToBlobUrl(d.pdf_base64, 'application/pdf');
-          const u2 = b64ToBlobUrl(d.detail_pdf_base64, 'application/pdf');
-          $('modal-pdf-frame').src = u1;
-          $('modal-detail-frame').src = u2;
+          $('modal-pdf-frame').src = b64ToBlobUrl(d.pdf_base64, 'application/pdf');
+          $('modal-detail-frame').src = b64ToBlobUrl(d.detail_pdf_base64, 'application/pdf');
 
-          // Excel Grid Preview (SheetJS)
           renderExcelGrid(d.excel_base64);
-
-          // Summary
           renderSummaryView(payload, d, 'modal-summary-content');
 
-          // Download Buttons
           document.querySelector('.btn-dl-pdf').onclick = () => dl64(d.pdf_base64, `納品書_${d.invoice_number}.pdf`, 'application/pdf');
           document.querySelector('.btn-dl-xl').onclick = () => dl64(d.excel_base64, `納品書_${d.invoice_number}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
           document.querySelector('.btn-dl-dpdf').onclick = () => dl64(d.detail_pdf_base64, `明細表_${d.invoice_number}.pdf`, 'application/pdf');
@@ -1423,8 +1431,6 @@
 
         function closePreviewModal() {
           $('modal-preview').style.display = 'none';
-          $('modal-pdf-frame').src = 'about:blank';
-          $('modal-detail-frame').src = 'about:blank';
         }
 
         function renderExcelGrid(b64) {
@@ -1438,66 +1444,23 @@
         }
 
         function renderSummaryView(payload, d, targetId) {
-          const items = payload.items;
-          const rate = payload.discount_rate;
+          const items = payload.items, rate = payload.discount_rate;
           let totalNet = 0, totalQty = 0;
-          items.forEach(it => {
-            const u = parseInt(it.unit_price) || 0;
-            const q = parseInt(it.quantity) || 1;
-            totalNet += Math.floor(u * (rate/100) * q);
-            totalQty += q;
-          });
-          const tax = Math.floor(totalNet * 0.1);
-          const grand = totalNet + tax;
-
-          let rows = '';
-          items.forEach((it, i) => {
-            const amt = Math.floor((it.unit_price||0) * (rate/100) * (it.quantity||1));
-            rows += `<tr>
-              <td class="left">${i+1}</td>
-              <td class="left">${it.code||'-'}</td>
-              <td>${it.color||'-'}</td>
-              <td>${it.size||'-'}</td>
-              <td>${it.quantity||1}</td>
-              <td>¥${(it.unit_price||0).toLocaleString()}</td>
-              <td>¥${amt.toLocaleString()}</td>
-            </tr>`;
-          });
-
-          $(targetId).innerHTML = `
-            <div class="summary-card">
+          items.forEach(it => { totalNet += Math.floor((parseInt(it.unit_price)||0) * (rate/100) * (parseInt(it.quantity)||1)); totalQty += (parseInt(it.quantity)||1); });
+          const tax = Math.floor(totalNet * 0.1), grand = totalNet + tax;
+          let rows = items.map((it, i) => `<tr><td class="left">${i+1}</td><td class="left">${it.code||'-'}</td><td>${it.color||'-'}</td><td>${it.size||'-'}</td><td>${it.quantity||1}</td><td>¥${(it.unit_price||0).toLocaleString()}</td><td>¥${Math.floor((it.unit_price||0)*(rate/100)*(it.quantity||1)).toLocaleString()}</td></tr>`).join('');
+          $(targetId).innerHTML = `<div class="summary-card">
               <div class="summary-row"><span class="lbl">伝票番号</span><span class="val">${d.invoice_number}</span></div>
               <div class="summary-row"><span class="lbl">取引先</span><span class="val">${payload.customer_name}</span></div>
               <div class="summary-row"><span class="lbl">掛率</span><span class="val">${rate}%</span></div>
-              <div class="summary-row"><span class="lbl">商品数</span><span class="val">${items.length}件 / ${totalQty}点</span></div>
-              <div class="summary-row"><span class="lbl">小計</span><span class="val">¥${totalNet.toLocaleString()}</span></div>
-              <div class="summary-row"><span class="lbl">消費税</span><span class="val">¥${tax.toLocaleString()}</span></div>
-              <div class="summary-row" style="font-size:16px;font-weight:700">
-                <span class="lbl" style="color:var(--gold)">合計</span>
-                <span class="val" style="color:var(--gold-bright)">¥${grand.toLocaleString()}</span>
-              </div>
-            </div>
-            <table class="summary-table">
-              <thead><tr><th class="left">No.</th><th class="left">品番</th><th>カラー</th><th>サイズ</th><th>数量</th><th>単価</th><th>金額</th></tr></thead>
-              <tbody>${rows}</tbody>
-            </table>
-          `;
+              <div class="summary-row"><span class="lbl">合計点数</span><span class="val">${totalQty}点</span></div>
+              <div class="summary-row" style="font-size:16px;font-weight:700"><span class="lbl" style="color:var(--gold)">合計金額</span><span class="val" style="color:var(--gold-bright)">¥${grand.toLocaleString()}</span></div>
+            </div><table class="summary-table"><thead><tr><th class="left">No.</th><th class="left">品番</th><th>カラー</th><th>サイズ</th><th>数</th><th>単価</th><th>金額</th></tr></thead><tbody>${rows}</tbody></table>`;
         }
 
-        // モーダルのタブ切替
-        $('modal-preview').querySelectorAll('.preview-tab').forEach(t => t.addEventListener('click', () => {
-          $('modal-preview').querySelectorAll('.preview-tab').forEach(x => x.classList.remove('active'));
-          $('modal-preview').querySelectorAll('.preview-pane').forEach(x => x.classList.remove('active'));
-          t.classList.add('active');
-          $('ppane-' + t.dataset.ptab).classList.add('active');
-        }));
-
         function setupPreviews(payload, d) {
-          // 既存のdl-section用（モーダルとほぼ同じだがIDが違う）
-          const u1 = b64ToBlobUrl(pdfData, 'application/pdf');
-          const u2 = b64ToBlobUrl(detailPdfData, 'application/pdf');
-          $('pdf-frame').src = u1;
-          $('detail-frame').src = u2;
+          $('pdf-frame').src = b64ToBlobUrl(pdfData, 'application/pdf');
+          $('detail-frame').src = b64ToBlobUrl(detailPdfData, 'application/pdf');
           renderSummaryView(payload, d, 'summary-content');
         }
 
@@ -1548,14 +1511,8 @@
             data.forEach(inv => {
                 const d = document.createElement('div');
                 d.className = 'hist-item';
-                
-                const statusBadge = inv.status === 'locked' 
-                    ? '<span class="badge badge-locked">LOCKED</span>' 
-                    : '<span class="badge badge-draft">DRAFT</span>';
-
-                const lockBtn = inv.status === 'locked'
-                    ? `<button class="btn btn-outline btn-sm" onclick="unlockHist(${inv.id})">解除</button>`
-                    : `<button class="btn btn-gold btn-sm" onclick="lockHist(${inv.id})">確定</button>`;
+                const statusBadge = inv.status === 'locked' ? '<span class="badge badge-locked">LOCKED</span>' : '<span class="badge badge-draft">DRAFT</span>';
+                const lockBtn = inv.status === 'locked' ? `<button class="btn btn-outline btn-sm" onclick="unlockHist(${inv.id})">解除</button>` : `<button class="btn btn-gold btn-sm" onclick="lockHist(${inv.id})">確定</button>`;
 
                 d.innerHTML = `
                     <div class="hist-info">
