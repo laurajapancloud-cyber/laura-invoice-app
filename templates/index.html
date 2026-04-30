@@ -1143,6 +1143,74 @@
         .excel-preview-container table { border-collapse: collapse; width: 100%; }
         .excel-preview-container th, .excel-preview-container td { border: 1px solid #ddd; padding: 4px 8px; }
         .excel-preview-container th { background: #f5f5f5; font-weight: bold; }
+
+/* ========================================== */
+/* ===== DESKTOP LAYOUT (≥ 1024px) =========== */
+/* ========================================== */
+@media (min-width: 1024px) {
+  .app-header { padding: 18px 40px 0; display: grid; grid-template-columns: auto 1fr auto; grid-template-rows: auto auto; grid-template-areas: "logo divider tabs" "logo divider tabs"; align-items: center; gap: 0 32px; text-align: left; }
+  .logo { grid-area: logo; font-size: 28px; margin-bottom: 0; text-indent: 0; letter-spacing: 0.32em; }
+  .logo-sub { grid-area: logo; font-size: 9px; margin: 30px 0 0 0; text-indent: 0; }
+  .divider-gold { grid-area: divider; width: 1px; height: 38px; margin: 0; background: linear-gradient(180deg, transparent, var(--gold), transparent); }
+  .tabs { grid-area: tabs; gap: 4px; width: auto; }
+  .tab { flex: 0 0 auto; padding: 10px 22px; font-size: 11px; border-radius: 8px; border: 1px solid transparent; border-bottom: none; cursor: pointer; }
+  .tab.active { background: var(--gold-soft); border-color: var(--border); border-bottom: none; }
+  .tab.active::before { display: none; }
+  .page { max-width: 1280px; padding: 32px 40px 80px; }
+  #page-create.active { display: grid; grid-template-columns: 380px 1fr; gap: 24px; align-items: start; }
+  #page-create > .card:nth-child(1), #page-create > .card:nth-child(2) { grid-column: 1; }
+  #page-create > .card:nth-child(2) { position: sticky; top: 100px; }
+  #preview-card, #dl-section { grid-column: 2; grid-row: 1 / span 2; margin-bottom: 0; }
+  .upload-area { padding: 60px 30px; cursor: pointer; }
+  .upload-icon { font-size: 48px; }
+  .upload-text { font-size: 16px; }
+  .upload-area::before { content: 'またはここにドラッグ&ドロップ'; display: block; font-size: 11px; color: var(--text-muted); margin-top: 12px; letter-spacing: 0.1em; }
+  .item-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .pdf-preview-frame { height: 75vh; min-height: 700px; }
+  #page-history .card { padding: 24px 28px; }
+  .hist-item { display: grid !important; grid-template-columns: 140px 1fr 120px 90px 220px; gap: 16px; align-items: center; padding: 14px 12px !important; border-radius: 8px; margin-bottom: 4px; border-bottom: 1px solid var(--border); cursor: default; }
+  .hist-item:hover { background: rgba(201,169,97,0.04); }
+  .hist-info { display: contents !important; }
+  .hist-info > div:nth-child(1) { display: contents !important; }
+  .hist-table-header { display: grid !important; grid-template-columns: 140px 1fr 120px 90px 220px; gap: 16px; padding: 12px; font-size: 10px; color: var(--gold); letter-spacing: 0.15em; text-transform: uppercase; border-bottom: 1px solid var(--border-strong); margin-bottom: 8px; font-family: 'Cormorant Garamond', serif; font-weight: 600; }
+  #page-dashboard.active { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  #page-dashboard > .card:nth-child(1) { grid-column: 1 / -1; }
+  .stat-grid { grid-template-columns: repeat(4, 1fr); }
+  .stat-val { font-size: 36px; }
+  .bar-chart { height: 200px; }
+  #page-settings.active { display: grid; grid-template-columns: 360px 1fr; gap: 24px; }
+  #page-settings > .card { margin-bottom: 0; }
+  #cust-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .cust-item { border-radius: 12px !important; background: var(--bg-elevated); border: 1px solid var(--border); padding: 14px !important; cursor: default; }
+  .btn:hover:not(:disabled) { transform: translateY(-1px); }
+  .btn:active:not(:disabled) { transform: translateY(0); }
+  .kbd { display: inline-block; }
+  .item-card, .doc-card, .stat-box { cursor: default; }
+  .item-card-num, .item-card-del, .badge, .qty-btn, .preview-tab { cursor: pointer; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: var(--bg-base); border-left: 1px solid var(--border); }
+  ::-webkit-scrollbar-thumb { background: linear-gradient(180deg, var(--gold-deep), var(--gold)); border: 2px solid var(--bg-base); border-radius: 6px; }
+  ::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, var(--gold), var(--gold-bright)); }
+  [data-tip] { position: relative; }
+  [data-tip]::after { content: attr(data-tip); position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%) translateY(4px); background: var(--bg-base); color: var(--gold-bright); border: 1px solid var(--border); padding: 6px 10px; border-radius: 6px; font-size: 11px; white-space: nowrap; opacity: 0; pointer-events: none; transition: all .2s; z-index: 100; }
+  [data-tip]:hover::after { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .modal-content { max-width: 1100px !important; }
+}
+
+@media (min-width: 1440px) {
+  .page { max-width: 1480px; padding: 40px 60px 100px; }
+  #page-create.active { grid-template-columns: 420px 1fr 360px; }
+  #preview-summary-wrap { grid-column: 3; grid-row: 1 / -1; position: sticky; top: 100px; }
+  .item-cards { grid-template-columns: 1fr 1fr 1fr; }
+}
+
+@media (min-width: 769px) and (max-width: 1023px) {
+  .page { max-width: 720px; padding: 28px 24px 60px; }
+  .stat-grid { grid-template-columns: repeat(4, 1fr); }
+  .item-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+}
+
+.kbd { display: none; padding: 2px 6px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 4px; font-family: monospace; font-size: 10px; color: var(--text-muted); margin-left: 8px; }
     </style>
 </head>
 
@@ -1193,10 +1261,10 @@
         <div class="logo-sub">INVOICE · DATA MANAGEMENT</div>
         <div class="divider-gold"></div>
         <div class="tabs">
-            <div class="tab active" data-tab="create">新規作成</div>
-            <div class="tab" data-tab="history">履歴</div>
-            <div class="tab" data-tab="dashboard">分析</div>
-            <div class="tab" data-tab="settings">設定</div>
+            <div class="tab active" data-tab="create">新規作成 <span class="kbd">⌘1</span></div>
+            <div class="tab" data-tab="history">履歴 <span class="kbd">⌘2</span></div>
+            <div class="tab" data-tab="dashboard">分析 <span class="kbd">⌘3</span></div>
+            <div class="tab" data-tab="settings">設定 <span class="kbd">⌘4</span></div>
         </div>
     </div>
 
@@ -1314,6 +1382,14 @@
         <div class="card">
             <div class="card-title">⌘ 伝票履歴</div>
             <div style="margin-bottom:18px"><input type="text" id="hist-search" placeholder="伝票番号や名前で検索..."></div>
+            <!-- デスクトップでだけ表示されるテーブルヘッダー -->
+            <div class="hist-table-header" style="display:none">
+              <span>伝票番号</span>
+              <span>取引先 / 件数</span>
+              <span style="text-align:right">金額</span>
+              <span>状態</span>
+              <span>アクション</span>
+            </div>
             <div id="hist-list">
                 <div class="empty-state">読込中...</div>
             </div>
@@ -1519,26 +1595,65 @@
         function renderHistory(data) {
             const list = $('hist-list'); list.innerHTML = '';
             if (!data.length) { list.innerHTML = '<div class="empty-state">伝票が見つかりません</div>'; return; }
+            
+            const isDesktop = window.matchMedia('(min-width: 1024px)').matches;
+            
             data.forEach(inv => {
-                const d = document.createElement('div'); d.className = 'hist-item';
-                const statusBadge = inv.status === 'locked' ? '<span class="badge badge-locked">LOCKED</span>' : '<span class="badge badge-draft">DRAFT</span>';
-                const lockBtn = inv.status === 'locked' ? `<button class="btn btn-outline btn-sm" onclick="unlockHist(${inv.id})">解除</button>` : `<button class="btn btn-gold btn-sm" onclick="lockHist(${inv.id})">確定</button>`;
-                d.innerHTML = `<div class="hist-info">
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                const d = document.createElement('div');
+                d.className = 'hist-item' + (inv.status === 'locked' ? ' locked' : '');
+                
+                const statusBadge = inv.status === 'locked'
+                ? '<span class="badge badge-locked">LOCKED</span>'
+                : '<span class="badge badge-draft">DRAFT</span>';
+                
+                const lockBtn = inv.status === 'locked'
+                ? `<button class="btn btn-outline btn-sm" data-tip="確定解除" onclick="unlockHist(${inv.id})">解除</button>`
+                : `<button class="btn btn-gold btn-sm" data-tip="確定して保存" onclick="lockHist(${inv.id})">確定</button>`;
+
+                if (isDesktop) {
+                    d.innerHTML = `
+                        <div class="hist-num">${inv.invoice_number}</div>
+                        <div>
+                        <div style="color:var(--text-primary); font-weight:500">${inv.customer_name}</div>
+                        <div class="hist-meta">${inv.item_count}点 · ${inv.created_at?.split('T')[0] || ''}</div>
+                        </div>
+                        <div class="hist-amt" style="text-align:right">¥${(inv.total_grand_total||0).toLocaleString()}</div>
+                        <div>${statusBadge}</div>
+                        <div style="display:flex; gap:6px; justify-content:flex-end">
+                        <button class="btn btn-gold btn-sm" data-tip="プレビュー表示" onclick="quickPreview(${inv.id})">👁</button>
+                        ${lockBtn}
+                        <button class="btn btn-outline btn-sm" data-tip="編集する" onclick="editHist(${inv.id})">✎</button>
+                        <button class="btn btn-red btn-sm" data-tip="削除する" onclick="delHist(${inv.id})">✕</button>
+                        </div>
+                    `;
+                } else {
+                    d.innerHTML = `
+                        <div class="hist-info">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px">
                             <div class="hist-num">${inv.invoice_number} ${statusBadge}</div>
-                            <div class="hist-amt">¥${(inv.total_grand_total || 0).toLocaleString()}</div>
+                            <div class="hist-amt">¥${(inv.total_grand_total||0).toLocaleString()}</div>
                         </div>
                         <div class="hist-meta">${inv.customer_name} · ${inv.item_count}点 · ${inv.created_at?.split('T')[0] || ''}</div>
                         <div class="hist-actions-row">
                             <button class="btn btn-gold btn-sm" onclick="quickPreview(${inv.id})">👁 プレビュー</button>
                             ${lockBtn}
                             <button class="btn btn-outline btn-sm" onclick="editHist(${inv.id})">✎</button>
-                            <button class="btn btn-outline btn-sm btn-red" onclick="delHist(${inv.id})">✕</button>
+                            <button class="btn btn-red btn-sm" onclick="delHist(${inv.id})">✕</button>
                         </div>
-                    </div>`;
+                        </div>
+                    `;
+                }
                 list.appendChild(d);
             });
         }
+
+        let resizeTimer;
+        window.addEventListener('resize', () => {
+          clearTimeout(resizeTimer);
+          resizeTimer = setTimeout(() => {
+            if (allHistory.length) renderHistory(allHistory);
+          }, 300);
+        });
         async function quickPreview(id) {
             try {
                 toast('プレビューを取得中...', 'info');
@@ -1801,8 +1916,30 @@
 
         $('btn-drive').addEventListener('click', uploadDriveCurrent);
 
+        document.addEventListener('keydown', (e) => {
+          if (['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName)) return;
+          if ((e.metaKey || e.ctrlKey) && /^[1-4]$/.test(e.key)) {
+            e.preventDefault();
+            document.querySelectorAll('.tab')[parseInt(e.key)-1]?.click();
+            return;
+          }
+          if (e.key === 'n' || e.key === 'N') {
+            document.querySelectorAll('.tab')[0]?.click();
+            $('btn-new')?.click();
+          }
+          if (e.key === '/' && document.querySelector('.tab.active')?.dataset.tab === 'history') {
+            e.preventDefault();
+            $('hist-search')?.focus();
+          }
+          if (e.key === 'Escape') {
+            closePreviewModal();
+            if ($('confirm-modal')) $('confirm-modal').style.display = 'none';
+          }
+        });
+
         setInterval(() => { fetch('/health').catch(() => { }); }, 5 * 60 * 1000);
         loadCustomers();
+        initTabSwitchers();
     </script>
 </body>
 
