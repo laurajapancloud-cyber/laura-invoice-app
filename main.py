@@ -14,6 +14,7 @@ import requests
 from supabase import create_client, Client as SupabaseClient
 
 from fastapi import FastAPI, UploadFile, File, Depends, HTTPException, status, Response, Request, Form
+from fastapi.staticfiles import StaticFiles
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -216,6 +217,7 @@ init_db()
 
 # ==================== FastAPI App ====================
 app = FastAPI()
+app.mount("/static", StaticFiles(directory="static"), name="static")
 security = HTTPBasic()
 templates = Jinja2Templates(directory="templates")
 

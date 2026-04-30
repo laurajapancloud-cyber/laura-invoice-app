@@ -942,6 +942,71 @@
         .badge-draft { background: #444; color: #ccc; }
         .btn-gold { background: linear-gradient(135deg, #ffd700, #ff8c00); color: #000; font-weight: 700; border: none; }
         .btn-gold:hover { transform: translateY(-2px); box-shadow: 0 4px 15px rgba(255, 215, 0, 0.4); }
+
+        /* Document Cards */
+        .doc-card-grid {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            overflow-x: auto;
+            padding-bottom: 5px;
+        }
+        .doc-card {
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 8px;
+            min-width: 120px;
+            flex: 1;
+            text-align: center;
+            transition: all 0.3s ease;
+            display: flex;
+            flex-direction: column;
+        }
+        .doc-card:hover {
+            border-color: var(--gold);
+            background: var(--bg-card-hover);
+            transform: translateY(-2px);
+        }
+        .doc-thumb {
+            height: 60px;
+            background-image: url('/static/assets/doc_icons.png');
+            background-size: 200% auto;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            filter: grayscale(0.2);
+            transition: filter 0.3s;
+        }
+        .doc-card:hover .doc-thumb { filter: grayscale(0); }
+        .doc-thumb.inv { background-position: left center; }
+        .doc-thumb.det { background-position: right center; }
+        
+        .doc-label {
+            font-size: 10px;
+            font-weight: 700;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+            letter-spacing: 0.05em;
+        }
+        .doc-btns {
+            display: flex;
+            gap: 4px;
+        }
+        .doc-btns .btn {
+            flex: 1;
+            margin-bottom: 0;
+            padding: 6px 2px;
+            font-size: 10px;
+            border-radius: 6px;
+        }
+        .hist-actions-row {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid var(--border);
+            align-items: center;
+        }
     </style>
 </head>
 
@@ -1019,19 +1084,22 @@
                 <div class="success-num" id="inv-num-display"></div>
                 <div class="success-meta">伝票が作成され、履歴に保存されました</div>
                 
-                <div class="dl-group">
-                    <div class="dl-group-title">━━ 📄 伝票 ━━</div>
-                    <div class="dl-row">
-                        <button class="btn btn-red" onclick="downloadBlob('pdf')">PDF</button>
-                        <button class="btn btn-green" onclick="downloadBlob('excel')">Excel</button>
+                <div class="doc-card-grid" style="margin-bottom:20px;">
+                    <div class="doc-card">
+                        <div class="doc-thumb inv"></div>
+                        <div class="doc-label">納品書</div>
+                        <div class="doc-btns">
+                            <button class="btn btn-red" onclick="downloadBlob('pdf')">PDF</button>
+                            <button class="btn btn-green" onclick="downloadBlob('excel')">XL</button>
+                        </div>
                     </div>
-                </div>
-                
-                <div class="dl-group">
-                    <div class="dl-group-title">━━ 📋 商品明細表 ━━</div>
-                    <div class="dl-row">
-                        <button class="btn btn-red" onclick="downloadBlob('detail-pdf')">PDF</button>
-                        <button class="btn btn-green" onclick="downloadBlob('detail-excel')">Excel</button>
+                    <div class="doc-card">
+                        <div class="doc-thumb det"></div>
+                        <div class="doc-label">商品明細表</div>
+                        <div class="doc-btns">
+                            <button class="btn btn-red" onclick="downloadBlob('detail-pdf')">PDF</button>
+                            <button class="btn btn-green" onclick="downloadBlob('detail-excel')">XL</button>
+                        </div>
                     </div>
                 </div>
 
@@ -1174,22 +1242,40 @@
 
                 d.innerHTML = `
                     <div class="hist-info">
-                        <div class="hist-num">${inv.invoice_number} ${statusBadge}</div>
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                            <div class="hist-num">${inv.invoice_number} ${statusBadge}</div>
+                            <div class="hist-amt">¥${(inv.total_grand_total || 0).toLocaleString()}</div>
+                        </div>
                         <div class="hist-meta">${inv.customer_name} · ${inv.item_count}点 · ${inv.created_at?.split('T')[0] || ''}</div>
-                        <div class="hist-actions">
-                            <a href="/api/history/${inv.id}/pdf" class="btn btn-red btn-sm">伝票PDF</a>
-                            <a href="/api/history/${inv.id}/excel" class="btn btn-green btn-sm">伝票XL</a>
-                            <a href="/api/history/${inv.id}/detail-pdf" class="btn btn-red btn-sm">明細PDF</a>
-                            <a href="/api/history/${inv.id}/detail-excel" class="btn btn-green btn-sm">明細XL</a>
-                            <button class="btn btn-blue btn-sm" onclick="uploadDrive(${inv.id}, this)">
+                        
+                        <div class="doc-card-grid">
+                            <div class="doc-card">
+                                <div class="doc-thumb inv"></div>
+                                <div class="doc-label">納品書</div>
+                                <div class="doc-btns">
+                                    <a href="/api/history/${inv.id}/pdf" class="btn btn-red">PDF</a>
+                                    <a href="/api/history/${inv.id}/excel" class="btn btn-green">XL</a>
+                                </div>
+                            </div>
+                            <div class="doc-card">
+                                <div class="doc-thumb det"></div>
+                                <div class="doc-label">商品明細表</div>
+                                <div class="doc-btns">
+                                    <a href="/api/history/${inv.id}/detail-pdf" class="btn btn-red">PDF</a>
+                                    <a href="/api/history/${inv.id}/detail-excel" class="btn btn-green">XL</a>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="hist-actions-row">
+                            <button class="btn btn-blue btn-sm" onclick="uploadDrive(${inv.id}, this)" style="flex:1">
                                 <span class="icon">☁</span> Drive
                             </button>
                             ${lockBtn}
-                            <button class="btn btn-accent btn-sm" onclick="editHist(${inv.id})" ${inv.status === 'locked' ? 'disabled title="ロック解除してから編集してください"' : ''}>✎</button>
-                            <button class="btn btn-outline btn-sm" onclick="delHist(${inv.id})">削除</button>
+                            <button class="btn btn-accent btn-sm" onclick="editHist(${inv.id})" ${inv.status === 'locked' ? 'disabled' : ''} style="width:36px">✎</button>
+                            <button class="btn btn-outline btn-sm" onclick="delHist(${inv.id})" style="width:36px">✕</button>
                         </div>
                     </div>
-                    <div class="hist-amt">¥${(inv.total_grand_total || 0).toLocaleString()}</div>
                 `;
                 list.appendChild(d);
             });
