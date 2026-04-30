@@ -605,9 +605,9 @@ def build_invoice_excel(invoice_data: dict) -> bytes:
         for col in ["A","B","C","D","F","G","H","I"]:
             ws[f"{col}{r}"].border = border_thin
         
-        # 品番-カラー-サイズ を連結してバーコード化
+        # ハイフンを除去して連結し、バーコード化
         try:
-            bc_str = f"{item['code']}-{item['color']}-{item['size']}"
+            bc_str = f"{item['code']}{item['color']}{item['size']}".replace("-", "")
             ean = barcode.get('code128', bc_str, writer=ImageWriter())
             bc_io = BytesIO()
             ean.write(bc_io)
