@@ -2250,6 +2250,39 @@
             const r = await fetch('/api/history'); const data = await r.json();
             allHistory = data; renderHistory(allHistory);
         }
+        async function delHist(id) {
+            if (!confirm('この伝票を削除してもよろしいですか？')) return;
+            try {
+                const r = await fetch(`/api/history/${id}`, { method: 'DELETE' });
+                if (!r.ok) throw new Error('削除に失敗しました');
+                toast('✦ 削除完了', 'ok');
+                loadHistory();
+                if (typeof selectedHistId !== 'undefined' && selectedHistId === id) { 
+                    selectedHistId = null; 
+                    const pane = $('hist-detail-pane');
+                    if (pane) pane.innerHTML = ''; 
+                }
+            } catch (e) { toast(e.message, 'err'); }
+        }
+        async function lockHist(id) {
+            try {
+                const r = await fetch(`/api/history/${id}/lock`, { method: 'POST' });
+                if (!r.ok) throw new Error('確定に失敗しました');
+                toast('✦ 伝票を確定しました', 'ok');
+                await loadHistory();
+                if (typeof selectedHistId !== 'undefined' && selectedHistId === id) selectHistItem({id: id});
+            } catch (e) { toast(e.message, 'err'); }
+        }
+        async function unlockHist(id) {
+            if (!confirm('確定を解除して編集可能にしますか？')) return;
+            try {
+                const r = await fetch(`/api/history/${id}/unlock`, { method: 'POST' });
+                if (!r.ok) throw new Error('解除に失敗しました');
+                toast('✦ 確定を解除しました', 'info');
+                await loadHistory();
+                if (typeof selectedHistId !== 'undefined' && selectedHistId === id) selectHistItem({id: id});
+            } catch (e) { toast(e.message, 'err'); }
+        }
         function renderHistory(data) {
             const list = $('hist-list'); list.innerHTML = '';
             if (!data.length) { list.innerHTML = '<div class="empty-state">伝票が見つかりません</div>'; return; }
