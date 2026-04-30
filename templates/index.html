@@ -1022,18 +1022,22 @@
                 <div class="dl-group">
                     <div class="dl-group-title">━━ 📄 伝票 ━━</div>
                     <div class="dl-row">
-                        <button class="btn btn-red" id="btn-pdf">PDF</button>
-                        <button class="btn btn-green" id="btn-excel">Excel</button>
+                        <button class="btn btn-red" onclick="downloadBlob('pdf')">PDF</button>
+                        <button class="btn btn-green" onclick="downloadBlob('excel')">Excel</button>
                     </div>
                 </div>
                 
                 <div class="dl-group">
                     <div class="dl-group-title">━━ 📋 商品明細表 ━━</div>
                     <div class="dl-row">
-                        <button class="btn btn-red" id="btn-detail-pdf">PDF</button>
-                        <button class="btn btn-green" id="btn-detail-excel">Excel</button>
+                        <button class="btn btn-red" onclick="downloadBlob('detail-pdf')">PDF</button>
+                        <button class="btn btn-green" onclick="downloadBlob('detail-excel')">Excel</button>
                     </div>
                 </div>
+
+                <button class="btn btn-gold" id="btn-lock-final" style="margin-top:20px; width:100%">
+                    ✦ この内容で確定して保存（固定化）
+                </button>
 
                 <button class="btn btn-blue" id="btn-drive" style="margin-top:14px; width:100%">
                     <div class="spinner" id="sp3"></div> ☁️ Google Driveに4ファイル保存
@@ -1383,31 +1387,22 @@
                 detailPdfData = d.detail_pdf_base64; detailExcelData = d.detail_excel_base64;
                 currentInvNum = d.invoice_number;
                 lastInvoiceId = d.invoice_id;
+                
                 $('inv-num-display').textContent = `伝票番号: ${d.invoice_number}`;
-                
-                const dlSection = $('download-section');
-                dlSection.innerHTML = `
-                    <div class="btn-group" style="margin-bottom:15px; display:grid; grid-template-columns:1fr 1fr; gap:5px">
-                        <button class="btn btn-red" onclick="downloadBlob('pdf')">伝票PDF</button>
-                        <button class="btn btn-green" onclick="downloadBlob('excel')">伝票XL</button>
-                        <button class="btn btn-red" onclick="downloadBlob('detail-pdf')">明細PDF</button>
-                        <button class="btn btn-green" onclick="downloadBlob('detail-excel')">明細XL</button>
-                    </div>
-                    <button class="btn btn-gold" id="btn-lock-final" style="width:100%">
-                        ✦ この内容で確定して保存（固定化）
-                    </button>
-                `;
-                
-                $('btn-lock-final').addEventListener('click', async () => {
-                    if (!lastInvoiceId) return;
-                    await lockHist(lastInvoiceId);
-                    $('result-section').style.display = 'none';
-                    loadHistory();
-                });
-                
-                $('preview-card').style.display = 'none'; $('dl-section').style.display = 'block';
-                toast('✦ 保存完了', 'ok');
-            } catch (e) { toast(e.message, 'err'); $('btn-generate').disabled = false; $('sp2').style.display = 'none'; }
+                $('preview-card').style.display = 'none'; 
+                $('dl-section').style.display = 'block';
+                toast('✦ 保存完了（下書き）', 'ok');
+            } catch (e) { toast(e.message, 'err'); }
+            finally { $('btn-generate').disabled = false; $('sp2').style.display = 'none'; }
+        });
+
+        // 確定ボタンのイベント
+        $('btn-lock-final')?.addEventListener('click', async () => {
+            if (!lastInvoiceId) return;
+            await lockHist(lastInvoiceId);
+            $('dl-section').style.display = 'none';
+            loadHistory();
+            document.querySelectorAll('.tab')[1].click(); // 履歴タブへ
         });
 
         function downloadBlob(type) {
