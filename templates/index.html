@@ -9,6 +9,12 @@
     <link
         href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700;800&family=Noto+Sans+JP:wght@300;400;500;700&display=swap"
         rel="stylesheet">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#c9a961">
+    <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="LAURA">
     <style>
         :root {
             /* Luxury Black × Gold Palette */
@@ -1620,7 +1626,51 @@
   .topbar-breadcrumb, .topbar-actions { display: none !important; }
 }
 
-/* ===== Generation Overlay (PDF/Excel生成中の全画面オーバーレイ) ===== */
+        /* ===== Job Queue Panel ===== */
+        .job-panel {
+            position: fixed; bottom: 100px; right: 24px;
+            width: 320px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-strong);
+            border-radius: 20px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+            z-index: 9998;
+            overflow: hidden;
+            display: none;
+            flex-direction: column;
+            animation: slideInRight .4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        @keyframes slideInRight { from { transform: translateX(30px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        .job-header {
+            padding: 14px 18px;
+            background: var(--bg-elevated);
+            border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .job-header-title { font-family: 'Cormorant Garamond', serif; font-size: 16px; color: var(--gold-bright); letter-spacing: 0.1em; }
+        .job-list { max-height: 320px; overflow-y: auto; padding: 12px; }
+        .job-item {
+            padding: 12px; border-radius: 12px;
+            display: flex; align-items: flex-start; gap: 14px;
+            margin-bottom: 8px;
+            background: var(--bg-input);
+            border: 1px solid transparent;
+            transition: all .2s;
+        }
+        .job-item:hover { border-color: var(--border); }
+        .job-item.job-done { background: rgba(0,255,100,0.03); }
+        .job-item.job-failed { background: rgba(255,50,50,0.03); }
+        .job-icon { font-size: 20px; margin-top: 2px; }
+        .job-info { flex: 1; }
+        .job-name { font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 2px; }
+        .job-status-text { font-size: 11px; color: var(--text-muted); }
+        .job-progress-mini { width: 100%; height: 3px; background: rgba(255,255,255,0.05); margin-top: 8px; border-radius: 2px; overflow: hidden; }
+        .job-progress-mini-fill { height: 100%; background: linear-gradient(90deg, var(--gold-deep), var(--gold-bright)); width: 0%; transition: width .4s ease-out; }
+        .job-done .job-progress-mini-fill { background: var(--green); width: 100% !important; }
+        .job-failed .job-progress-mini-fill { background: var(--red); width: 100% !important; }
+        .job-close-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 16px; }
+
+        /* ===== Generation Overlay (PDF/Excel生成中の全画面オーバーレイ) ===== */
 .gen-overlay {
   position: fixed; inset: 0;
   background: rgba(10,10,10,0.92);
@@ -1827,6 +1877,9 @@
         <span class="crumb-active" id="topbar-current">新規作成</span>
       </div>
       <div class="topbar-actions">
+        <button class="btn btn-outline btn-sm" id="btn-install-pwa" style="display:none">
+          <span>📲</span> <span>インストール</span>
+        </button>
         <button class="cmdk-trigger" id="cmdk-trigger">
           <span>🔍</span><span>検索...</span>
           <span class="cmdk-shortcut">⌘K</span>
@@ -2099,6 +2152,125 @@
             URL.revokeObjectURL(u); 
           } catch (e) { toast('保存エラー: ' + e.message, 'err'); } 
         }
+
+        // ===== Job Management (Async Queue) =====
+        class JobManager {
+          constructor() {
+            this.jobs = new Map();
+            this.pollingInterval = 2500;
+            this.restoreFromStorage();
+          }
+
+          async restoreFromStorage() {
+            const saved = localStorage.getItem('laura-active-jobs');
+            if (saved) {
+              const ids = JSON.parse(saved);
+              ids.forEach(id => this.trackJob(id));
+            }
+          }
+
+          saveToStorage() {
+            const ids = Array.from(this.jobs.keys()).filter(id => {
+              const j = this.jobs.get(id);
+              return j.status === 'pending' || j.status === 'processing';
+            });
+            localStorage.setItem('laura-active-jobs', JSON.stringify(ids));
+          }
+
+          async enqueue(type, endpoint, formData, callbacks = {}) {
+            try {
+              const r = await fetch(endpoint, { method: 'POST', body: formData });
+              const data = await r.json();
+              if (data.job_id) {
+                this.trackJob(data.job_id, type, callbacks);
+                JobUI.show();
+                return data.job_id;
+              }
+              throw new Error(data.detail || 'Job creation failed');
+            } catch (e) {
+              toast('ジョブ開始エラー: ' + e.message, 'err');
+              return null;
+            }
+          }
+
+          async trackJob(jid, type = 'unknown', callbacks = {}) {
+            if (this.jobs.has(jid)) return;
+            this.jobs.set(jid, { id: jid, type, status: 'pending', callbacks });
+            this.poll(jid);
+            this.saveToStorage();
+          }
+
+          async poll(jid) {
+            const job = this.jobs.get(jid);
+            if (!job || job.status === 'done' || job.status === 'failed') return;
+
+            try {
+              const r = await fetch(`/api/jobs/${jid}`);
+              const data = await r.json();
+              job.status = data.status;
+              job.type = data.type;
+              job.result = data.result;
+              job.error = data.error;
+              
+              JobUI.updateItem(job);
+
+              if (job.status === 'done') {
+                toast(`${this.getJobLabel(job.type)}が完了しました`, 'success');
+                if (job.callbacks.onSuccess) job.callbacks.onSuccess(job.result);
+                this.saveToStorage();
+              } else if (job.status === 'failed') {
+                toast(`${this.getJobLabel(job.type)}が失敗しました: ${job.error}`, 'err');
+                if (job.callbacks.onError) job.callbacks.onError(job.error);
+                this.saveToStorage();
+              } else {
+                setTimeout(() => this.poll(jid), this.pollingInterval);
+              }
+            } catch (e) {
+              setTimeout(() => this.poll(jid), this.pollingInterval * 2);
+            }
+          }
+
+          getJobLabel(type) {
+            const labels = { 'analyze': '画像解析', 'drive_upload': 'Drive保存' };
+            return labels[type] || type;
+          }
+        }
+
+        const JobUI = {
+          show() { $('job-panel').style.display = 'flex'; },
+          updateItem(job) {
+            let el = $(`job-item-${job.id}`);
+            if (!el) {
+              el = document.createElement('div');
+              el.id = `job-item-${job.id}`;
+              el.className = 'job-item';
+              $('job-list').prepend(el);
+            }
+            
+            const icon = job.type === 'analyze' ? '🤖' : '☁️';
+            const progress = job.status === 'done' ? 100 : (job.status === 'processing' ? 60 : 10);
+            
+            el.className = `job-item job-${job.status}`;
+            el.innerHTML = `
+              <div class="job-icon">${icon}</div>
+              <div class="job-info">
+                <div class="job-name">${this.getJobLabel(job.type)}</div>
+                <div class="job-status-text">${this.getStatusLabel(job.status)}</div>
+                <div class="job-progress-mini"><div class="job-progress-mini-fill" style="width:${progress}%"></div></div>
+              </div>
+            `;
+          },
+          getJobLabel(type) {
+            const labels = { 'analyze': '画像解析', 'drive_upload': 'Drive保存' };
+            return labels[type] || type;
+          },
+          getStatusLabel(status) {
+            const labels = { 'pending': '待機中...', 'processing': '実行中...', 'done': '完了', 'failed': 'エラー' };
+            return labels[status] || status;
+          }
+        };
+
+        const jobManager = new JobManager();
 
         // ===== Generation Progress (疑似プログレス) =====
         let genTimer = null;
@@ -2446,27 +2618,64 @@
 
         $('btn-analyze').addEventListener('click', async () => {
           if (!selectedFiles.length) return;
-          $('btn-analyze').disabled = true; $('sp1').style.display = 'block';
-          $('btn-analyze-text').textContent = '処理中...';
-          extractedItems = []; $('preview-card').style.display = 'none'; $('dl-section').style.display = 'none';
-          const ai = $('sel-ai').value, total = selectedFiles.length;
-          const pw = $('prog-wrap'); pw.style.display = 'block';
+          const ai = $('sel-ai').value;
+          const total = selectedFiles.length;
+          
+          $('btn-analyze').disabled = true; 
+          $('sp1').style.display = 'block';
+          $('btn-analyze-text').textContent = '準備中...';
+          $('prog-wrap').style.display = 'block';
+          updProg('画像を圧縮して送信準備中...', 0, 100);
+
           try {
             const blobs = [];
-            for (let i = 0; i < total; i++) { updProg(`画像を圧縮中 (${i + 1}/${total})`, i, total * 2); blobs.push(await compress(selectedFiles[i])); }
-            for (let i = 0; i < total; i++) {
-              updProg(`AI解析中 (${i + 1}/${total}枚目)`, total + i, total * 2);
-              const fd = new FormData(); fd.append('ai_model', ai); fd.append('files', blobs[i], `img_${i}.jpg`);
-              const r = await fetch('/analyze-images', { method: 'POST', body: fd });
-              if (!r.ok) { const e = await r.json(); throw new Error(e.detail || 'APIエラー'); }
-              const d = await r.json(); extractedItems.push(...d.items); renderPreview();
+            for (let i = 0; i < total; i++) { 
+              updProg(`画像を圧縮中 (${i + 1}/${total})`, Math.round((i/total)*20), 100); 
+              blobs.push(await compress(selectedFiles[i])); 
             }
-            const merged = {};
-            extractedItems.forEach(it => { const key = `${it.code}|${it.color}|${it.size}|${it.unit_price}`; const qty = parseInt(it.quantity) || 1; if (merged[key]) merged[key].quantity += qty; else merged[key] = { ...it, quantity: qty }; });
-            extractedItems = Object.values(merged); renderPreview();
-            toast(`✦ ${total}枚の解析完了`, 'ok'); pw.style.display = 'none';
-          } catch (e) { toast(e.message, 'err'); $('btn-analyze').disabled = false; }
-          finally { $('sp1').style.display = 'none'; }
+
+            const fd = new FormData();
+            fd.append('ai_model', ai);
+            blobs.forEach((b, i) => fd.append('files', b, `img_${i}.jpg`));
+
+            jobManager.enqueue('analyze', '/api/jobs/analyze', fd, {
+              onSuccess: (res) => {
+                extractedItems = [];
+                res.items.forEach(it => {
+                  const key = `${it.code}|${it.color}|${it.size}|${it.unit_price}`;
+                  const qty = parseInt(it.quantity) || 1;
+                  extractedItems.push({ ...it, quantity: qty });
+                });
+                
+                // Merge logic
+                const merged = {};
+                extractedItems.forEach(it => {
+                  const key = `${it.code}|${it.color}|${it.size}|${it.unit_price}`;
+                  if (merged[key]) merged[key].quantity += it.quantity;
+                  else merged[key] = { ...it };
+                });
+                extractedItems = Object.values(merged);
+                
+                renderPreview();
+                $('prog-wrap').style.display = 'none';
+                $('btn-analyze').disabled = false;
+                $('sp1').style.display = 'none';
+                $('btn-analyze-text').textContent = '解析完了';
+                window.scrollTo({ top: $('preview-card').offsetTop - 20, behavior: 'smooth' });
+              },
+              onError: (err) => {
+                $('prog-wrap').style.display = 'none';
+                $('btn-analyze').disabled = false;
+                $('sp1').style.display = 'none';
+                $('btn-analyze-text').textContent = '解析失敗';
+              }
+            });
+
+          } catch (e) { 
+            toast(e.message, 'err'); 
+            $('btn-analyze').disabled = false;
+            $('sp1').style.display = 'none';
+          }
         });
         function updProg(label, cur, tot) { $('prog-label').textContent = label; const p = Math.round(cur / tot * 100); $('prog-pct').textContent = p + '%'; $('prog-fill').style.width = p + '%'; }
 
@@ -2609,21 +2818,22 @@
             const sp = btnEl?.querySelector('.spinner');
             if (sp) sp.style.display = 'block';
             if (btnEl) btnEl.disabled = true;
-            try {
-                showGenProgress(5, 'drive');
-                const r = await fetch(`/api/history/${invId}/upload-drive`, { method: 'POST' });
-                if (!r.ok) { const e = await r.json(); throw new Error(e.detail); }
-                const d = await r.json();
-                hideGenProgress();
-                const links = d.uploaded.map(u => `<a href="${u.url}" target="_blank" style="color:var(--gold-bright);text-decoration:underline">${u.type.toUpperCase()}</a>`).join(' / ');
-                toast(`✦ Driveに保存しました: ${links}`, 'ok', 0); 
-            } catch (e) {
-                hideGenProgress();
-                toast(`Drive保存失敗: ${e.message}`, 'err');
-            } finally {
+            
+            const fd = new FormData();
+            fd.append('inv_id', invId);
+
+            jobManager.enqueue('drive_upload', '/api/jobs/drive-upload', fd, {
+              onSuccess: (res) => {
+                const links = res.uploaded.map(u => `<a href="${u.url}" target="_blank" style="color:var(--gold-bright);text-decoration:underline">${u.type.toUpperCase()}</a>`).join(' / ');
+                toast(`✦ Driveに保存しました: ${links}`, 'ok', 0);
                 if (sp) sp.style.display = 'none';
                 if (btnEl) btnEl.disabled = false;
-            }
+              },
+              onError: (err) => {
+                if (sp) sp.style.display = 'none';
+                if (btnEl) btnEl.disabled = false;
+              }
+            });
         }
 
         $('btn-drive').addEventListener('click', uploadDriveCurrent);
@@ -2959,6 +3169,79 @@
         });
 
         setInterval(() => { fetch('/health').catch(() => { }); }, 5 * 60 * 1000);
+    </script>
+
+    <!-- Job Queue Panel -->
+    <div id="job-panel" class="job-panel">
+      <div class="job-header">
+        <div class="job-header-title">ACTIVE JOBS</div>
+        <button class="job-close-btn" onclick="$('job-panel').style.display='none'">✕</button>
+      </div>
+      <div id="job-list" class="job-list"></div>
+    </div>
+
+    <!-- iOS PWA Banner -->
+    <div id="ios-pwa-banner" class="ios-banner">
+      <img src="/static/icons/apple-touch-icon.png" class="ios-banner-icon">
+      <div class="ios-banner-text">
+        ホーム画面に追加してアプリとして使用できます。<br>
+        共有ボタン <span style="font-size:18px">⎋</span> から「ホーム画面に追加」をタップしてください。
+      </div>
+      <button class="ios-banner-close" onclick="dismissIOSBanner()">✕</button>
+    </div>
+
+    <script>
+        // ===== PWA Logic =====
+        let deferredPrompt;
+        const installBtn = $('btn-install-pwa');
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+          e.preventDefault();
+          deferredPrompt = e;
+          if (installBtn) installBtn.style.display = 'flex';
+        });
+
+        if (installBtn) {
+          installBtn.addEventListener('click', async () => {
+            if (!deferredPrompt) return;
+            deferredPrompt.prompt();
+            const { outcome } = await deferredPrompt.userChoice;
+            if (outcome === 'accepted') {
+              installBtn.style.display = 'none';
+            }
+            deferredPrompt = null;
+          });
+        }
+
+        function dismissIOSBanner() {
+          $('ios-pwa-banner').style.display = 'none';
+          localStorage.setItem('pwa-banner-dismissed', Date.now());
+        }
+
+        function checkIOSPWA() {
+          const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+          const isStandalone = window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches;
+          const isDismissed = localStorage.getItem('pwa-banner-dismissed');
+          
+          if (isIOS && !isStandalone && !isDismissed) {
+            setTimeout(() => {
+              $('ios-pwa-banner').style.display = 'flex';
+            }, 5000);
+          }
+        }
+
+        if ('serviceWorker' in navigator) {
+          window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js', { scope: '/' })
+              .then(reg => {
+                console.log('SW Registered:', reg.scope);
+                checkIOSPWA();
+              })
+              .catch(err => console.log('SW Fail:', err));
+          });
+        }
+
+        // ===== Existing App Initialization =====
         loadCustomers();
         initTabSwitchers();
     </script>
