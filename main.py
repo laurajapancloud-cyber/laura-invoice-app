@@ -321,25 +321,54 @@ async def get_dashboard(username: Annotated[str, Depends(authenticate)]):
     conn = get_db()
     if not conn:
         return {"this_month": {"invoices": 0, "total_amount": 0}, "monthly": [], "api_usage": []}
+    
     with conn.cursor() as cur:
-        now = get_jst_now()
-        month_start = now.strftime("%Y-%m-01")
+        # DBセッションをJSTに設定
+        try:
+            cur.execute("SET TIME ZONE 'Asia/Tokyo'")
+        except: pass
         
-        # This month stats
+        now = get_jst_now()
+        # 今月の開始時刻 (JST)
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        # 前月の開始時刻 (JST)
+        last_month_start = (month_start - datetime.timedelta(days=1)).replace(day=1)
+        
+        # 今月の統計
         cur.execute(
             "SELECT COUNT(*) as cnt, COALESCE(SUM(total_grand_total),0) as total FROM invoices WHERE created_at >= %s",
             (month_start,)
         )
-        inv_stats = cur.fetchone()
+        this_month = cur.fetchone()
         
-        # Monthly history (last 6 months)
-        # Postgres uses to_char for formatting
+        # 前月の統計
         cur.execute(
-            "SELECT to_char(created_at, 'YYYY-MM') as month, COUNT(*) as cnt, COALESCE(SUM(total_grand_total),0) as total FROM invoices GROUP BY month ORDER BY month DESC LIMIT 6"
+            "SELECT COUNT(*) as cnt, COALESCE(SUM(total_grand_total),0) as total FROM invoices WHERE created_at >= %s AND created_at < %s",
+            (last_month_start, month_start)
+        )
+        last_month = cur.fetchone()
+        
+        # 月別推移 (過去12ヶ月)
+        cur.execute(
+            "SELECT to_char(created_at, 'YYYY-MM') as month, COUNT(*) as cnt, COALESCE(SUM(total_grand_total),0) as total FROM invoices GROUP BY month ORDER BY month DESC LIMIT 12"
         )
         monthly = cur.fetchall()
         
-        # API usage this month
+        # 今月の取引先別売上トップ5
+        cur.execute(
+            "SELECT customer_name, SUM(total_grand_total) as total FROM invoices WHERE created_at >= %s GROUP BY customer_name ORDER BY total DESC LIMIT 5",
+            (month_start,)
+        )
+        top_customers = cur.fetchall()
+        
+        # 今月の商品別(品番)数量トップ5
+        cur.execute(
+            "SELECT code, SUM(quantity) as qty FROM invoice_items ii JOIN invoices i ON ii.invoice_id = i.id WHERE i.created_at >= %s GROUP BY code ORDER BY qty DESC LIMIT 5",
+            (month_start,)
+        )
+        top_items = cur.fetchall()
+
+        # API利用状況
         cur.execute(
             "SELECT ai_model, COUNT(*) as cnt, COALESCE(SUM(image_count),0) as imgs FROM api_usage WHERE created_at >= %s GROUP BY ai_model",
             (month_start,)
@@ -347,22 +376,22 @@ async def get_dashboard(username: Annotated[str, Depends(authenticate)]):
         usage = cur.fetchall()
     conn.close()
     
-    # Estimate costs
+    # コスト計算
     usage_list = []
     for u in usage:
         model = u["ai_model"]
         imgs = u["imgs"]
-        if model == "gemini":
-            cost = round(imgs * 0.1, 1)
-        elif model in ["azure", "openai"]:
-            cost = round(imgs * 0.5, 1)
-        else:
-            cost = 0
+        if model == "gemini": cost = round(imgs * 0.1, 1)
+        elif model in ["azure", "openai"]: cost = round(imgs * 0.5, 1)
+        else: cost = 0
         usage_list.append({"model": model, "requests": u["cnt"], "images": imgs, "est_cost_yen": cost})
     
     return {
-        "this_month": {"invoices": inv_stats["cnt"], "total_amount": inv_stats["total"]},
+        "this_month": {"invoices": this_month["cnt"], "total_amount": this_month["total"]},
+        "last_month": {"invoices": last_month["cnt"], "total_amount": last_month["total"]},
         "monthly": [dict(m) for m in monthly],
+        "top_customers": [dict(c) for c in top_customers],
+        "top_items": [dict(i) for i in top_items],
         "api_usage": usage_list
     }
 

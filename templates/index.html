@@ -1614,8 +1614,26 @@
   .kbd { display: inline-block; }
   
   /* hover lift */
-  .btn:hover:not(:disabled) { transform: translateY(-1px); }
   .btn:active:not(:disabled) { transform: translateY(0); }
+
+  /* OCR PC Table */
+  .pc-item-table {
+    width: 100%; border-collapse: collapse; margin-top: 10px;
+  }
+  .pc-item-table th {
+    text-align: left; font-size: 10px; color: var(--gold); letter-spacing: 0.1em;
+    padding: 10px 8px; border-bottom: 1px solid var(--border-strong); text-transform: uppercase;
+  }
+  .pc-item-table td {
+    padding: 8px; border-bottom: 1px solid var(--border); vertical-align: middle;
+  }
+  .pc-item-table input {
+    background: var(--bg-input); border: 1px solid var(--border); color: var(--text-primary);
+    padding: 8px 10px; border-radius: 6px; width: 100%; font-family: inherit; font-size: 14px;
+  }
+  .pc-item-table input:focus { border-color: var(--gold); outline: none; }
+  .pc-item-table .qty-stepper { border-radius: 6px; }
+  .pc-item-table .qty-stepper input { border: none !important; padding: 8px 2px !important; }
 }
 
 @media (min-width: 1440px) {
@@ -1818,12 +1836,14 @@
             <iframe id="modal-pdf-frame" class="pdf-preview-frame"></iframe>
             <div class="preview-actions">
               <button class="btn btn-red btn-dl-pdf">📄 PDF保存</button>
-              <button class="btn btn-green btn-dl-xl">📊 Excel保存</button>
             </div>
           </div>
 
           <div class="preview-pane" id="m-ppane-excel">
             <div id="excel-preview-grid" class="excel-preview-container"></div>
+            <div class="preview-actions">
+              <button class="btn btn-green btn-dl-xl">📊 Excel保存</button>
+            </div>
           </div>
 
           <div class="preview-pane" id="m-ppane-detail">
@@ -1922,14 +1942,14 @@
             <div class="card-title">⚜ 伝票設定</div>
             <div class="form-row">
                 <div class="form-group"><label>取引先</label><select id="sel-customer">
-                        <option value="">読込中...</option>
+                        <option value="manual" selected>-- 手動入力 --</option>
                     </select></div>
-                <div class="form-group" id="manual-customer-group" style="display:none">
+                <div class="form-group" id="manual-customer-group">
                     <label>取引先名（手動入力）</label>
                     <input type="text" id="inp-manual-customer" placeholder="例: 株式会社 〇〇 御中">
                 </div>
                 <div class="form-group" style="max-width:90px"><label>掛率(%)</label><input type="number" id="inp-rate"
-                        value="35" min="0" max="100"></div>
+                        value="0" min="0" max="100"></div>
             </div>
             <div class="form-row">
                 <div class="form-group"><label>AI モデル</label>
@@ -2029,8 +2049,11 @@
     <div class="page" id="page-history">
         <div class="card">
             <div class="card-title">⌘ 伝票履歴</div>
-            <div style="margin-bottom:14px">
-                <input type="text" id="hist-search" placeholder="伝票番号や名前で検索..." />
+            <div style="display:flex; gap:10px; margin-bottom:14px">
+                <input type="text" id="hist-search" placeholder="伝票番号や名前で検索..." style="flex:1" />
+                <select id="hist-month-filter" style="width:140px; padding:12px; background:var(--bg-input); border:1px solid var(--border); border-radius:10px; color:var(--text-primary); font-size:14px">
+                    <option value="">すべての月</option>
+                </select>
             </div>
             <!-- デスクトップでだけ表示されるテーブルヘッダー -->
             <div class="hist-table-header" style="display:none">
@@ -2054,12 +2077,24 @@
             <div class="stat-grid">
                 <div class="stat-box">
                     <div class="stat-val" id="dash-inv-cnt">0</div>
-                    <div class="stat-label">伝票数</div>
+                    <div class="stat-label">今月の伝票数</div>
+                    <div class="stat-sub" id="dash-inv-cnt-diff" style="font-size:10px; margin-top:4px"></div>
                 </div>
                 <div class="stat-box">
-                    <div class="stat-val" id="dash-inv-amt">¥0</div>
-                    <div class="stat-label">合計金額</div>
+                    <div class="stat-val" id="dash-inv-amt" style="font-size:24px">¥0</div>
+                    <div class="stat-label">今月の合計金額</div>
+                    <div class="stat-sub" id="dash-inv-amt-diff" style="font-size:10px; margin-top:4px"></div>
                 </div>
+            </div>
+        </div>
+        <div class="card" id="dash-top-card" style="display:grid; grid-template-columns:1fr 1fr; gap:20px">
+            <div>
+                <div class="card-title" style="font-size:14px">🏆 取引先TOP5</div>
+                <div id="dash-top-customers" style="font-size:12px; color:var(--text-secondary)"></div>
+            </div>
+            <div>
+                <div class="card-title" style="font-size:14px">📦 人気品番TOP5</div>
+                <div id="dash-top-items" style="font-size:12px; color:var(--text-secondary)"></div>
             </div>
         </div>
         <div class="card">
@@ -2365,6 +2400,11 @@
           $('pdf-frame').src = b64ToBlobUrl(pdfData, 'application/pdf');
           $('detail-frame').src = b64ToBlobUrl(detailPdfData, 'application/pdf');
           renderSummaryView(payload, d, 'summary-content');
+          
+          try {
+              const wb = XLSX.read(excelData, {type: 'base64'});
+              $('excel-preview-grid-inline').innerHTML = XLSX.utils.sheet_to_html(wb.Sheets[wb.SheetNames[0]]);
+          } catch(e) {}
         }
 
         function openPreviewModal(d, payload) {
@@ -2423,9 +2463,8 @@
 
         async function loadCustomers() {
             const r = await fetch('/api/customers'); const data = await r.json();
-            const sel = $('sel-customer'); sel.innerHTML = '<option value="">-- 選択してください --</option>';
+            const sel = $('sel-customer'); sel.innerHTML = '<option value="manual" selected>-- 手動入力 --</option>';
             data.forEach(c => { const opt = document.createElement('option'); opt.value = JSON.stringify(c); opt.textContent = `${c.name} (${c.discount_rate}%)`; sel.appendChild(opt); });
-            sel.innerHTML += '<option value="manual">-- 手動入力 --</option>';
             sel.onchange = (e) => {
                 if (e.target.value === "manual") { $('manual-customer-group').style.display = 'block'; $('inp-rate').value = 0; }
                 else { $('manual-customer-group').style.display = 'none'; try { const c = JSON.parse(e.target.value); $('inp-rate').value = c.discount_rate; } catch(e){} }
@@ -2448,7 +2487,32 @@
 
         async function loadHistory() {
             const r = await fetch('/api/history'); const data = await r.json();
-            allHistory = data; renderHistory(allHistory);
+            allHistory = data; 
+            updateMonthFilter(data);
+            renderHistory(allHistory);
+        }
+        function updateMonthFilter(data) {
+            const months = [...new Set(data.map(inv => inv.created_at?.split('-').slice(0,2).join('-')))].filter(Boolean).sort().reverse();
+            const filter = $('hist-month-filter');
+            const current = filter.value;
+            filter.innerHTML = '<option value="">すべての月</option>';
+            months.forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = m;
+                opt.textContent = m.replace('-', '年') + '月';
+                filter.appendChild(opt);
+            });
+            filter.value = current;
+            filter.onchange = () => {
+                const q = $('hist-search').value.toLowerCase().trim();
+                const m = filter.value;
+                const filtered = allHistory.filter(inv => {
+                    const matchQ = !q || (inv.invoice_number||'').toLowerCase().includes(q) || (inv.customer_name||'').toLowerCase().includes(q);
+                    const matchM = !m || inv.created_at?.startsWith(m);
+                    return matchQ && matchM;
+                });
+                renderHistory(filtered);
+            };
         }
         async function delHist(id) {
             if (!confirm('この伝票を削除してもよろしいですか？')) return;
@@ -2712,29 +2776,88 @@
 
         function renderPreview() {
             const container = $('item-cards'); container.innerHTML = '';
-            extractedItems.forEach((it, i) => {
-                const amt = calcItemAmount(it);
-                const card = document.createElement('div'); card.className = 'item-card';
-                card.innerHTML = `<div class="item-card-header"><span class="item-card-num">N° ${String(i + 1).padStart(2, '0')}</span><button class="item-card-del" onclick="delRow(${i})">✕</button></div>
-                <div class="item-card-body">
-                  <div class="item-field full"><label>品番</label><input value="${it.code || ''}" data-i="${i}" data-k="code"></div>
-                  <div class="item-field"><label>カラー</label><input value="${it.color || ''}" data-i="${i}" data-k="color"></div>
-                  <div class="item-field"><label>サイズ</label><input value="${it.size || ''}" data-i="${i}" data-k="size"></div>
-                  <div class="item-field"><label>数量</label><div class="qty-stepper"><button onclick="adjustQty(${i},-1)">−</button><input type="number" value="${it.quantity || 1}" data-i="${i}" data-k="quantity"><button onclick="adjustQty(${i},1)">＋</button></div></div>
-                  <div class="item-field"><label>単価</label><input type="number" value="${it.unit_price || 0}" data-i="${i}" data-k="unit_price"></div>
-                </div>
-                <div class="item-card-footer"><span class="item-card-price">${getRate()}% × ${it.quantity}点</span><span class="item-card-total">¥${amt.toLocaleString()}</span></div>`;
-                container.appendChild(card);
-            });
+            const isDesktop = window.matchMedia('(min-width: 1024px)').matches;
+            
+            if (isDesktop) {
+                const table = document.createElement('table');
+                table.className = 'pc-item-table';
+                table.innerHTML = `
+                    <thead>
+                        <tr>
+                            <th style="width:40px">No</th>
+                            <th>品番</th>
+                            <th style="width:100px">カラー</th>
+                            <th style="width:80px">サイズ</th>
+                            <th style="width:140px">数量</th>
+                            <th style="width:140px">単価</th>
+                            <th style="width:120px; text-align:right">金額</th>
+                            <th style="width:40px"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="pc-item-body"></tbody>
+                `;
+                container.appendChild(table);
+                const tbody = $('pc-item-body');
+                
+                extractedItems.forEach((it, i) => {
+                    const amt = calcItemAmount(it);
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td style="font-size:11px; color:var(--text-muted)">${i+1}</td>
+                        <td><input value="${it.code || ''}" data-i="${i}" data-k="code" style="font-weight:600"></td>
+                        <td><input value="${it.color || ''}" data-i="${i}" data-k="color"></td>
+                        <td><input value="${it.size || ''}" data-i="${i}" data-k="size"></td>
+                        <td>
+                            <div class="qty-stepper">
+                                <button class="qty-btn minus" onclick="adjustQty(${i},-1)">−</button>
+                                <input type="number" value="${it.quantity || 1}" data-i="${i}" data-k="quantity">
+                                <button class="qty-btn plus" onclick="adjustQty(${i},1)">＋</button>
+                            </div>
+                        </td>
+                        <td><input type="number" value="${it.unit_price || 0}" data-i="${i}" data-k="unit_price" style="font-size:16px; font-weight:700; color:var(--gold-bright)"></td>
+                        <td style="text-align:right; font-family:'Cormorant Garamond',serif; font-size:18px; font-weight:700; color:var(--gold-bright)">¥${amt.toLocaleString()}</td>
+                        <td><button class="item-card-del" onclick="delRow(${i})">✕</button></td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } else {
+                extractedItems.forEach((it, i) => {
+                    const amt = calcItemAmount(it);
+                    const card = document.createElement('div'); card.className = 'item-card';
+                    card.innerHTML = `<div class="item-card-header"><span class="item-card-num">N° ${String(i + 1).padStart(2, '0')}</span><button class="item-card-del" onclick="delRow(${i})">✕</button></div>
+                    <div class="item-card-body">
+                      <div class="item-field full"><label>品番</label><input value="${it.code || ''}" data-i="${i}" data-k="code"></div>
+                      <div class="item-field"><label>カラー</label><input value="${it.color || ''}" data-i="${i}" data-k="color"></div>
+                      <div class="item-field"><label>サイズ</label><input value="${it.size || ''}" data-i="${i}" data-k="size"></div>
+                      <div class="item-field"><label>数量</label><div class="qty-stepper"><button onclick="adjustQty(${i},-1)">−</button><input type="number" value="${it.quantity || 1}" data-i="${i}" data-k="quantity"><button onclick="adjustQty(${i},1)">＋</button></div></div>
+                      <div class="item-field"><label>単価</label><input type="number" value="${it.unit_price || 0}" data-i="${i}" data-k="unit_price"></div>
+                    </div>
+                    <div class="item-card-footer"><span class="item-card-price">${getRate()}% × ${it.quantity}点</span><span class="item-card-total">¥${amt.toLocaleString()}</span></div>`;
+                    container.appendChild(card);
+                });
+            }
+            
             container.querySelectorAll('input').forEach(inp => inp.addEventListener('input', () => { 
                 syncInputs(); 
-                const i = parseInt(inp.dataset.i);
-                const card = container.children[i];
-                if (card) {
-                    const it = extractedItems[i];
-                    const amt = calcItemAmount(it);
-                    card.querySelector('.item-card-price').textContent = `${getRate()}% × ${it.quantity || 1}点`;
-                    card.querySelector('.item-card-total').textContent = `¥${amt.toLocaleString()}`;
+                if (!isDesktop) {
+                    const i = parseInt(inp.dataset.i);
+                    const card = container.children[i];
+                    if (card) {
+                        const it = extractedItems[i];
+                        const amt = calcItemAmount(it);
+                        card.querySelector('.item-card-price').textContent = `${getRate()}% × ${it.quantity || 1}点`;
+                        card.querySelector('.item-card-total').textContent = `¥${amt.toLocaleString()}`;
+                    }
+                } else {
+                    // PC版は再描画で合計金額などを更新（入力中のカーソル維持はinputイベント外で行う必要があるが、一旦シンプルに）
+                    updateSummary();
+                    // 行ごとの金額だけ更新
+                    const i = parseInt(inp.dataset.i);
+                    const rows = $('pc-item-body').children;
+                    if (rows[i]) {
+                        const amt = calcItemAmount(extractedItems[i]);
+                        rows[i].children[6].textContent = `¥${amt.toLocaleString()}`;
+                    }
                 }
                 updateSummary(); 
             }));
@@ -2815,10 +2938,39 @@
                 const r = await fetch('/api/dashboard'); const d = await r.json();
                 $('dash-inv-cnt').textContent = d.this_month.invoices;
                 $('dash-inv-amt').textContent = '¥' + d.this_month.total_amount.toLocaleString();
+                
+                // Diff with last month
+                const cntDiff = d.this_month.invoices - d.last_month.invoices;
+                const amtDiff = d.this_month.total_amount - d.last_month.total_amount;
+                $('dash-inv-cnt-diff').innerHTML = `前月比: <span style="color:${cntDiff>=0?'var(--green)':'var(--red)'}">${cntDiff>=0?'+':''}${cntDiff}</span>`;
+                $('dash-inv-amt-diff').innerHTML = `前月比: <span style="color:${amtDiff>=0?'var(--green)':'var(--red)'}">${amtDiff>=0?'+':''}${amtDiff.toLocaleString()}</span>`;
+
+                // Top Customers
+                const tc = $('dash-top-customers'); tc.innerHTML = '';
+                if (d.top_customers.length) {
+                    d.top_customers.forEach((c, i) => {
+                        const div = document.createElement('div');
+                        div.style.display = 'flex'; div.style.justifyContent = 'space-between'; div.style.padding = '4px 0';
+                        div.innerHTML = `<span>${i+1}. ${c.customer_name}</span><span>¥${c.total.toLocaleString()}</span>`;
+                        tc.appendChild(div);
+                    });
+                } else { tc.innerHTML = 'データなし'; }
+
+                // Top Items
+                const ti = $('dash-top-items'); ti.innerHTML = '';
+                if (d.top_items.length) {
+                    d.top_items.forEach((it, i) => {
+                        const div = document.createElement('div');
+                        div.style.display = 'flex'; div.style.justifyContent = 'space-between'; div.style.padding = '4px 0';
+                        div.innerHTML = `<span>${i+1}. ${it.code}</span><span>${it.qty}点</span>`;
+                        ti.appendChild(div);
+                    });
+                } else { ti.innerHTML = 'データなし'; }
+
                 const bc = $('bar-chart'); bc.innerHTML = '';
                 if (d.monthly.length) {
                     const max = Math.max(...d.monthly.map(m => m.total), 1);
-                    d.monthly.reverse().forEach(m => {
+                    [...d.monthly].reverse().forEach(m => {
                         const col = document.createElement('div'); col.className = 'bar-col';
                         const h = Math.max(4, Math.round(m.total / max * 100));
                         col.innerHTML = `<div class="bar" style="height:${h}px"></div><div class="bar-label">${m.month.slice(5)}月</div>`;
