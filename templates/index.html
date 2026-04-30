@@ -1007,6 +1007,110 @@
             border-top: 1px solid var(--border);
             align-items: center;
         }
+
+        /* ===== Preview Tabs ===== */
+        .preview-tabs {
+          display: flex; gap: 0;
+          border-bottom: 1px solid var(--border);
+          margin: 18px 0 0;
+        }
+        .preview-tab {
+          flex: 1; padding: 12px 8px;
+          font-size: 11px; font-weight: 600;
+          letter-spacing: 0.08em; color: var(--text-muted);
+          cursor: pointer;
+          border-bottom: 2px solid transparent;
+          transition: all .25s; text-align: center;
+        }
+        .preview-tab.active {
+          color: var(--gold-bright);
+          border-bottom-color: var(--gold);
+        }
+        .preview-pane {
+          display: none; padding: 16px 0 0;
+          animation: fadeIn .3s ease-out;
+        }
+        .preview-pane.active { display: block; }
+        .pdf-preview-frame {
+          width: 100%; height: 60vh; min-height: 420px;
+          border: 1px solid var(--border);
+          border-radius: 12px; background: #fff;
+        }
+        .preview-actions {
+          display: flex; gap: 10px; margin-top: 12px;
+        }
+        .preview-actions .btn { flex: 1; margin: 0; }
+        .summary-card {
+          background: var(--bg-elevated);
+          border: 1px solid var(--border);
+          border-radius: 14px; padding: 18px;
+        }
+        .summary-row {
+          display: flex; justify-content: space-between;
+          padding: 8px 0; font-size: 13px;
+          border-bottom: 1px dashed var(--border);
+        }
+        .summary-row:last-child { border: none; }
+        .summary-row .lbl { color: var(--text-muted); }
+        .summary-row .val { color: var(--text-primary); font-weight: 500; }
+        .summary-table {
+          width: 100%; margin-top: 14px;
+          font-size: 12px; border-collapse: collapse;
+        }
+        .summary-table th, .summary-table td {
+          padding: 8px 6px; border-bottom: 1px solid var(--border);
+          text-align: right; font-variant-numeric: tabular-nums;
+        }
+        .summary-table th {
+          background: var(--gold-soft); color: var(--gold-bright);
+          font-weight: 600; letter-spacing: 0.05em;
+          font-size: 10px; text-transform: uppercase;
+        }
+        .summary-table td.left, .summary-table th.left { text-align: left; }
+
+        /* ===== Quantity Stepper ===== */
+        .qty-stepper {
+          display: flex; align-items: stretch;
+          border: 1px solid var(--border);
+          border-radius: 8px; overflow: hidden;
+          background: var(--bg-input);
+        }
+        .qty-stepper input {
+          flex: 1; min-width: 0;
+          border: none !important;
+          border-radius: 0 !important;
+          background: transparent;
+          text-align: center !important;
+          padding: 10px 4px !important;
+          font-size: 15px;
+          color: var(--text-primary);
+          font-variant-numeric: tabular-nums;
+          font-family: inherit;
+          -webkit-appearance: none;
+          -moz-appearance: textfield;
+        }
+        .qty-stepper input:focus {
+          outline: none;
+          background: var(--gold-soft);
+          box-shadow: none !important;
+        }
+        .qty-stepper input::-webkit-inner-spin-button { -webkit-appearance: none; }
+        .qty-btn {
+          width: 36px;
+          background: transparent;
+          border: none;
+          color: var(--gold);
+          font-size: 18px; font-weight: 700;
+          cursor: pointer;
+          transition: background .15s;
+          font-family: inherit;
+          user-select: none;
+        }
+        .qty-btn:hover { background: var(--gold-soft); }
+        .qty-btn:active { background: rgba(201, 169, 97, 0.25); }
+        .qty-btn.minus { border-right: 1px solid var(--border); }
+        .qty-btn.plus { border-left: 1px solid var(--border); }
+        .qty-btn:disabled { opacity: 0.3; cursor: not-allowed; }
     </style>
 </head>
 
@@ -1083,45 +1187,50 @@
         </div>
 
         <div id="dl-section" style="display:none">
-            <div class="card success-card">
-                <div class="success-icon">✦</div>
-                <div class="success-num" id="inv-num-display"></div>
-                <div class="success-meta">伝票が作成され、履歴に保存されました</div>
-                
-                <div class="doc-card-grid" style="margin-bottom:20px;">
-                    <div class="doc-card">
-                        <div class="doc-thumb inv"></div>
-                        <div class="doc-label">納品書</div>
-                        <div class="doc-btns">
-                            <button class="btn btn-red" onclick="downloadBlob('pdf')">PDF</button>
-                            <button class="btn btn-green" onclick="downloadBlob('excel')">XL</button>
-                        </div>
-                    </div>
-                    <div class="doc-card">
-                        <div class="doc-thumb det"></div>
-                        <div class="doc-label">商品明細表</div>
-                        <div class="doc-btns">
-                            <button class="btn btn-red" onclick="downloadBlob('detail-pdf')">PDF</button>
-                            <button class="btn btn-green" onclick="downloadBlob('detail-excel')">XL</button>
-                        </div>
-                    </div>
-                </div>
+          <div class="card success-card">
+            <div class="success-icon">✦</div>
+            <div class="success-num" id="inv-num-display"></div>
+            <div class="success-meta">伝票が作成され、履歴に保存されました</div>
 
-                <button class="btn btn-gold" id="btn-lock-final" style="margin-top:20px; width:100%">
-                    ✦ この内容で確定して保存（固定化）
-                </button>
-
-                <button class="btn btn-blue" id="btn-drive" style="margin-top:14px; width:100%">
-                    <div class="spinner" id="sp3"></div> ☁️ Google Driveに4ファイル保存
-                </button>
-                
-                <div class="share-btns" style="display:flex; gap:10px; margin-top:10px;">
-                    <button class="btn btn-sm btn-outline" id="btn-line" style="flex:1">LINE</button>
-                    <button class="btn btn-sm btn-outline" id="btn-email" style="flex:1">メール</button>
-                </div>
-                
-                <button class="btn btn-dark" id="btn-new" style="margin-top:10px; width:100%">＋ 新しい伝票を作成する</button>
+            <!-- ★ プレビュータブ -->
+            <div class="preview-tabs">
+              <div class="preview-tab active" data-ptab="pdf">📄 納品書</div>
+              <div class="preview-tab" data-ptab="detail">📋 明細表</div>
+              <div class="preview-tab" data-ptab="summary">⚜ 概要</div>
             </div>
+
+            <div class="preview-pane active" id="ppane-pdf">
+              <iframe id="pdf-frame" class="pdf-preview-frame"></iframe>
+              <div class="preview-actions">
+                <button class="btn btn-red" onclick="downloadBlob('pdf')">📄 PDF保存</button>
+                <button class="btn btn-green" onclick="downloadBlob('excel')">📊 Excel保存</button>
+              </div>
+            </div>
+
+            <div class="preview-pane" id="ppane-detail">
+              <iframe id="detail-frame" class="pdf-preview-frame"></iframe>
+              <div class="preview-actions">
+                <button class="btn btn-red" onclick="downloadBlob('detail-pdf')">📄 PDF保存</button>
+                <button class="btn btn-green" onclick="downloadBlob('detail-excel')">📊 Excel保存</button>
+              </div>
+            </div>
+
+            <div class="preview-pane" id="ppane-summary">
+              <div id="summary-content"></div>
+            </div>
+
+            <button class="btn btn-gold" id="btn-lock-final" style="margin-top:18px; width:100%">
+              ✦ この内容で確定して保存（固定化）
+            </button>
+            <button class="btn btn-blue" id="btn-drive" style="margin-top:10px; width:100%">
+              <div class="spinner" id="sp3"></div> ☁️ Google Driveに4ファイル保存
+            </button>
+            <div class="share-btns" style="display:flex; gap:10px; margin-top:10px;">
+              <button class="btn btn-sm btn-outline" id="btn-line" style="flex:1">LINE</button>
+              <button class="btn btn-sm btn-outline" id="btn-email" style="flex:1">メール</button>
+            </div>
+            <button class="btn btn-dark" id="btn-new" style="margin-top:10px; width:100%">＋ 新しい伝票を作成する</button>
+          </div>
         </div>
     </div>
 
@@ -1201,6 +1310,80 @@
         }));
 
         const toast = (msg, type) => { const t = $('toast'); t.textContent = msg; t.className = 'toast toast-' + type; t.style.display = 'block'; };
+
+        /* ===== Preview Helpers ===== */
+        function b64ToBlobUrl(b64, mime){
+          try {
+            const bin = atob(b64.replace(/\s/g, ''));
+            const arr = new Uint8Array(bin.length);
+            for(let i=0; i<bin.length; i++) arr[i] = bin.charCodeAt(i);
+            return URL.createObjectURL(new Blob([arr], {type: mime}));
+          } catch(e){ return ''; }
+        }
+
+        function setupPreviews(payload, d) {
+          // PDF（iOS Safari対応のためBlob URL）
+          if ($('pdf-frame')._url) URL.revokeObjectURL($('pdf-frame')._url);
+          if ($('detail-frame')._url) URL.revokeObjectURL($('detail-frame')._url);
+          const u1 = b64ToBlobUrl(pdfData, 'application/pdf');
+          const u2 = b64ToBlobUrl(detailPdfData, 'application/pdf');
+          $('pdf-frame').src = u1; $('pdf-frame')._url = u1;
+          $('detail-frame').src = u2; $('detail-frame')._url = u2;
+
+          // サマリービュー
+          const items = payload.items;
+          const rate = payload.discount_rate;
+          let totalNet = 0, totalQty = 0;
+          items.forEach(it => {
+            const u = parseInt(it.unit_price) || 0;
+            const q = parseInt(it.quantity) || 1;
+            totalNet += Math.floor(u * (rate/100) * q);
+            totalQty += q;
+          });
+          const tax = Math.floor(totalNet * 0.1);
+          const grand = totalNet + tax;
+
+          let rows = '';
+          items.forEach((it, i) => {
+            const amt = Math.floor((it.unit_price||0) * (rate/100) * (it.quantity||1));
+            rows += `<tr>
+              <td class="left">${i+1}</td>
+              <td class="left">${it.code||'-'}</td>
+              <td>${it.color||'-'}</td>
+              <td>${it.size||'-'}</td>
+              <td>${it.quantity||1}</td>
+              <td>¥${(it.unit_price||0).toLocaleString()}</td>
+              <td>¥${amt.toLocaleString()}</td>
+            </tr>`;
+          });
+
+          $('summary-content').innerHTML = `
+            <div class="summary-card">
+              <div class="summary-row"><span class="lbl">伝票番号</span><span class="val">${d.invoice_number}</span></div>
+              <div class="summary-row"><span class="lbl">取引先</span><span class="val">${payload.customer_name}</span></div>
+              <div class="summary-row"><span class="lbl">掛率</span><span class="val">${rate}%</span></div>
+              <div class="summary-row"><span class="lbl">商品数</span><span class="val">${items.length}件 / ${totalQty}点</span></div>
+              <div class="summary-row"><span class="lbl">小計</span><span class="val">¥${totalNet.toLocaleString()}</span></div>
+              <div class="summary-row"><span class="lbl">消費税</span><span class="val">¥${tax.toLocaleString()}</span></div>
+              <div class="summary-row" style="font-size:16px;font-weight:700">
+                <span class="lbl" style="color:var(--gold)">合計</span>
+                <span class="val" style="color:var(--gold-bright)">¥${grand.toLocaleString()}</span>
+              </div>
+            </div>
+            <table class="summary-table">
+              <thead><tr><th class="left">No.</th><th class="left">品番</th><th>カラー</th><th>サイズ</th><th>数量</th><th>単価</th><th>金額</th></tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          `;
+        }
+
+        // プレビュータブ切替
+        document.querySelectorAll('.preview-tab').forEach(t => t.addEventListener('click', () => {
+          document.querySelectorAll('.preview-tab').forEach(x => x.classList.remove('active'));
+          document.querySelectorAll('.preview-pane').forEach(x => x.classList.remove('active'));
+          t.classList.add('active');
+          $('ppane-' + t.dataset.ptab).classList.add('active');
+        }));
 
         async function loadCustomers() {
             const r = await fetch('/api/customers'); const data = await r.json();
@@ -1369,8 +1552,7 @@
                 toast('データを展開しました。修正して保存してください。', 'ok');
             } catch (e) { toast(e.message, 'err'); }
         }
-
-        $('drop-area').addEventListener('click', () => $('file-input').click());
+$('drop-area').addEventListener('click', () => $('file-input').click());
         $('file-input').addEventListener('change', e => { if (e.target.files.length) { Array.from(e.target.files).forEach(f => selectedFiles.push(f)); e.target.value = ''; renderThumbs(); } });
         function renderThumbs() {
             const c = $('thumbs'); c.innerHTML = '';
@@ -1384,41 +1566,84 @@
         const sleep = ms => new Promise(r => setTimeout(r, ms));
 
         $('btn-analyze').addEventListener('click', async () => {
-            if (!selectedFiles.length) return;
-            $('btn-analyze').disabled = true; $('sp1').style.display = 'block'; $('btn-analyze-text').textContent = '処理中...';
-            $('toast').style.display = 'none'; extractedItems = []; $('preview-card').style.display = 'none'; $('dl-section').style.display = 'none';
-            const ai = $('sel-ai').value, total = selectedFiles.length;
-            const pw = $('prog-wrap'); pw.style.display = 'block';
-            try {
-                const blobs = [];
-                for (let i = 0; i < total; i++) { updProg(`画像を圧縮中 (${i + 1}/${total})`, i, total * 2); blobs.push(await compress(selectedFiles[i])); }
-                for (let i = 0; i < total; i++) {
-                    updProg(`AI解析中 (${i + 1}/${total}枚目)`, total + i, total * 2);
-                    let ok = false, retry = 0;
-                    while (!ok && retry < 1) {
-                        const fd = new FormData(); fd.append('ai_model', ai); fd.append('files', blobs[i], `img_${i}.jpg`);
-                        const r = await fetch('/analyze-images', { method: 'POST', body: fd });
-                        if (r.status === 429) { retry++; toast('AI混雑中。10秒後に再試行..', 'err'); await sleep(10000); continue; }
-                        if (!r.ok) { const e = await r.json(); throw new Error(e.detail || 'APIエラー'); }
-                        const d = await r.json(); extractedItems.push(...d.items); ok = true;
-                    }
-                    if (!ok) throw new Error('無料枠上限です。AIモデルを切り替えてください。');
+          if (!selectedFiles.length) return;
+          $('btn-analyze').disabled = true;
+          $('sp1').style.display = 'block';
+          $('btn-analyze-text').textContent = '処理中...';
+          $('toast').style.display = 'none';
+          extractedItems = [];
+          $('preview-card').style.display = 'none';
+          $('dl-section').style.display = 'none';
+
+          const ai = $('sel-ai').value, total = selectedFiles.length;
+          const pw = $('prog-wrap'); pw.style.display = 'block';
+
+          try {
+            const blobs = [];
+            for (let i = 0; i < total; i++) {
+              updProg(`画像を圧縮中 (${i + 1}/${total})`, i, total * 2);
+              blobs.push(await compress(selectedFiles[i]));
+            }
+
+            $('preview-title').textContent = `✎ 解析中... (0/${total}枚処理済み)`;
+            $('drop-area').style.display = 'none';
+            $('thumbs').style.display = 'none';
+            $('btn-analyze').style.display = 'none';
+            $('preview-card').style.display = 'block';
+
+            for (let i = 0; i < total; i++) {
+              updProg(`AI解析中 (${i + 1}/${total}枚目)`, total + i, total * 2);
+              let ok = false, retry = 0;
+              while (!ok && retry < 1) {
+                const fd = new FormData();
+                fd.append('ai_model', ai);
+                fd.append('files', blobs[i], `img_${i}.jpg`);
+                const r = await fetch('/analyze-images', { method: 'POST', body: fd });
+                if (r.status === 429) {
+                  retry++;
+                  toast('AI混雑中。10秒後に再試行..', 'err');
+                  await sleep(10000);
+                  continue;
                 }
-                updProg('完了', 1, 1);
-                const merged = {};
-                extractedItems.forEach(it => {
-                    const key = `${it.code}|${it.color}|${it.size}|${it.unit_price}`;
-                    const qty = parseInt(it.quantity) || 1;
-                    if (merged[key]) { merged[key].quantity += qty; }
-                    else { merged[key] = { ...it, quantity: qty }; }
-                });
-                extractedItems = Object.values(merged);
-                toast(`✦ ${total}枚の解析完了 ${extractedItems.length}件に集約しました`, 'ok');
-                $('drop-area').style.display = 'none'; $('thumbs').style.display = 'none'; $('btn-analyze').style.display = 'none';
-                pw.style.display = 'none';
-                $('preview-title').textContent = '✎ 読み取り結果（タップで修正可能）';
-                renderPreview();
-            } catch (e) { console.error(e); toast(e.message, 'err'); $('btn-analyze').disabled = false; $('sp1').style.display = 'none'; $('btn-analyze-text').textContent = '再試行'; }
+                if (!r.ok) {
+                  const e = await r.json();
+                  throw new Error(e.detail || 'APIエラー');
+                }
+                const d = await r.json();
+                extractedItems.push(...d.items);
+                ok = true;
+              }
+              if (!ok) throw new Error('無料枠上限です。AIモデルを切り替えてください。');
+
+              $('preview-title').textContent = `✎ 解析中... (${i + 1}/${total}枚処理済み)`;
+              renderPreview();
+            }
+            updProg('完了', 1, 1);
+
+            const merged = {};
+            extractedItems.forEach(it => {
+              const key = `${it.code}|${it.color}|${it.size}|${it.unit_price}`;
+              const qty = parseInt(it.quantity) || 1;
+              if (merged[key]) merged[key].quantity += qty;
+              else merged[key] = { ...it, quantity: qty };
+            });
+            extractedItems = Object.values(merged);
+            renderPreview();
+
+            toast(`✦ ${total}枚の解析完了 ${extractedItems.length}件に集約しました`, 'ok');
+            pw.style.display = 'none';
+            $('preview-title').textContent = '✎ 読み取り結果（タップで修正可能）';
+
+          } catch (e) {
+            console.error(e);
+            toast(e.message, 'err');
+            $('btn-analyze').disabled = false;
+            $('btn-analyze').style.display = '';
+            $('drop-area').style.display = '';
+            $('thumbs').style.display = '';
+            $('sp1').style.display = 'none';
+            $('btn-analyze-text').textContent = '再試行';
+          }
         });
         function updProg(label, cur, tot) { $('prog-label').textContent = label; const p = Math.round(cur / tot * 100); $('prog-pct').textContent = p + '%'; $('prog-fill').style.width = p + '%'; }
 
@@ -1427,6 +1652,7 @@
 
         function renderPreview() {
             const container = $('item-cards'); container.innerHTML = '';
+            const rate = getRate();
             extractedItems.forEach((it, i) => {
                 const amt = calcItemAmount(it);
                 const card = document.createElement('div'); card.className = 'item-card'; card.dataset.idx = i;
@@ -1439,7 +1665,13 @@
         <div class="item-field full"><label>品番</label><input value="${it.code || ''}" data-i="${i}" data-k="code" placeholder="例: 148-3101"></div>
         <div class="item-field"><label>カラー</label><input value="${it.color || ''}" data-i="${i}" data-k="color" placeholder="例: 24"></div>
         <div class="item-field"><label>サイズ</label><input value="${it.size || ''}" data-i="${i}" data-k="size" placeholder="例: 46"></div>
-        <div class="item-field"><label>数量</label><input type="number" value="${it.quantity || 1}" data-i="${i}" data-k="quantity" min="1" inputmode="numeric"></div>
+        <div class="item-field"><label>数量</label>
+          <div class="qty-stepper">
+            <button type="button" class="qty-btn minus" onclick="adjustQty(${i}, -1)">−</button>
+            <input type="number" value="${it.quantity || 1}" data-i="${i}" data-k="quantity" min="1" inputmode="numeric">
+            <button type="button" class="qty-btn plus" onclick="adjustQty(${i}, 1)">＋</button>
+          </div>
+        </div>
         <div class="item-field"><label>単価 (税抜)</label><input type="number" value="${it.unit_price || 0}" data-i="${i}" data-k="unit_price" min="0" inputmode="numeric"></div>
       </div>
       <div class="item-card-footer">
@@ -1486,6 +1718,12 @@
     </div>`;
         }
         function delRow(i) { syncInputs(); extractedItems.splice(i, 1); renderPreview(); }
+        function adjustQty(i, delta) {
+          syncInputs();
+          const cur = parseInt(extractedItems[i].quantity) || 1;
+          extractedItems[i].quantity = Math.max(1, cur + delta);
+          renderPreview();
+        }
         function syncInputs() {
             $('item-cards').querySelectorAll('input').forEach(inp => {
                 const i = inp.dataset.i, k = inp.dataset.k;
@@ -1525,6 +1763,7 @@
                 $('inv-num-display').textContent = `伝票番号: ${d.invoice_number}`;
                 $('preview-card').style.display = 'none'; 
                 $('dl-section').style.display = 'block';
+                setupPreviews(payload, d);   // ★追加
                 toast('✦ 保存完了（下書き）', 'ok');
             } catch (e) { toast(e.message, 'err'); }
             finally { $('btn-generate').disabled = false; $('sp2').style.display = 'none'; }
