@@ -643,11 +643,13 @@ def assemble_invoice_data(inv_info: dict, items_input: list, discount_rate: int)
     """生成用データ準備"""
     processed = []
     total_net = total_tax = total_grand = 0
+    # 掛け率が0（手動入力等）の場合は、掛け率なし（100%）として計算
+    rate = (discount_rate / 100.0) if discount_rate > 0 else 1.0
     for it in items_input:
         up = it.get("unit_price", 0)
         if isinstance(up, str): up = int(up.replace(',','').replace('¥','').strip() or '0')
         qty = max(1, int(it.get("quantity") or 1))
-        net = int(up * (discount_rate / 100) * qty)
+        net = int(up * rate * qty)
         tax = int(net * 0.1)
         grand = net + tax
         processed.append({
