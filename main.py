@@ -612,7 +612,7 @@ def build_invoice_excel(invoice_data: dict) -> bytes:
             img = ExcelImage(bc_io)
             img.width, img.height = 120, 30
             marker = AnchorMarker(col=3, colOff=pixels_to_EMU(10), row=r-1, rowOff=pixels_to_EMU(5))
-            img.anchor = OneCellAnchor(_marker=marker, ext=XDRPositiveSize2D(cx=pixels_to_EMU(120), cy=pixels_to_EMU(30)))
+            img.anchor = OneCellAnchor(_from=marker, ext=XDRPositiveSize2D(cx=pixels_to_EMU(120), cy=pixels_to_EMU(30)))
             ws.add_image(img)
         except: pass
 
@@ -777,45 +777,60 @@ async def get_history(username: Annotated[str, Depends(authenticate)]):
     conn.close()
     return [dict(r) for r in rows]
 
-def _serve_file(inv_id: int, kind: str):
+# kind: "pdf" | "excel" | "detail_pdf" | "detail_excel"
+KIND_CONFIG = {
+    "pdf":          {"path_field": "pdf_storage_path",          "mime": "application/pdf",                                                            "ext": "pdf",  "files_key": "pdf"},
+    "excel":        {"path_field": "excel_storage_path",        "mime": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",         "ext": "xlsx", "files_key": "excel"},
+    "detail_pdf":   {"path_field": "detail_pdf_storage_path",   "mime": "application/pdf",                                                            "ext": "pdf",  "files_key": "detail_pdf"},
+    "detail_excel": {"path_field": "detail_excel_storage_path", "mime": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",         "ext": "xlsx", "files_key": "detail_excel"},
+}
+
+def serve_file(inv_id: int, kind: str):
+    cfg = KIND_CONFIG[kind]
     conn = get_db()
     with conn.cursor() as cur:
         cur.execute("SELECT * FROM invoices WHERE id=%s", (inv_id,))
         inv = cur.fetchone()
-        if not inv: raise HTTPException(404, "Not found")
+        if not inv:
+            conn.close()
+            raise HTTPException(404, "Not found")
         cur.execute("SELECT code,color,size,unit_price,quantity FROM invoice_items WHERE invoice_id=%s", (inv_id,))
         items = [dict(r) for r in cur.fetchall()]
     conn.close()
-    
-    path_field = f"{kind.replace('-','_')}_storage_path"
-    mime_map = {
-        "pdf": ("application/pdf", "pdf"),
-        "excel": ("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "xlsx"),
-        "detail-pdf": ("application/pdf", "pdf"),
-        "detail-excel": ("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "xlsx"),
-    }
-    mime, ext = mime_map[kind]
-    
-    if inv["status"] == "locked" and inv.get(path_field):
+
+    fname = f'{inv["invoice_number"]}_{kind}.{cfg["ext"]}'
+
+    # Locked + Storage 存在 → そのまま配信
+    if inv["status"] == "locked" and inv.get(cfg["path_field"]):
         try:
-            data = storage_download(inv[path_field])
-            return Response(content=data, media_type=mime, headers={"Content-Disposition": f'attachment; filename="{inv["invoice_number"]}_{kind}.{ext}"'})
-        except: pass
-    
-    # Draft or Storage missing -> Re-generate
-    inv_data = assemble_invoice_data(dict(inv), items, inv["discount_rate"])
+            data = storage_download(inv[cfg["path_field"]])
+            return Response(content=data, media_type=cfg["mime"],
+                            headers={"Content-Disposition": f'attachment; filename="{fname}"'})
+        except Exception as e:
+            print(f"Storage download failed, regenerating: {e}")
+
+    # Draft or Storage欠落 → 再生成
+    dr = inv.get("discount_rate") or 100
+    inv_data = assemble_invoice_data(dict(inv), items, dr)
     files = build_all_files(inv_data)
-    key = kind.replace("-", "_")
-    return Response(content=files[key], media_type=mime, headers={"Content-Disposition": f'attachment; filename="{inv["invoice_number"]}_{kind}.{ext}"'})
+    return Response(content=files[cfg["files_key"]], media_type=cfg["mime"],
+                    headers={"Content-Disposition": f'attachment; filename="{fname}"'})
 
 @app.get("/api/history/{inv_id}/pdf")
-async def dl_pdf(inv_id: int, username: Annotated[str, Depends(authenticate)]): return _serve_file(inv_id, "pdf")
+async def dl_pdf(inv_id: int, username: Annotated[str, Depends(authenticate)]):
+    return serve_file(inv_id, "pdf")
+
 @app.get("/api/history/{inv_id}/excel")
-async def dl_excel(inv_id: int, username: Annotated[str, Depends(authenticate)]): return _serve_file(inv_id, "excel")
+async def dl_excel(inv_id: int, username: Annotated[str, Depends(authenticate)]):
+    return serve_file(inv_id, "excel")
+
 @app.get("/api/history/{inv_id}/detail-pdf")
-async def dl_dpdf(inv_id: int, username: Annotated[str, Depends(authenticate)]): return _serve_file(inv_id, "detail-pdf")
+async def dl_detail_pdf(inv_id: int, username: Annotated[str, Depends(authenticate)]):
+    return serve_file(inv_id, "detail_pdf")
+
 @app.get("/api/history/{inv_id}/detail-excel")
-async def dl_dxl(inv_id: int, username: Annotated[str, Depends(authenticate)]): return _serve_file(inv_id, "detail-excel")
+async def dl_detail_excel(inv_id: int, username: Annotated[str, Depends(authenticate)]):
+    return serve_file(inv_id, "detail_excel")
 
 @app.get("/api/history/{inv_id}/items")
 async def get_history_items(inv_id: int, username: Annotated[str, Depends(authenticate)]):
