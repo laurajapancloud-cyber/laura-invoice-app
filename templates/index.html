@@ -1629,7 +1629,8 @@
   }
   .pc-item-table input {
     background: var(--bg-input); border: 1px solid var(--border); color: var(--text-primary);
-    padding: 8px 10px; border-radius: 6px; width: 100%; font-family: inherit; font-size: 14px;
+    padding: 8px 10px; border-radius: 6px; width: 100%; min-width: 60px; font-family: inherit; font-size: 14px;
+    box-sizing: border-box;
   }
   .pc-item-table input:focus { border-color: var(--gold); outline: none; }
   .pc-item-table .qty-stepper { border-radius: 6px; }
@@ -2785,7 +2786,7 @@
                     <thead>
                         <tr>
                             <th style="width:40px">No</th>
-                            <th>品番</th>
+                            <th style="min-width:150px">品番</th>
                             <th style="width:100px">カラー</th>
                             <th style="width:80px">サイズ</th>
                             <th style="width:140px">数量</th>
@@ -3270,7 +3271,12 @@
                   <button class="btn btn-green" onclick="dl64('${d.excel_base64}','納品書_${d.invoice_number}.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')">📊 Excel保存</button>
                 </div>
               </div>
-              <div class="preview-pane" id="dpane-excel"><div id="dpane-excel-grid" class="excel-preview-container"></div></div>
+              <div class="preview-pane" id="dpane-excel">
+                <div id="dpane-excel-grid" class="excel-preview-container"></div>
+                <div class="preview-actions">
+                  <button class="btn btn-green" onclick="dl64('${d.excel_base64}','納品書_${d.invoice_number}.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')">📊 Excel保存</button>
+                </div>
+              </div>
               <div class="preview-pane" id="dpane-detail">
                 <iframe class="pdf-preview-frame" src="${b64ToBlobUrl(d.detail_pdf_base64,'application/pdf')}"></iframe>
                 <div class="preview-actions">
