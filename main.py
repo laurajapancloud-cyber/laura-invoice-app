@@ -354,17 +354,15 @@ async def get_dashboard(username: Annotated[str, Depends(authenticate)]):
         )
         monthly = cur.fetchall()
         
-        # 今月の取引先別売上トップ5
+        # 全期間の取引先別売上トップ5
         cur.execute(
-            "SELECT customer_name, SUM(total_grand_total) as total FROM invoices WHERE created_at >= %s GROUP BY customer_name ORDER BY total DESC LIMIT 5",
-            (month_start,)
+            "SELECT customer_name, SUM(total_grand_total) as total FROM invoices GROUP BY customer_name ORDER BY total DESC LIMIT 5"
         )
         top_customers = cur.fetchall()
         
-        # 今月の商品別(品番)数量トップ5
+        # 全期間の商品別(品番)数量トップ5
         cur.execute(
-            "SELECT code, SUM(quantity) as qty FROM invoice_items ii JOIN invoices i ON ii.invoice_id = i.id WHERE i.created_at >= %s GROUP BY code ORDER BY qty DESC LIMIT 5",
-            (month_start,)
+            "SELECT code, SUM(quantity) as qty FROM invoice_items ii JOIN invoices i ON ii.invoice_id = i.id GROUP BY code ORDER BY qty DESC LIMIT 5"
         )
         top_items = cur.fetchall()
 
