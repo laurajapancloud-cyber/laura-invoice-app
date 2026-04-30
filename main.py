@@ -85,6 +85,21 @@ supabase_client: Optional[SupabaseClient] = None
 if SUPABASE_URL and SUPABASE_SERVICE_KEY:
     supabase_client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
+DOC_TYPE_PREFIXES = {
+    "delivery": "LJ", "return": "LR",
+    "prov_delivery": "TLJ", "prov_return": "TLR",
+}
+DOC_TYPE_LABELS = {
+    "delivery": "納品伝票", "return": "返品伝票",
+    "prov_delivery": "仮納品", "prov_return": "仮返品",
+}
+DOC_TYPE_TITLES = {
+    "delivery":      {"main": "御 納 品 書", "detail": "商 品 明 細 表",   "pdf_title": "納品書",   "detail_pdf_title": "商品明細表"},
+    "return":        {"main": "御 返 品 書", "detail": "返 品 明 細 表",   "pdf_title": "返品書",   "detail_pdf_title": "返品明細表"},
+    "prov_delivery": {"main": "仮 納 品 書", "detail": "仮納品 明細表",     "pdf_title": "仮納品書", "detail_pdf_title": "仮納品明細表"},
+    "prov_return":   {"main": "仮 返 品 書", "detail": "仮返品 明細表",     "pdf_title": "仮返品書", "detail_pdf_title": "仮返品明細表"},
+}
+
 def storage_upload(path: str, data: bytes, mime: str) -> str:
     """Supabase Storage にアップロードし、保存パスを返す"""
     if not supabase_client:
@@ -165,13 +180,18 @@ def init_db():
     conn = get_db()
     if not conn: return
     with conn.cursor() as cur:
+        # Users table
         cur.execute("""
-            CREATE TABLE IF NOT EXISTS customers (
+            CREATE TABLE IF NOT EXISTS users (
                 id SERIAL PRIMARY KEY,
-                name TEXT NOT NULL,
-                discount_rate INTEGER NOT NULL DEFAULT 35,
+                name TEXT NOT NULL UNIQUE,
+                color TEXT DEFAULT '#c9a961',
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             );
+        """)
+        
+        # Invoices table
+        cur.execute("""
             CREATE TABLE IF NOT EXISTS invoices (
                 id SERIAL PRIMARY KEY,
                 invoice_number TEXT NOT NULL UNIQUE,
@@ -181,12 +201,23 @@ def init_db():
                 total_tax_amount INTEGER DEFAULT 0,
                 total_grand_total INTEGER DEFAULT 0,
                 item_count INTEGER DEFAULT 0,
-                pdf_data BYTEA,
-                excel_data BYTEA,
-                detail_pdf_data BYTEA,
-                detail_excel_data BYTEA,
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                status TEXT DEFAULT 'draft',
+                pdf_storage_path TEXT,
+                excel_storage_path TEXT,
+                detail_pdf_storage_path TEXT,
+                detail_excel_storage_path TEXT,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                locked_at TIMESTAMP WITH TIME ZONE,
+                user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                doc_type TEXT NOT NULL DEFAULT 'delivery'
             );
+        """)
+        cur.execute("ALTER TABLE invoices ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;")
+        cur.execute("ALTER TABLE invoices ADD COLUMN IF NOT EXISTS doc_type TEXT NOT NULL DEFAULT 'delivery';")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_invoices_doc_type ON invoices(doc_type);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_invoices_user ON invoices(user_id);")
+
+        cur.execute("""
             CREATE TABLE IF NOT EXISTS invoice_items (
                 id SERIAL PRIMARY KEY,
                 invoice_id INTEGER NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
@@ -216,6 +247,12 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_jobs_status_created ON jobs(status, created_at DESC);
         """)
         
+        # Initial users if empty
+        cur.execute("SELECT COUNT(*) FROM users;")
+        if cur.fetchone()['count'] == 0:
+            cur.execute("INSERT INTO users (name, color) VALUES (%s, %s), (%s, %s);", 
+                       ("緒方", "#c9a961", "高橋", "#6b9bd1"))
+        
         cur.execute("SELECT COUNT(*) FROM customers")
         if cur.fetchone()['count'] == 0:
             cur.executemany("INSERT INTO customers (name, discount_rate) VALUES (%s, %s)", [
@@ -225,13 +262,15 @@ def init_db():
     conn.commit()
     conn.close()
 
-def generate_invoice_number():
+def generate_invoice_number(doc_type='delivery'):
+    prefix_code = DOC_TYPE_PREFIXES.get(doc_type, "LJ")
     now = get_jst_now()
-    prefix = f"LJ-{now.strftime('%Y%m')}"
+    prefix = f"{prefix_code}-{now.strftime('%Y%m')}"
     conn = get_db()
     if not conn: return f"{prefix}-TEST"
     with conn.cursor() as cur:
-        cur.execute("SELECT COUNT(*) AS cnt FROM invoices WHERE invoice_number LIKE %s", (f"{prefix}%",))
+        # doc_typeごとに最新の番号を取得するためにカウント
+        cur.execute("SELECT COUNT(*) AS cnt FROM invoices WHERE invoice_number LIKE %s AND doc_type = %s", (f"{prefix}%", doc_type))
         row = cur.fetchone()
         seq = (row['cnt'] or 0) + 1
     conn.close()
@@ -336,33 +375,33 @@ async def get_dashboard(username: Annotated[str, Depends(authenticate)]):
         
         # 今月の統計
         cur.execute(
-            "SELECT COUNT(*) as cnt, COALESCE(SUM(total_grand_total),0) as total FROM invoices WHERE created_at >= %s",
+            "SELECT COUNT(*) as cnt, COALESCE(SUM(total_grand_total),0) as total FROM invoices WHERE created_at >= %s AND doc_type='delivery'",
             (month_start,)
         )
         this_month = cur.fetchone()
         
         # 前月の統計
         cur.execute(
-            "SELECT COUNT(*) as cnt, COALESCE(SUM(total_grand_total),0) as total FROM invoices WHERE created_at >= %s AND created_at < %s",
+            "SELECT COUNT(*) as cnt, COALESCE(SUM(total_grand_total),0) as total FROM invoices WHERE created_at >= %s AND created_at < %s AND doc_type='delivery'",
             (last_month_start, month_start)
         )
         last_month = cur.fetchone()
         
         # 月別推移 (過去12ヶ月)
         cur.execute(
-            "SELECT to_char(created_at, 'YYYY-MM') as month, COUNT(*) as cnt, COALESCE(SUM(total_grand_total),0) as total FROM invoices GROUP BY month ORDER BY month DESC LIMIT 12"
+            "SELECT to_char(created_at, 'YYYY-MM') as month, COUNT(*) as cnt, COALESCE(SUM(total_grand_total),0) as total FROM invoices WHERE doc_type='delivery' GROUP BY month ORDER BY month DESC LIMIT 12"
         )
         monthly = cur.fetchall()
         
         # 全期間の取引先別売上トップ5
         cur.execute(
-            "SELECT customer_name, SUM(total_grand_total) as total FROM invoices GROUP BY customer_name ORDER BY total DESC LIMIT 5"
+            "SELECT customer_name, SUM(total_grand_total) as total FROM invoices WHERE doc_type='delivery' GROUP BY customer_name ORDER BY total DESC LIMIT 5"
         )
         top_customers = cur.fetchall()
         
         # 全期間の商品別(品番)数量トップ5
         cur.execute(
-            "SELECT code, SUM(quantity) as qty FROM invoice_items ii JOIN invoices i ON ii.invoice_id = i.id GROUP BY code ORDER BY qty DESC LIMIT 5"
+            "SELECT code, SUM(quantity) as qty FROM invoice_items ii JOIN invoices i ON ii.invoice_id = i.id WHERE i.doc_type='delivery' GROUP BY code ORDER BY qty DESC LIMIT 5"
         )
         top_items = cur.fetchall()
 
@@ -392,6 +431,37 @@ async def get_dashboard(username: Annotated[str, Depends(authenticate)]):
         "top_items": [dict(i) for i in top_items],
         "api_usage": usage_list
     }
+
+# ==================== User Master API ====================
+@app.get("/api/users")
+async def get_users(username: Annotated[str, Depends(authenticate)]):
+    conn = get_db()
+    if not conn: return []
+    with conn.cursor() as cur:
+        cur.execute("SELECT id, name, color FROM users ORDER BY id")
+        rows = cur.fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+@app.post("/api/users")
+async def add_user(username: Annotated[str, Depends(authenticate)], name: str = Form(...), color: str = Form("#c9a961")):
+    conn = get_db()
+    if not conn: return {"status": "no-db-mode"}
+    with conn.cursor() as cur:
+        cur.execute("INSERT INTO users (name, color) VALUES (%s, %s)", (name, color))
+    conn.commit()
+    conn.close()
+    return {"status": "ok"}
+
+@app.delete("/api/users/{uid}")
+async def delete_user(uid: int, username: Annotated[str, Depends(authenticate)]):
+    conn = get_db()
+    if not conn: return {"status": "no-db-mode"}
+    with conn.cursor() as cur:
+        cur.execute("DELETE FROM users WHERE id = %s", (uid,))
+    conn.commit()
+    conn.close()
+    return {"status": "ok"}
 
 # ==================== Customer Master API ====================
 @app.get("/api/customers")
@@ -527,11 +597,12 @@ async def enqueue_analyze(bt: BackgroundTasks, username: Annotated[str, Depends(
 # ==================== Product Detail Sheet Logic ====================
 SIZE_COLUMNS = ["44", "46", "48", "50", "52"]
 
-def build_detail_excel(invoice_number: str, customer_name: str, items: list) -> bytes:
+def build_detail_excel(invoice_number: str, customer_name: str, items: list, doc_type='delivery') -> bytes:
     """商品明細表 Excel (サイズ別内訳)"""
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.title = "商品明細表"
+    titles = DOC_TYPE_TITLES.get(doc_type, DOC_TYPE_TITLES["delivery"])
+    ws.title = titles["detail_pdf_title"]
 
     fill_header = PatternFill(start_color="F4ECD8", end_color="F4ECD8", fill_type="solid")
     fill_meta = PatternFill(start_color="FFF8E7", end_color="FFF8E7", fill_type="solid")
@@ -551,7 +622,7 @@ def build_detail_excel(invoice_number: str, customer_name: str, items: list) -> 
     reiwa = now.year - 2018
 
     # タイトル
-    ws["A1"] = "商 品 明 細 表"
+    ws["A1"] = titles["detail"]
     ws["A1"].font = Font(bold=True, size=14)
     ws.merge_cells("A1:E1")
     ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
@@ -618,9 +689,10 @@ def build_detail_excel(invoice_number: str, customer_name: str, items: list) -> 
     wb.save(out)
     return out.getvalue()
 
-def build_detail_pdf(invoice_number: str, customer_name: str, items: list) -> bytes:
+def build_detail_pdf(invoice_number: str, customer_name: str, items: list, doc_type='delivery') -> bytes:
     """商品明細表 PDF"""
     from jinja2 import Template
+    titles = DOC_TYPE_TITLES.get(doc_type, DOC_TYPE_TITLES["delivery"])
     rows_html = ""
     for i, item in enumerate(items):
         rows_html += f"<tr><td>{i+1}</td><td>{item.get('code','')}</td><td>{item.get('color','')}</td><td>{item.get('size','')}</td><td>{item.get('quantity',0)}</td><td>¥{item.get('unit_price',0):,}</td></tr>"
@@ -631,7 +703,7 @@ def build_detail_pdf(invoice_number: str, customer_name: str, items: list) -> by
     .meta{{margin-bottom:15px;}}
     table{{width:100%;border-collapse:collapse;}} th,td{{border:1px solid #ccc;padding:6px;text-align:center;}}
     th{{background:#f4ecd8;}}</style></head><body>
-    <div class="title">商品明細表</div>
+    <div class="title">{titles['detail']}</div>
     <div class="meta"><span>伝票番号: {invoice_number}</span><br><span>取引先: {customer_name}</span></div>
     <table><thead><tr><th>No.</th><th>品番</th><th>カラー</th><th>サイズ</th><th>枚数</th><th>上代</th></tr></thead>
     <tbody>{rows_html}</tbody></table></body></html>"""
@@ -649,13 +721,13 @@ def build_invoice_excel(invoice_data: dict) -> bytes:
     """納品書 Excel (バーコード付き)"""
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.title = "伝票"
+    ws.title = invoice_data.get("doc_pdf_title", "伝票")
     fill_yellow = PatternFill(start_color="FFE699", end_color="FFE699", fill_type="solid")
     fill_blue = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
     border_thin = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
     
     ws.merge_cells("A1:E1")
-    ws["A1"] = "御 納 品 書"
+    ws["A1"] = invoice_data.get("doc_title_main", "御 納 品 書")
     ws["A1"].font = Font(size=24, bold=True)
     ws["A1"].alignment = Alignment(horizontal="center")
     
@@ -731,14 +803,15 @@ def build_invoice_excel(invoice_data: dict) -> bytes:
 
 def build_all_files(invoice_data: dict) -> dict:
     """4ファイルまとめて生成"""
+    doc_type = invoice_data.get("doc_type", "delivery")
     return {
         "pdf": build_invoice_pdf(invoice_data),
         "excel": build_invoice_excel(invoice_data),
-        "detail_pdf": build_detail_pdf(invoice_data["invoice_number"], invoice_data["customer_name"], invoice_data["items"]),
-        "detail_excel": build_detail_excel(invoice_data["invoice_number"], invoice_data["customer_name"], invoice_data["items"]),
+        "detail_pdf": build_detail_pdf(invoice_data["invoice_number"], invoice_data["customer_name"], invoice_data["items"], doc_type),
+        "detail_excel": build_detail_excel(invoice_data["invoice_number"], invoice_data["customer_name"], invoice_data["items"], doc_type),
     }
 
-def assemble_invoice_data(inv_info: dict, items_input: list, discount_rate: int) -> dict:
+def assemble_invoice_data(inv_info: dict, items_input: list, discount_rate: int, doc_type='delivery') -> dict:
     """生成用データ準備"""
     processed = []
     total_net = total_tax = total_grand = 0
@@ -762,11 +835,18 @@ def assemble_invoice_data(inv_info: dict, items_input: list, discount_rate: int)
         try: dt = datetime.datetime.fromisoformat(dt.replace("Z", "+00:00"))
         except: dt = get_jst_now()
 
+    titles = DOC_TYPE_TITLES.get(doc_type, DOC_TYPE_TITLES["delivery"])
+
     return {
         "invoice_number": inv_info["invoice_number"], "customer_name": inv_info["customer_name"],
         "discount_rate": discount_rate, "items": processed,
         "total_net_amount": total_net, "total_tax_amount": total_tax, "total_grand_total": total_grand,
-        "issuer": "株式会社 ラウラジャパン", "date": dt.strftime("%Y年%m月%d日")
+        "issuer": "株式会社 ラウラジャパン", "date": dt.strftime("%Y年%m月%d日"),
+        "doc_type": doc_type,
+        "doc_title_main": titles["main"],
+        "doc_title_detail": titles["detail"],
+        "doc_pdf_title": titles["pdf_title"],
+        "doc_detail_pdf_title": titles["detail_pdf_title"]
     }
 
 # ==================== Document Generation API ====================
@@ -775,17 +855,20 @@ class DocumentRequest(BaseModel):
     customer_name: str
     discount_rate: int
     items: List[Dict[str, Any]]
+    doc_type: Optional[str] = "delivery"
+    user_id: Optional[int] = None
 
 @app.post("/api/preview")
 async def preview_documents(username: Annotated[str, Depends(authenticate)], payload: DocumentRequest):
     """保存せず、PDF/Excelだけ生成して返す"""
     inv_data = assemble_invoice_data(
         {"invoice_number": "PREVIEW-" + get_jst_now().strftime("%H%M%S"), "customer_name": payload.customer_name},
-        payload.items, payload.discount_rate
+        payload.items, payload.discount_rate, payload.doc_type or "delivery"
     )
     files = build_all_files(inv_data)
     return {
         "invoice_number": inv_data["invoice_number"],
+        "doc_type": inv_data["doc_type"],
         "pdf_base64": base64.b64encode(files["pdf"]).decode(),
         "excel_base64": base64.b64encode(files["excel"]).decode(),
         "detail_pdf_base64": base64.b64encode(files["detail_pdf"]).decode(),
@@ -797,6 +880,7 @@ async def preview_documents(username: Annotated[str, Depends(authenticate)], pay
 async def generate_documents(request: Request, username: Annotated[str, Depends(authenticate)], payload: DocumentRequest):
     try:
         conn = get_db()
+        doc_type = payload.doc_type or "delivery"
         with conn.cursor() as cur:
             if payload.invoice_id:
                 cur.execute("SELECT invoice_number, status FROM invoices WHERE id = %s", (payload.invoice_id,))
@@ -805,24 +889,24 @@ async def generate_documents(request: Request, username: Annotated[str, Depends(
                 if row["status"] == "locked": raise HTTPException(400, "確定済みの伝票は編集できません。")
                 invoice_number = row["invoice_number"]
             else:
-                invoice_number = generate_invoice_number()
+                invoice_number = generate_invoice_number(doc_type)
 
-            inv_data = assemble_invoice_data({"invoice_number": invoice_number, "customer_name": payload.customer_name}, payload.items, payload.discount_rate)
+            inv_data = assemble_invoice_data({"invoice_number": invoice_number, "customer_name": payload.customer_name}, payload.items, payload.discount_rate, doc_type)
 
             if payload.invoice_id:
                 cur.execute("""
                     UPDATE invoices SET customer_name=%s, discount_rate=%s, total_net_amount=%s, total_tax_amount=%s, total_grand_total=%s, 
-                    item_count=%s, status='draft', locked_at=NULL,
+                    item_count=%s, status='draft', locked_at=NULL, doc_type=%s, user_id=%s,
                     pdf_storage_path=NULL, excel_storage_path=NULL, detail_pdf_storage_path=NULL, detail_excel_storage_path=NULL,
                     created_at=CURRENT_TIMESTAMP WHERE id=%s
-                """, (payload.customer_name, payload.discount_rate, inv_data["total_net_amount"], inv_data["total_tax_amount"], inv_data["total_grand_total"], len(inv_data["items"]), payload.invoice_id))
+                """, (payload.customer_name, payload.discount_rate, inv_data["total_net_amount"], inv_data["total_tax_amount"], inv_data["total_grand_total"], len(inv_data["items"]), doc_type, payload.user_id, payload.invoice_id))
                 cur.execute("DELETE FROM invoice_items WHERE invoice_id=%s", (payload.invoice_id,))
                 inv_id = payload.invoice_id
             else:
                 cur.execute("""
-                    INSERT INTO invoices (invoice_number, customer_name, discount_rate, total_net_amount, total_tax_amount, total_grand_total, item_count, status) 
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,'draft') RETURNING id
-                """, (invoice_number, payload.customer_name, payload.discount_rate, inv_data["total_net_amount"], inv_data["total_tax_amount"], inv_data["total_grand_total"], len(inv_data["items"])))
+                    INSERT INTO invoices (invoice_number, customer_name, discount_rate, total_net_amount, total_tax_amount, total_grand_total, item_count, status, doc_type, user_id) 
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,'draft',%s,%s) RETURNING id
+                """, (invoice_number, payload.customer_name, payload.discount_rate, inv_data["total_net_amount"], inv_data["total_tax_amount"], inv_data["total_grand_total"], len(inv_data["items"]), doc_type, payload.user_id))
                 inv_id = cur.fetchone()['id']
             
             for item in inv_data["items"]:
@@ -833,7 +917,7 @@ async def generate_documents(request: Request, username: Annotated[str, Depends(
 
         files = build_all_files(inv_data)
         return JSONResponse({
-            "invoice_id": inv_id, "invoice_number": invoice_number, "status": "draft",
+            "invoice_id": inv_id, "invoice_number": invoice_number, "status": "draft", "doc_type": doc_type,
             "pdf_base64": base64.b64encode(files["pdf"]).decode(), "excel_base64": base64.b64encode(files["excel"]).decode(),
             "detail_pdf_base64": base64.b64encode(files["detail_pdf"]).decode(), "detail_excel_base64": base64.b64encode(files["detail_excel"]).decode(),
         })
@@ -842,7 +926,7 @@ async def generate_documents(request: Request, username: Annotated[str, Depends(
 async def get_preview(request: Request, username: Annotated[str, Depends(authenticate)], payload: DocumentRequest):
     try:
         # DB保存せずに生成データだけ作成
-        inv_data = assemble_invoice_data({"invoice_number": "PREVIEW-0000", "customer_name": payload.customer_name}, payload.items, payload.discount_rate)
+        inv_data = assemble_invoice_data({"invoice_number": "PREVIEW-0000", "customer_name": payload.customer_name}, payload.items, payload.discount_rate, payload.doc_type or "delivery")
         files = build_all_files(inv_data)
         return JSONResponse({
             "invoice_number": inv_data["invoice_number"],
@@ -867,7 +951,7 @@ async def lock_invoice(inv_id: int, username: Annotated[str, Depends(authenticat
         cur.execute("SELECT code,color,size,unit_price,quantity FROM invoice_items WHERE invoice_id=%s", (inv_id,))
         items = [dict(r) for r in cur.fetchall()]
     
-    inv_data = assemble_invoice_data(dict(inv), items, inv["discount_rate"])
+    inv_data = assemble_invoice_data(dict(inv), items, inv["discount_rate"], inv.get("doc_type", "delivery"))
     files = build_all_files(inv_data)
     
     base = f"locked/{inv['invoice_number']}"
@@ -900,15 +984,29 @@ async def unlock_invoice(inv_id: int, username: Annotated[str, Depends(authentic
 
 # ==================== History & Serving API ====================
 @app.get("/api/history")
-async def get_history(username: Annotated[str, Depends(authenticate)]):
+async def get_history(username: Annotated[str, Depends(authenticate)], doc_type: Optional[str] = None, user_id: Optional[int] = None):
     conn = get_db()
     if not conn: return []
     with conn.cursor() as cur:
-        cur.execute("""
-            SELECT id, invoice_number, customer_name, total_grand_total, item_count, status, 
-            to_char(locked_at, 'YYYY-MM-DD"T"HH24:MI:SS') as locked_at, 
-            to_char(created_at, 'YYYY-MM-DD\"T\"HH24:MI:SS') as created_at FROM invoices ORDER BY id DESC
-        """)
+        query = """
+            SELECT i.id, i.invoice_number, i.customer_name, i.total_grand_total, i.item_count, i.status, i.doc_type,
+            u.name as user_name, u.color as user_color,
+            to_char(i.locked_at, 'YYYY-MM-DD"T"HH24:MI:SS') as locked_at, 
+            to_char(i.created_at, 'YYYY-MM-DD\"T\"HH24:MI:SS') as created_at 
+            FROM invoices i
+            LEFT JOIN users u ON i.user_id = u.id
+            WHERE 1=1
+        """
+        params = []
+        if doc_type and doc_type != 'all':
+            query += " AND i.doc_type = %s"
+            params.append(doc_type)
+        if user_id:
+            query += " AND i.user_id = %s"
+            params.append(user_id)
+            
+        query += " ORDER BY i.id DESC"
+        cur.execute(query, tuple(params))
         rows = cur.fetchall()
     conn.close()
     return [dict(r) for r in rows]
@@ -948,36 +1046,12 @@ def serve_file(inv_id: int, kind: str):
 
     # Draft or Storage欠落 → 再生成
     dr = inv.get("discount_rate") or 100
-    inv_data = assemble_invoice_data(dict(inv), items, dr)
+    inv_data = assemble_invoice_data(dict(inv), items, dr, inv.get("doc_type", "delivery"))
     files = build_all_files(inv_data)
     return Response(content=files[cfg["files_key"]], media_type=cfg["mime"],
                     headers={"Content-Disposition": f'attachment; filename="{fname}"'})
 
-@app.get("/api/history/{inv_id}/data")
-async def get_history_data(inv_id: int, username: Annotated[str, Depends(authenticate)]):
-    conn = get_db()
-    if not conn: raise HTTPException(500, "DB required")
-    with conn.cursor() as cur:
-        cur.execute("SELECT * FROM invoices WHERE id=%s", (inv_id,))
-        inv = cur.fetchone()
-        if not inv: raise HTTPException(404, "Not found")
-        cur.execute("SELECT code, color, size, unit_price, quantity, net_amount FROM invoice_items WHERE invoice_id=%s", (inv_id,))
-        items = [dict(r) for r in cur.fetchall()]
-    
-    inv_data = assemble_invoice_data(dict(inv), items, inv["discount_rate"])
-    files = build_all_files(inv_data)
-    
-    return JSONResponse({
-        "invoice_id": inv["id"],
-        "invoice_number": inv["invoice_number"],
-        "customer_name": inv["customer_name"],
-        "discount_rate": inv["discount_rate"],
-        "items": items,
-        "pdf_base64": base64.b64encode(files["pdf"]).decode(),
-        "excel_base64": base64.b64encode(files["excel"]).decode(),
-        "detail_pdf_base64": base64.b64encode(files["detail_pdf"]).decode(),
-        "detail_excel_base64": base64.b64encode(files["detail_excel"]).decode(),
-    })
+
 
 @app.get("/api/history/{inv_id}/pdf")
 async def dl_pdf(inv_id: int, username: Annotated[str, Depends(authenticate)]):
@@ -1006,7 +1080,7 @@ async def get_history_items(inv_id: int, username: Annotated[str, Depends(authen
         inv = cur.fetchone()
     conn.close()
     if not inv: raise HTTPException(status_code=404, detail="Invoice not found")
-    return {"invoice_number": inv["invoice_number"], "customer_name": inv["customer_name"], "discount_rate": inv["discount_rate"], "items": [dict(r) for r in rows]}
+    return {"invoice_number": inv["invoice_number"], "customer_name": inv["customer_name"], "discount_rate": inv["discount_rate"], "doc_type": inv.get("doc_type", "delivery"), "items": [dict(r) for r in rows]}
 
 @app.delete("/api/history/{inv_id}")
 async def delete_history(inv_id: int, username: Annotated[str, Depends(authenticate)]):
@@ -1044,17 +1118,22 @@ async def upload_drive_internal(jid: str, inv_id: int):
             except: files = None
         if not files:
             dr = inv.get("discount_rate") or 100
-            inv_data = assemble_invoice_data(dict(inv), items, dr)
+            inv_data = assemble_invoice_data(dict(inv), items, dr, inv.get("doc_type", "delivery"))
             files = build_all_files(inv_data)
 
         inv_num = inv["invoice_number"]
         cust = (inv["customer_name"] or "無名").replace("/", "_").replace("\\", "_")
+        
+        title_map = DOC_TYPE_TITLES.get(inv.get("doc_type", "delivery"), DOC_TYPE_TITLES["delivery"])
+        main_label   = title_map["pdf_title"]
+        detail_label = title_map["detail_pdf_title"]
+
         uploaded = []
         targets = [
-            ("pdf", f"{inv_num}_{cust}_伝票.pdf", "application/pdf", files["pdf"]),
-            ("excel", f"{inv_num}_{cust}_伝票.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", files["excel"]),
-            ("detail_pdf", f"{inv_num}_{cust}_明細表.pdf", "application/pdf", files["detail_pdf"]),
-            ("detail_excel", f"{inv_num}_{cust}_明細表.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", files["detail_excel"]),
+            ("pdf",          f"{inv_num}{cust}{main_label}.pdf",   "application/pdf", files["pdf"]),
+            ("excel",        f"{inv_num}{cust}{main_label}.xlsx",  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", files["excel"]),
+            ("detail_pdf",   f"{inv_num}{cust}{detail_label}.pdf", "application/pdf", files["detail_pdf"]),
+            ("detail_excel", f"{inv_num}{cust}{detail_label}.xlsx","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", files["detail_excel"]),
         ]
         for typ, fn, mime, data in targets:
             resp = requests.post(GDRIVE_WEBHOOK_URL, json={"folderId": GDRIVE_FOLDER_ID, "filename": fn, "mime": mime, "base64": base64.b64encode(data).decode()}, timeout=30)
@@ -1108,13 +1187,15 @@ async def get_history_data(inv_id: int, username: Annotated[str, Depends(authent
         items = [dict(r) for r in cur.fetchall()]
     conn.close()
 
-    inv_data = assemble_invoice_data(inv, items, inv["discount_rate"])
+    inv_data = assemble_invoice_data(inv, items, inv["discount_rate"], inv.get("doc_type", "delivery"))
     files = build_all_files(inv_data)
     return {
+        "invoice_id": inv["id"],
         "invoice_number": inv["invoice_number"],
         "customer_name": inv["customer_name"],
         "discount_rate": inv["discount_rate"],
         "status": inv["status"],
+        "doc_type": inv.get("doc_type", "delivery"),
         "items": items,
         "pdf_base64": base64.b64encode(files["pdf"]).decode(),
         "excel_base64": base64.b64encode(files["excel"]).decode(),

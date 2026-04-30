@@ -1725,6 +1725,30 @@
         .job-failed .job-progress-mini-fill { background: var(--red); width: 100% !important; }
         .job-close-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 16px; }
 
+        .doctype-btn { margin:0 !important; padding:10px 6px; font-size:11px; opacity:.55; border:1px solid var(--border); border-radius:8px; background:var(--bg-elevated); color:var(--text-primary); cursor:pointer; flex:1; transition:all .2s; }
+        .doctype-btn.active {
+            opacity:1; background:linear-gradient(135deg,var(--gold-bright),var(--gold-deep));
+            color:#1a1a1a; border-color:var(--gold); font-weight:bold;
+        }
+        .user-pill {
+            display:flex; align-items:center; gap:8px; padding:14px;
+            border:1px solid var(--border); border-radius:12px; cursor:pointer;
+            background:var(--bg-elevated); transition:all .2s; position:relative;
+        }
+        .user-pill:hover { border-color:var(--gold); background:var(--bg-input); }
+        .user-pill .dot { width:10px; height:10px; border-radius:50%; }
+        .user-chip {
+            display:inline-flex; align-items:center; gap:6px; padding:4px 10px;
+            border-radius:20px; background:var(--gold-soft); border:1px solid var(--border);
+            font-size:11px; color:var(--gold-bright); cursor:pointer;
+        }
+        #hist-type-filter {
+            width:140px; padding:12px; background:var(--bg-input);
+            border:1px solid var(--border); border-radius:10px;
+            color:var(--text-primary); font-size:14px;
+        }
+        .badge { display:inline-block; padding:2px 8px; border-radius:12px; font-size:10px; font-weight:bold; margin-right:4px; }
+
         /* ===== Generation Overlay (PDF/Excel生成中の全画面オーバーレイ) ===== */
 .gen-overlay {
   position: fixed; inset: 0;
@@ -1874,6 +1898,24 @@
         </div>
       </div>
     </div>
+    <!-- ===== User Selection Modal ===== -->
+    <div id="user-modal" class="pwa-modal" style="display:flex; z-index:200000; background:rgba(10,10,10,0.95); backdrop-filter:blur(20px);">
+        <div class="pwa-box" style="max-width:500px; width:90vw;">
+            <div class="gen-crest">LAURA JAPAN</div>
+            <div class="gen-sub">SELECT OPERATOR</div>
+            <div id="user-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:20px;">
+                <!-- JSで描画 -->
+            </div>
+            <div style="margin-top:30px; padding-top:20px; border-top:1px solid var(--border);">
+                <div style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">新規ユーザー追加</div>
+                <div style="display:flex; gap:8px;">
+                    <input type="text" id="new-user-name" placeholder="名前を入力" style="flex:1; background:var(--bg-input); border:1px solid var(--border); border-radius:8px; padding:10px; color:var(--text-primary);">
+                    <button class="btn btn-gold btn-sm" onclick="addUserInline()">追加</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- ===== Desktop Sidebar ===== -->
     <aside class="sidebar" style="display:none">
         <div class="sidebar-logo">
@@ -1927,6 +1969,9 @@
     <div class="app-header">
       <!-- モバイル用（既存） -->
       <div class="logo">LAURA JAPAN</div>
+      <div id="mobile-user-chip" class="user-chip" style="margin-left:auto; margin-right:10px;" onclick="showUserModal()">
+        <span class="dot"></span> <span class="name">ユーザー未選択</span>
+      </div>
       <div class="logo-sub">SARTORIA · MILANO · MMXXIV</div>
       <div class="divider-gold"></div>
       <div class="tabs">
@@ -1942,6 +1987,9 @@
         <span class="crumb-active" id="topbar-current">新規作成</span>
       </div>
       <div class="topbar-actions">
+        <div id="desktop-user-chip" class="user-chip" style="margin-right:12px;" onclick="showUserModal()">
+          <span class="dot"></span> <span class="name">ユーザー未選択</span>
+        </div>
         <button class="cmdk-trigger" id="cmdk-trigger">
           <span>🔍</span><span>検索...</span>
           <span class="cmdk-shortcut">⌘K</span>
@@ -1954,6 +2002,12 @@
         <div class="page active" id="page-create">
         <div class="card">
             <div class="card-title">⚜ 伝票設定</div>
+            <div style="display:flex; gap:6px; margin-bottom:20px; padding:4px; background:var(--bg-input); border-radius:10px;">
+                <button class="doctype-btn active" data-type="delivery">納品</button>
+                <button class="doctype-btn" data-type="return">返品</button>
+                <button class="doctype-btn" data-type="prov_delivery">仮納品</button>
+                <button class="doctype-btn" data-type="prov_return">仮返品</button>
+            </div>
             <div class="form-row">
                 <div class="form-group"><label>取引先</label><select id="sel-customer">
                         <option value="manual" selected>-- 手動入力 --</option>
@@ -2065,6 +2119,13 @@
             <div class="card-title">⌘ 伝票履歴</div>
             <div class="search-bar-wrap" style="display:flex; gap:10px; margin-bottom:14px">
                 <input type="text" id="hist-search" placeholder="伝票番号や名前で検索..." style="flex:1" />
+                <select id="hist-type-filter">
+                    <option value="all">すべての種別</option>
+                    <option value="delivery">納品伝票</option>
+                    <option value="return">返品伝票</option>
+                    <option value="prov_delivery">仮納品</option>
+                    <option value="prov_return">仮返品</option>
+                </select>
                 <select id="hist-month-filter" style="width:140px; padding:12px; background:var(--bg-input); border:1px solid var(--border); border-radius:10px; color:var(--text-primary); font-size:14px">
                     <option value="">すべての月</option>
                 </select>
@@ -2166,6 +2227,94 @@
         let detailPdfData = null, detailExcelData = null;
         let currentEditingInvId = null, allHistory = [], currentInvNum = '', lastInvoiceId = null;
         const $ = id => document.getElementById(id);
+
+        // --- NEW: User & DocType State ---
+        let currentUser = JSON.parse(localStorage.getItem('laura-current-user') || 'null');
+        let currentDocType = 'delivery';
+        let allUsers = [];
+        const TYPE_TITLES = {
+          delivery:      { main:'納品書',   detail:'商品明細表',   label:'納品' },
+          return:        { main:'返品書',   detail:'返品明細表',   label:'返品' },
+          prov_delivery: { main:'仮納品書', detail:'仮納品明細表', label:'仮納品' },
+          prov_return:   { main:'仮返品書', detail:'仮返品明細表', label:'仮返品' },
+        };
+        const TYPE_COLORS = {
+          delivery:'var(--gold)', return:'var(--red)',
+          prov_delivery:'var(--blue)', prov_return:'#a87fb8'
+        };
+
+        // --- NEW: User Functions ---
+        async function loadUsers() {
+            try {
+                const r = await fetch('/api/users');
+                allUsers = await r.json();
+                const grid = $('user-grid');
+                grid.innerHTML = allUsers.map(u => `
+                    <div class="user-pill" onclick='selectUser(${JSON.stringify(u).replace(/'/g, "&#39;")})'>
+                        <span class="dot" style="background:${u.color}"></span>
+                        <span style="font-size:14px; font-weight:600">${u.name}</span>
+                        <button class="del-user-btn" style="position:absolute; top:4px; right:4px; background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:10px" onclick="event.stopPropagation(); delUser(${u.id})">✕</button>
+                    </div>
+                `).join('');
+            } catch(e) { console.error(e); }
+        }
+        function selectUser(u) {
+            currentUser = u;
+            localStorage.setItem('laura-current-user', JSON.stringify(u));
+            $('user-modal').style.display = 'none';
+            updateUserChip();
+        }
+        function updateUserChip() {
+            if (!currentUser) return;
+            const chips = [$('mobile-user-chip'), $('desktop-user-chip')];
+            chips.forEach(c => {
+                if (!c) return;
+                c.querySelector('.dot').style.background = currentUser.color;
+                c.querySelector('.name').innerText = currentUser.name;
+            });
+        }
+        function showUserModal() {
+            loadUsers();
+            $('user-modal').style.display = 'flex';
+        }
+        async function addUserInline() {
+            const name = $('new-user-name').value.trim();
+            if (!name) return;
+            const fd = new FormData(); fd.append('name', name);
+            const r = await fetch('/api/users', { method:'POST', body:fd });
+            if (r.ok) {
+                $('new-user-name').value = '';
+                loadUsers();
+            }
+        }
+        async function delUser(id) {
+            if (!confirm('ユーザーを削除しますか？')) return;
+            const r = await fetch(`/api/users/${id}`, { method:'DELETE' });
+            if (r.ok) loadUsers();
+        }
+
+        // Initialize Users
+        (async () => {
+            if (currentUser) {
+                $('user-modal').style.display = 'none';
+                updateUserChip();
+            } else {
+                showUserModal();
+            }
+        })();
+
+        // --- NEW: DocType Tab Listeners ---
+        document.querySelectorAll('.doctype-btn').forEach(b => {
+            b.addEventListener('click', () => {
+                document.querySelectorAll('.doctype-btn').forEach(x => x.classList.remove('active'));
+                b.classList.add('active');
+                currentDocType = b.dataset.type;
+                // 必要ならプレビュータイトルなども更新
+                const titles = TYPE_TITLES[currentDocType];
+                document.querySelectorAll('.preview-tab[data-ptab="pdf"]').forEach(t => t.innerText = `📄 ${titles.main}`);
+                document.querySelectorAll('.preview-tab[data-ptab="detail"]').forEach(t => t.innerText = `📋 ${titles.detail.replace(' ','')}`);
+            });
+        });
 
         document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
             document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
@@ -2500,11 +2649,13 @@
         async function delCust(id) { if (confirm('削除しますか？')) { await fetch(`/api/customers/${id}`, { method: 'DELETE' }); loadCustomers(); } }
 
         async function loadHistory() {
-            const r = await fetch('/api/history'); const data = await r.json();
-            allHistory = data; 
-            updateMonthFilter(data);
+            const t = $('hist-type-filter')?.value || 'all';
+            const r = await fetch(`/api/history?doc_type=${t}`);
+            allHistory = await r.json();
+            updateMonthFilter(allHistory);
             renderHistory(allHistory);
         }
+        $('hist-type-filter')?.addEventListener('change', loadHistory);
         function updateMonthFilter(data) {
             const months = [...new Set(data.map(inv => inv.created_at?.split('-').slice(0,2).join('-')))].filter(Boolean).sort().reverse();
             const filter = $('hist-month-filter');
@@ -2571,10 +2722,10 @@
                 const d = document.createElement('div');
                 d.className = 'hist-item' + (inv.status === 'locked' ? ' locked' : '');
                 
-                const statusBadge = inv.status === 'locked'
-                ? '<span class="badge badge-locked">LOCKED</span>'
-                : '<span class="badge badge-draft">DRAFT</span>';
-                
+                const statusBadge = `<span class="status-badge status-${inv.status || 'draft'}">${inv.status === 'locked' ? '確定済' : '下書き'}</span>`;
+                const typeBadge = `<span class="badge" style="background:${TYPE_COLORS[inv.doc_type]||'#666'}1a; color:${TYPE_COLORS[inv.doc_type]||'#aaa'}; border:1px solid ${TYPE_COLORS[inv.doc_type]||'#666'}">${TYPE_TITLES[inv.doc_type]?.label || '納品'}</span>`;
+                const userBadge = inv.user_name ? `<span style="font-size:10px; color:${inv.user_color}; margin-left:4px">● ${inv.user_name}</span>` : '';
+
                 const lockBtn = inv.status === 'locked'
                 ? `<button class="btn btn-outline btn-sm" data-tip="確定解除" onclick="unlockHist(${inv.id})">解除</button>`
                 : `<button class="btn btn-gold btn-sm" data-tip="確定して保存" onclick="lockHist(${inv.id})">確定</button>`;
@@ -2584,8 +2735,8 @@
                     d.innerHTML = `
                         <div class="hist-num">${inv.invoice_number}</div>
                         <div>
-                        <div style="color:var(--text-primary); font-weight:500">${inv.customer_name}</div>
-                        <div class="hist-meta">${inv.item_count}点 · ${inv.created_at?.split('T')[0] || ''}</div>
+                        <div style="color:var(--text-primary); font-weight:500">${inv.customer_name} ${userBadge}</div>
+                        <div class="hist-meta">${typeBadge} · ${inv.item_count}点 · ${inv.created_at?.split('T')[0] || ''}</div>
                         </div>
                         <div class="hist-amt" style="text-align:right">¥${(inv.total_grand_total||0).toLocaleString()}</div>
                         <div>${statusBadge}</div>
@@ -2605,7 +2756,7 @@
                             <div class="hist-num">${inv.invoice_number} ${statusBadge}</div>
                             <div class="hist-amt">¥${(inv.total_grand_total||0).toLocaleString()}</div>
                         </div>
-                        <div class="hist-meta">${inv.customer_name} · ${inv.item_count}点 · ${inv.created_at?.split('T')[0] || ''}</div>
+                        <div class="hist-meta">${typeBadge} ${inv.customer_name} ${userBadge} · ${inv.item_count}点</div>
                         <div class="hist-actions-row">
                             <button class="btn btn-gold btn-sm" onclick="quickPreview(${inv.id})">👁 プレビュー</button>
                             ${lockBtn}
@@ -2618,6 +2769,84 @@
                 }
                 list.appendChild(d);
             });
+        }
+
+        async function selectHistItem(inv) {
+          currentEditingInvId = inv.id;
+          document.querySelectorAll('.hist-item').forEach(el => el.classList.remove('active'));
+          event?.currentTarget?.classList.add('active');
+          const pane = $('hist-detail-pane');
+          if (pane) pane.innerHTML = `<div class="empty-state" style="margin:auto"><div class="spinner" style="display:inline-block;border-color:rgba(201,169,97,0.3);border-top-color:var(--gold)"></div> 読込中...</div>`;
+          
+          try {
+            const r = await fetch(`/api/history/${inv.id}/data`);
+            if (!r.ok) throw new Error('読込失敗');
+            const d = await r.json();
+            const titles = TYPE_TITLES[d.doc_type] || TYPE_TITLES.delivery;
+            
+            // PC版の詳細表示
+            if (pane && window.innerWidth >= 1024) {
+                const lockBtn = d.status === 'locked'
+                  ? `<button class="btn btn-outline btn-sm" onclick="unlockHist(${d.invoice_id})">解除</button>`
+                  : `<button class="btn btn-gold btn-sm" onclick="lockHist(${d.invoice_id})">確定</button>`;
+                const driveBtn = d.status === 'locked'
+                  ? `<button class="btn btn-blue btn-sm" onclick="uploadDrive(${d.invoice_id}, this)">☁️ Drive保存</button>`
+                  : '';
+                
+                pane.innerHTML = `
+                  <div class="detail-header">
+                    <div class="detail-header-info">
+                      <h2>${d.invoice_number}</h2>
+                      <div class="detail-header-meta"><span class="badge" style="background:${TYPE_COLORS[d.doc_type]}33; color:${TYPE_COLORS[d.doc_type]}">${titles.label}</span> ${d.customer_name} · ${d.items.length}点 · ¥${(d.total_grand_total||0).toLocaleString()}</div>
+                    </div>
+                    <div class="detail-actions">
+                      <button class="btn btn-gold btn-sm" onclick="editHist(${d.invoice_id})">✎ 編集</button>
+                      ${lockBtn}
+                      ${driveBtn}
+                      <button class="btn btn-red btn-sm" onclick="delHist(${d.invoice_id})">✕ 削除</button>
+                    </div>
+                  </div>
+                  <div class="preview-tabs detail-tabs" data-target-prefix="dpane-">
+                    <div class="preview-tab active" data-ptab="pdf">📄 ${titles.main}</div>
+                    <div class="preview-tab" data-ptab="detail">📋 ${titles.detail.replace(' ','')}</div>
+                    <div class="preview-tab" data-ptab="summary">⚜ 概要</div>
+                  </div>
+                  <div class="preview-pane active" id="dpane-pdf">
+                    <iframe class="pdf-preview-frame" src="${b64ToBlobUrl(d.pdf_base64,'application/pdf')}"></iframe>
+                    <div class="preview-actions">
+                      <button class="btn btn-red" onclick="dl64('${d.pdf_base64}','${titles.main}_${d.invoice_number}.pdf','application/pdf')">📄 PDF保存</button>
+                      <button class="btn btn-green" onclick="dl64('${d.excel_base64}','${titles.main}_${d.invoice_number}.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')">📊 Excel保存</button>
+                    </div>
+                  </div>
+                  <div class="preview-pane" id="dpane-detail">
+                    <iframe class="pdf-preview-frame" src="${b64ToBlobUrl(d.detail_pdf_base64,'application/pdf')}"></iframe>
+                    <div class="preview-actions">
+                      <button class="btn btn-red" onclick="dl64('${d.detail_pdf_base64}','${titles.detail.replace(' ','')}_${d.invoice_number}.pdf','application/pdf')">📄 PDF保存</button>
+                      <button class="btn btn-green" onclick="dl64('${d.detail_excel_base64}','${titles.detail.replace(' ','')}_${d.invoice_number}.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')">📊 Excel保存</button>
+                    </div>
+                  </div>
+                  <div class="preview-pane" id="dpane-summary">
+                    <div style="padding:20px; font-size:14px; line-height:1.8;">
+                        <div><strong>取引先:</strong> ${d.customer_name}</div>
+                        <div><strong>伝票種別:</strong> ${titles.label}</div>
+                        <div><strong>商品数:</strong> ${d.items.length}</div>
+                        <div><strong>金額合計:</strong> ¥${(d.total_grand_total||0).toLocaleString()}</div>
+                    </div>
+                  </div>`;
+                initTabSwitchers();
+            } else {
+                // モバイル版: プレビューカードを表示
+                pdfData = d.pdf_base64; excelData = d.excel_base64;
+                detailPdfData = d.detail_pdf_base64; detailExcelData = d.detail_excel_base64;
+                currentInvNum = d.invoice_number;
+                currentDocType = d.doc_type;
+                setupPreviews(d, d);
+                $('preview-card').style.display = 'block';
+                window.scrollTo({ top: $('preview-card').offsetTop - 20, behavior: 'smooth' });
+            }
+          } catch (e) {
+            if (pane) pane.innerHTML = `<div class="empty-state" style="color:var(--red)">エラー: ${e.message}</div>`;
+          }
         }
 
         let resizeTimer;
@@ -2650,6 +2879,9 @@
                 if (!r.ok) throw new Error('読込失敗');
                 const d = await r.json();
                 currentEditingInvId = id; extractedItems = d.items;
+                currentDocType = d.doc_type || 'delivery';
+                document.querySelectorAll('.doctype-btn').forEach(b => b.classList.toggle('active', b.dataset.type === currentDocType));
+
                 $('inp-rate').value = d.discount_rate;
                 const sel = $('sel-customer'); let found = false;
                 for (let i=0; i<sel.options.length; i++) { try { const c = JSON.parse(sel.options[i].value); if (c.name === d.customer_name) { sel.selectedIndex = i; found = true; break; } } catch(e){} }
@@ -3209,121 +3441,7 @@
           }
         });
 
-        // =========================================
-        // ===== History Master-Detail (desktop) ==
-        // =========================================
-        let selectedHistId = null;
-        const _origRenderHistory = renderHistory;
-        window.renderHistory = function(data) {
-          if (!isDesktopUI()) return _origRenderHistory(data);
-          
-          const list = $('hist-list');
-          list.innerHTML = '';
-          if (!data.length) {
-            list.innerHTML = '<div class="empty-state">伝票が見つかりません</div>';
-            return;
-          }
-          data.forEach(inv => {
-            const d = document.createElement('div');
-            d.className = 'hist-item' + (inv.id === selectedHistId ? ' selected' : '');
-            const statusBadge = inv.status === 'locked'
-              ? '<span class="badge badge-locked">LOCKED</span>'
-              : '<span class="badge badge-draft">DRAFT</span>';
-            d.innerHTML = `
-              <div class="hist-num">${inv.invoice_number}</div>
-              <div>
-                <div style="color:var(--text-primary); font-weight:500; font-size:13px">${inv.customer_name}</div>
-                <div class="hist-meta">${inv.item_count}点 · ${inv.created_at?.split('T')[0] || ''}</div>
-              </div>
-              <div class="hist-amt">¥${(inv.total_grand_total||0).toLocaleString()}</div>
-              <div>${statusBadge}</div>`;
-            d.onclick = () => selectHistItem(inv);
-            list.appendChild(d);
-          });
-        };
 
-        async function selectHistItem(inv) {
-          selectedHistId = inv.id;
-          document.querySelectorAll('.hist-item').forEach(el => el.classList.remove('selected'));
-          event?.currentTarget?.classList.add('selected');
-          const pane = $('hist-detail-pane');
-          pane.innerHTML = `<div class="empty-state" style="margin:auto"><div class="spinner" style="display:inline-block;border-color:rgba(201,169,97,0.3);border-top-color:var(--gold)"></div> 読込中...</div>`;
-          
-          try {
-            const r = await fetch(`/api/history/${inv.id}/data`);
-            if (!r.ok) throw new Error('読込失敗');
-            const d = await r.json();
-            d.id = inv.id;
-            const payload = { customer_name: d.customer_name, discount_rate: d.discount_rate, items: d.items };
-            
-            const lockBtn = inv.status === 'locked'
-              ? `<button class="btn btn-outline btn-sm" onclick="unlockHist(${inv.id})">解除</button>`
-              : `<button class="btn btn-gold btn-sm" onclick="lockHist(${inv.id})">確定</button>`;
-            const driveBtn = inv.status === 'locked'
-              ? `<button class="btn btn-blue btn-sm" onclick="uploadDrive(${inv.id}, this)">☁️ Drive保存</button>`
-              : '';
-            
-            pane.innerHTML = `
-              <div class="detail-header">
-                <div class="detail-header-info">
-                  <h2>${d.invoice_number}</h2>
-                  <div class="detail-header-meta">${d.customer_name} · ${inv.item_count}点 · ¥${(inv.total_grand_total||0).toLocaleString()}</div>
-                </div>
-                <div class="detail-actions">
-                  <button class="btn btn-gold btn-sm" onclick="editHist(${inv.id})">✎ 編集</button>
-                  ${lockBtn}
-                  ${driveBtn}
-                  <button class="btn btn-red btn-sm" onclick="delHist(${inv.id})">✕ 削除</button>
-                </div>
-              </div>
-              <div class="preview-tabs detail-tabs" data-target-prefix="dpane-">
-                <div class="preview-tab active" data-ptab="pdf">📄 納品書</div>
-                <div class="preview-tab" data-ptab="excel">📊 Excel</div>
-                <div class="preview-tab" data-ptab="detail">📋 明細表</div>
-                <div class="preview-tab" data-ptab="summary">⚜ 概要</div>
-              </div>
-              <div class="preview-pane active" id="dpane-pdf">
-                <iframe class="pdf-preview-frame" src="${b64ToBlobUrl(d.pdf_base64,'application/pdf')}"></iframe>
-                <div class="preview-actions">
-                  <button class="btn btn-red" onclick="dl64('${d.pdf_base64}','納品書_${d.invoice_number}.pdf','application/pdf')">📄 PDF保存</button>
-                  <button class="btn btn-green" onclick="dl64('${d.excel_base64}','納品書_${d.invoice_number}.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')">📊 Excel保存</button>
-                </div>
-              </div>
-              <div class="preview-pane" id="dpane-excel">
-                <div id="dpane-excel-grid" class="excel-preview-container"></div>
-                <div class="preview-actions">
-                  <button class="btn btn-green" onclick="dl64('${d.excel_base64}','納品書_${d.invoice_number}.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')">📊 Excel保存</button>
-                </div>
-              </div>
-              <div class="preview-pane" id="dpane-detail">
-                <iframe class="pdf-preview-frame" src="${b64ToBlobUrl(d.detail_pdf_base64,'application/pdf')}"></iframe>
-                <div class="preview-actions">
-                  <button class="btn btn-red" onclick="dl64('${d.detail_pdf_base64}','明細表_${d.invoice_number}.pdf','application/pdf')">📄 PDF保存</button>
-                  <button class="btn btn-green" onclick="dl64('${d.detail_excel_base64}','明細表_${d.invoice_number}.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')">📊 Excel保存</button>
-                </div>
-              </div>
-              <div class="preview-pane" id="dpane-summary"></div>`;
-            
-            // Excel grid
-            try {
-              const wb = XLSX.read(d.excel_base64, {type: 'base64'});
-              $('dpane-excel-grid').innerHTML = XLSX.utils.sheet_to_html(wb.Sheets[wb.SheetNames[0]]);
-            } catch(e) {}
-            renderSummaryView(payload, d, 'dpane-summary');
-            initTabSwitchers(); // 詳細ペイン内のタブを再初期化
-          } catch (e) {
-            pane.innerHTML = `<div class="empty-state" style="color:var(--red)">エラー: ${e.message}</div>`;
-          }
-        }
-
-        // 履歴に切り替えたとき、デスクトップなら最初の項目を自動選択
-        const _origLoadHistory = loadHistory;
-        window.loadHistory = async function() {
-          await _origLoadHistory();
-          if (isDesktopUI() && allHistory.length && !selectedHistId) {
-            setTimeout(() => $('hist-list')?.firstChild?.click(), 100);
-          }
-        };
 
         // =========================================
         // ===== Sortable history table ===========
