@@ -1031,8 +1031,12 @@
                 <div class="form-group"><label>取引先</label><select id="sel-customer">
                         <option value="">読込中...</option>
                     </select></div>
+                <div class="form-group" id="manual-customer-group" style="display:none">
+                    <label>取引先名（手動入力）</label>
+                    <input type="text" id="inp-manual-customer" placeholder="例: 株式会社 〇〇 御中">
+                </div>
                 <div class="form-group" style="max-width:90px"><label>掛率(%)</label><input type="number" id="inp-rate"
-                        value="35" min="1" max="100"></div>
+                        value="35" min="0" max="100"></div>
             </div>
             <div class="form-row">
                 <div class="form-group"><label>AI モデル</label>
@@ -1211,7 +1215,21 @@
                 cl.appendChild(d);
             });
         }
-        $('sel-customer').addEventListener('change', e => { try { const c = JSON.parse(e.target.value); $('inp-rate').value = c.discount_rate; } catch { } });
+        $('sel-customer').addEventListener('change', e => {
+            const val = e.target.value;
+            if (val === '') {
+                $('inp-rate').value = 0;
+                $('manual-customer-group').style.display = 'block';
+            } else {
+                try {
+                    const c = JSON.parse(val);
+                    $('inp-rate').value = c.discount_rate;
+                    $('manual-customer-group').style.display = 'none';
+                } catch {
+                    $('manual-customer-group').style.display = 'none';
+                }
+            }
+        });
         $('btn-add-cust').addEventListener('click', async () => {
             const n = $('new-cust-name').value.trim(), r = $('new-cust-rate').value;
             if (!n) return;
@@ -1319,6 +1337,30 @@
                 const d = await r.json();
                 currentEditingInvId = id;
                 extractedItems = d.items;
+                $('inp-rate').value = d.discount_rate;
+                
+                // 取引先セレクトボックスの復元
+                const sel = $('sel-customer');
+                let found = false;
+                for(let i=0; i<sel.options.length; i++) {
+                    if(!sel.options[i].value) continue;
+                    try {
+                        const c = JSON.parse(sel.options[i].value);
+                        if(c.name === d.customer_name) {
+                            sel.selectedIndex = i;
+                            found = true;
+                            break;
+                        }
+                    } catch {}
+                }
+                if(!found) {
+                    sel.value = ''; // 手動
+                    $('manual-customer-group').style.display = 'block';
+                    $('inp-manual-customer').value = d.customer_name;
+                } else {
+                    $('manual-customer-group').style.display = 'none';
+                }
+
                 $('preview-title').textContent = `✎ 再編集: ${d.invoice_number}`;
                 document.querySelectorAll('.tab')[0].click();
                 $('drop-area').style.display = 'none'; $('thumbs').style.display = 'none'; $('btn-analyze').style.display = 'none';
@@ -1462,8 +1504,14 @@
         $('btn-generate').addEventListener('click', async () => {
             $('btn-generate').disabled = true; $('sp2').style.display = 'block'; $('toast').style.display = 'none';
             syncInputs();
-            let cn = ''; try { cn = JSON.parse($('sel-customer').value).name; } catch { cn = $('sel-customer').options[$('sel-customer').selectedIndex]?.textContent?.replace(/ \(\d+%\)/, '') || '取引先不明'; }
-            const payload = { invoice_id: currentEditingInvId, customer_name: cn, discount_rate: parseInt($('inp-rate').value) || 35, items: extractedItems };
+            let cn = '';
+            const selVal = $('sel-customer').value;
+            if (selVal === '') {
+                cn = $('inp-manual-customer').value.trim() || '取引先不明';
+            } else {
+                try { cn = JSON.parse(selVal).name; } catch { cn = $('sel-customer').options[$('sel-customer').selectedIndex]?.textContent?.replace(/ \(\d+%\)/, '') || '取引先不明'; }
+            }
+            const payload = { invoice_id: currentEditingInvId, customer_name: cn, discount_rate: parseInt($('inp-rate').value) || 0, items: extractedItems };
             try {
                 toast('PDF・Excelを生成中...', 'info');
                 const r = await fetch('/generate-documents', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
