@@ -1135,6 +1135,50 @@
           box-shadow: 0 20px 50px rgba(0,0,0,0.5);
           animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
         }
+        /* ===== PWA Modal (iOS用説明) ===== */
+    .pwa-modal {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.85);
+      backdrop-filter: blur(8px);
+      z-index: 10001; display: none;
+      align-items: center; justify-content: center;
+      padding: 20px;
+    }
+    .pwa-modal-content {
+      background: var(--bg-card);
+      border: 1px solid var(--border-strong);
+      border-radius: 24px;
+      padding: 40px 32px;
+      width: min(400px, 100%);
+      text-align: center;
+      position: relative;
+    }
+    .pwa-modal-icon { width: 80px; height: 80px; border-radius: 20px; margin: 0 auto 24px; display: block; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+    .pwa-modal-title { font-size: 20px; color: var(--gold); margin-bottom: 12px; font-weight: 600; }
+    .pwa-modal-text { color: var(--text-muted); font-size: 14px; line-height: 1.6; margin-bottom: 32px; }
+    .pwa-modal-step { background: rgba(255,255,255,0.05); padding: 16px; border-radius: 12px; margin-bottom: 12px; text-align: left; display: flex; align-items: center; gap: 12px; }
+    .pwa-modal-step-icon { font-size: 20px; width: 32px; text-align: center; }
+    .pwa-modal-close { position: absolute; top: 16px; right: 16px; color: var(--text-muted); cursor: pointer; border: none; background: none; font-size: 20px; }
+
+    .sidebar-install {
+      margin-top: auto;
+      padding: 12px 16px;
+      border-top: 1px solid var(--border-subtle);
+      display: none; /* 初期は非表示 */
+    }
+    .install-pill {
+      display: flex; align-items: center; gap: 10px;
+      background: rgba(201,169,97,0.1);
+      color: var(--gold);
+      padding: 10px 16px;
+      border-radius: 12px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: 1px solid rgba(201,169,97,0.2);
+      width: 100%;
+    }
+    .install-pill:hover { background: rgba(201,169,97,0.2); }
         @keyframes slideUp { from { transform: translateY(30px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         .modal-header {
           padding: 20px 24px; border-bottom: 1px solid var(--border);
@@ -1753,6 +1797,7 @@
 </head>
 
 <body>
+
     <!-- 生成中オーバーレイ -->
     <div id="gen-overlay" class="gen-overlay">
       <div class="gen-box">
@@ -1818,34 +1863,41 @@
     </div>
     <!-- ===== Desktop Sidebar ===== -->
     <aside class="sidebar" style="display:none">
-      <div class="sidebar-brand">
-        <div class="logo">LAURA · J</div>
-        <div class="logo-sub">SARTORIA · MMXXIV</div>
-      </div>
-      <nav class="sidebar-nav">
-        <div class="sidebar-tab active" data-tab="create">
-          <span class="sidebar-tab-icon">✂</span>
-          <span>新規作成</span>
-          <span class="sidebar-tab-shortcut">⌘1</span>
+        <div class="sidebar-logo">
+            <img src="/static/icons/maskable-512.png" alt="LAURA JAPAN" class="logo-img">
+            <div class="logo-text">LAURA JAPAN<br><span>SARTORIA · MMXXIV</span></div>
         </div>
-        <div class="sidebar-tab" data-tab="history">
-          <span class="sidebar-tab-icon">📒</span>
-          <span>履歴</span>
-          <span class="sidebar-tab-shortcut">⌘2</span>
+        <nav class="sidebar-nav">
+            <div class="sidebar-tab active" data-tab="create">
+              <span class="sidebar-tab-icon">✨</span>
+              <span>新規作成</span>
+              <span class="sidebar-tab-shortcut">⌘1</span>
+            </div>
+            <div class="sidebar-tab" data-tab="history">
+              <span class="sidebar-tab-icon">📄</span>
+              <span>履歴</span>
+              <span class="sidebar-tab-shortcut">⌘2</span>
+            </div>
+            <div class="sidebar-tab" data-tab="dashboard">
+              <span class="sidebar-tab-icon">📊</span>
+              <span>分析</span>
+              <span class="sidebar-tab-shortcut">⌘3</span>
+            </div>
+            <div class="sidebar-divider"></div>
+            <div class="sidebar-tab" data-tab="settings">
+              <span class="sidebar-tab-icon">⚙️</span>
+              <span>設定</span>
+              <span class="sidebar-tab-shortcut">⌘4</span>
+            </div>
+        </nav>
+        
+        <div class="sidebar-install" id="sidebar-install-container">
+            <div class="install-pill" onclick="triggerPWAInstall()">
+                <span>📲</span>
+                <span>アプリをインストール</span>
+            </div>
         </div>
-        <div class="sidebar-tab" data-tab="dashboard">
-          <span class="sidebar-tab-icon">📊</span>
-          <span>分析</span>
-          <span class="sidebar-tab-shortcut">⌘3</span>
-        </div>
-        <div class="sidebar-divider"></div>
-        <div class="sidebar-tab" data-tab="settings">
-          <span class="sidebar-tab-icon">⚙</span>
-          <span>設定</span>
-          <span class="sidebar-tab-shortcut">⌘4</span>
-        </div>
-      </nav>
-      <div class="sidebar-footer">v1.0 · MILANO</div>
+        <div class="sidebar-footer">v1.0 · MILANO</div>
     </aside>
 
     <!-- ===== Command Palette (⌘K) ===== -->
@@ -1877,9 +1929,6 @@
         <span class="crumb-active" id="topbar-current">新規作成</span>
       </div>
       <div class="topbar-actions">
-        <button class="btn btn-outline btn-sm" id="btn-install-pwa" style="display:none">
-          <span>📲</span> <span>インストール</span>
-        </button>
         <button class="cmdk-trigger" id="cmdk-trigger">
           <span>🔍</span><span>検索...</span>
           <span class="cmdk-shortcut">⌘K</span>
@@ -3171,6 +3220,36 @@
         setInterval(() => { fetch('/health').catch(() => { }); }, 5 * 60 * 1000);
     </script>
 
+    <!-- PWA Installation Modal (iOS/Manual) -->
+    <div id="pwa-modal" class="pwa-modal">
+      <div class="pwa-modal-content">
+        <button class="pwa-modal-close" onclick="closePWAModal()">✕</button>
+        <img src="/static/icons/apple-touch-icon.png" class="pwa-modal-icon">
+        <div class="pwa-modal-title">Install LAURA JAPAN</div>
+        <div class="pwa-modal-text">ホーム画面に追加して、デスクトップアプリのように快適に使用できます。</div>
+        
+        <div id="pwa-ios-steps" style="display:none">
+          <div class="pwa-modal-step">
+            <div class="pwa-modal-step-icon">⎋</div>
+            <div>ブラウザの下部（または上部）にある<b>共有ボタン</b>をタップします。</div>
+          </div>
+          <div class="pwa-modal-step">
+            <div class="pwa-modal-step-icon">＋</div>
+            <div>メニューから<b>「ホーム画面に追加」</b>を選択します。</div>
+          </div>
+        </div>
+
+        <div id="pwa-other-steps" style="display:none">
+          <div class="pwa-modal-step">
+            <div class="pwa-modal-step-icon">⋮</div>
+            <div>ブラウザのメニューから<b>「インストール」</b>を選択してください。</div>
+          </div>
+        </div>
+
+        <button class="btn btn-gold" style="width:100%; margin-top:20px;" onclick="closePWAModal()">了解しました</button>
+      </div>
+    </div>
+
     <!-- Job Queue Panel -->
     <div id="job-panel" class="job-panel">
       <div class="job-header">
@@ -3180,63 +3259,59 @@
       <div id="job-list" class="job-list"></div>
     </div>
 
-    <!-- iOS PWA Banner -->
-    <div id="ios-pwa-banner" class="ios-banner">
-      <img src="/static/icons/apple-touch-icon.png" class="ios-banner-icon">
-      <div class="ios-banner-text">
-        ホーム画面に追加してアプリとして使用できます。<br>
-        共有ボタン <span style="font-size:18px">⎋</span> から「ホーム画面に追加」をタップしてください。
-      </div>
-      <button class="ios-banner-close" onclick="dismissIOSBanner()">✕</button>
-    </div>
-
     <script>
         // ===== PWA Logic =====
         let deferredPrompt;
-        const installBtn = $('btn-install-pwa');
+        const sidebarInstall = $('sidebar-install-container');
 
         window.addEventListener('beforeinstallprompt', (e) => {
           e.preventDefault();
           deferredPrompt = e;
-          if (installBtn) installBtn.style.display = 'flex';
+          if (sidebarInstall) sidebarInstall.style.display = 'block';
         });
 
-        if (installBtn) {
-          installBtn.addEventListener('click', async () => {
-            if (!deferredPrompt) return;
+        const isStandalone = window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches;
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+
+        if (!isStandalone && sidebarInstall) {
+            // iOSの場合はプロンプトが出ないので最初から表示しておく
+            if (isIOS) sidebarInstall.style.display = 'block';
+        }
+
+        async function triggerPWAInstall() {
+          if (deferredPrompt) {
             deferredPrompt.prompt();
             const { outcome } = await deferredPrompt.userChoice;
             if (outcome === 'accepted') {
-              installBtn.style.display = 'none';
+              if (sidebarInstall) sidebarInstall.style.display = 'none';
             }
             deferredPrompt = null;
-          });
-        }
-
-        function dismissIOSBanner() {
-          $('ios-pwa-banner').style.display = 'none';
-          localStorage.setItem('pwa-banner-dismissed', Date.now());
-        }
-
-        function checkIOSPWA() {
-          const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-          const isStandalone = window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches;
-          const isDismissed = localStorage.getItem('pwa-banner-dismissed');
-          
-          if (isIOS && !isStandalone && !isDismissed) {
-            setTimeout(() => {
-              $('ios-pwa-banner').style.display = 'flex';
-            }, 5000);
+          } else if (isIOS) {
+            showPWAModal('ios');
+          } else {
+            showPWAModal('other');
           }
+        }
+
+        function showPWAModal(type) {
+          $('pwa-modal').style.display = 'flex';
+          if (type === 'ios') {
+            $('pwa-ios-steps').style.display = 'block';
+            $('pwa-other-steps').style.display = 'none';
+          } else {
+            $('pwa-ios-steps').style.display = 'none';
+            $('pwa-other-steps').style.display = 'block';
+          }
+        }
+
+        function closePWAModal() {
+          $('pwa-modal').style.display = 'none';
         }
 
         if ('serviceWorker' in navigator) {
           window.addEventListener('load', () => {
             navigator.serviceWorker.register('/sw.js', { scope: '/' })
-              .then(reg => {
-                console.log('SW Registered:', reg.scope);
-                checkIOSPWA();
-              })
+              .then(reg => console.log('SW Registered'))
               .catch(err => console.log('SW Fail:', err));
           });
         }
