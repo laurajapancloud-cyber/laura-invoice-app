@@ -658,9 +658,10 @@ async def upload_to_drive(inv_id: int, username: Annotated[str, Depends(authenti
     uploaded = []
 
     def _upload(filename, mime, data):
+        print(f"DEBUG: Uploading {filename} to Folder ID: {GDRIVE_FOLDER_ID}")
         meta = {"name": filename}
         if GDRIVE_FOLDER_ID:
-            meta["parents"] = [GDRIVE_FOLDER_ID]
+            meta["parents"] = [GDRIVE_FOLDER_ID.strip()]
         media = MediaInMemoryUpload(data, mimetype=mime, resumable=False)
         f = service.files().create(
             body=meta, media_body=media,
