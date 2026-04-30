@@ -894,13 +894,17 @@ async def upload_to_drive(inv_id: int, username: Annotated[str, Depends(authenti
             "detail_excel": storage_download(inv["detail_excel_storage_path"]),
         }
     else:
-        inv_data = assemble_invoice_data(dict(inv), items, inv["discount_rate"])
+        # 割引率がNULLの場合は100%として扱う
+        dr = inv.get("discount_rate")
+        if dr is None: dr = 100
+        inv_data = assemble_invoice_data(dict(inv), items, dr)
         files = build_all_files(inv_data)
 
     inv_num = inv["invoice_number"]
-    cust = (inv["customer_name"] or "").replace("/", "_").replace("\\", "_")
+    cust = (inv["customer_name"] or "無名").replace("/", "_").replace("\\", "_")
     uploaded = []
-    async def _up(fn, mime, data):
+
+    def _up_sync(fn, mime, data):
         resp = requests.post(GDRIVE_WEBHOOK_URL, json={
             "folderId": GDRIVE_FOLDER_ID, "filename": fn, "mime": mime, "base64": base64.b64encode(data).decode()
         }, timeout=30)
