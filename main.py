@@ -575,8 +575,10 @@ def build_detail_pdf(invoice_number: str, customer_name: str, items: list) -> by
         sections.append(chunk)
 
     html = f"""
-    <html><head><style>
-        body {{ font-family: sans-serif; font-size: 11px; color: #333; }}
+    <html><head>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {{ font-family: 'Noto Sans JP', sans-serif; font-size: 11px; color: #333; }}
         .page {{ padding: 20px; }}
         .header {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }}
         h1 {{ font-size: 20px; margin: 0; letter-spacing: 0.3em; }}
