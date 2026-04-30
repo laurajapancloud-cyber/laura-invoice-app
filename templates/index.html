@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>LAURA JAPAN | Invoice System</title>
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     <link
         href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700;800&family=Noto+Sans+JP:wght@300;400;500;700&display=swap"
         rel="stylesheet">
@@ -1111,10 +1112,80 @@
         .qty-btn.minus { border-right: 1px solid var(--border); }
         .qty-btn.plus { border-left: 1px solid var(--border); }
         .qty-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+        /* ===== Modal Preview ===== */
+        .modal-overlay {
+          position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+          background: rgba(0,0,0,0.85); backdrop-filter: blur(8px);
+          z-index: 10000; display: none; align-items: center; justify-content: center;
+          padding: 20px;
+        }
+        .modal-content {
+          background: var(--bg-card); width: 100%; max-width: 900px; max-height: 90vh;
+          border-radius: 24px; border: 1px solid var(--border);
+          display: flex; flex-direction: column; overflow: hidden;
+          box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+          animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        @keyframes slideUp { from { transform: translateY(30px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .modal-header {
+          padding: 20px 24px; border-bottom: 1px solid var(--border);
+          display: flex; justify-content: space-between; align-items: center;
+        }
+        .modal-body { flex: 1; overflow-y: auto; padding: 0 24px 24px; }
+        .excel-preview-container {
+          background: #fff; color: #333; overflow: auto;
+          border-radius: 12px; border: 1px solid var(--border);
+          padding: 10px; font-size: 11px;
+        }
+        .excel-preview-container table { border-collapse: collapse; width: 100%; }
+        .excel-preview-container th, .excel-preview-container td { border: 1px solid #ddd; padding: 4px 8px; }
+        .excel-preview-container th { background: #f5f5f5; font-weight: bold; }
     </style>
 </head>
 
 <body>
+    <!-- プレビューモーダル -->
+    <div id="modal-preview" class="modal-overlay">
+      <div class="modal-content">
+        <div class="modal-header">
+          <div style="font-weight:700; color:var(--gold-bright)" id="modal-title">📄 ドキュメントプレビュー</div>
+          <button class="btn btn-outline btn-sm" onclick="closePreviewModal()">✕ 閉じる</button>
+        </div>
+        <div class="modal-body">
+          <div class="preview-tabs">
+            <div class="preview-tab active" data-ptab="pdf">📄 納品書</div>
+            <div class="preview-tab" data-ptab="excel">📊 Excel表</div>
+            <div class="preview-tab" data-ptab="detail">📋 明細表</div>
+            <div class="preview-tab" data-ptab="summary">⚜ 概要</div>
+          </div>
+
+          <div class="preview-pane active" id="ppane-pdf">
+            <iframe id="modal-pdf-frame" class="pdf-preview-frame"></iframe>
+            <div class="preview-actions">
+              <button class="btn btn-red btn-dl-pdf">📄 PDF保存</button>
+              <button class="btn btn-green btn-dl-xl">📊 Excel保存</button>
+            </div>
+          </div>
+
+          <div class="preview-pane" id="ppane-excel">
+            <div id="excel-preview-grid" class="excel-preview-container"></div>
+          </div>
+
+          <div class="preview-pane" id="ppane-detail">
+            <iframe id="modal-detail-frame" class="pdf-preview-frame"></iframe>
+            <div class="preview-actions">
+              <button class="btn btn-red btn-dl-dpdf">📄 PDF保存</button>
+              <button class="btn btn-green btn-dl-dxl">📊 Excel保存</button>
+            </div>
+          </div>
+
+          <div class="preview-pane" id="ppane-summary">
+            <div id="modal-summary-content"></div>
+          </div>
+        </div>
+      </div>
+    </div>
     <div class="app-header">
         <div class="logo">LAURA JAPAN</div>
         <div class="logo-sub">INVOICE · DATA MANAGEMENT</div>
@@ -1182,6 +1253,9 @@
             <div style="margin-top:18px">
                 <button class="btn btn-gold" id="btn-generate">
                     <div class="spinner" id="sp2"></div>最終データを確定して保存
+                </button>
+                <button class="btn btn-outline" id="btn-preview-only" style="margin-top:10px; width:100%">
+                    👁 プレビューを確認
                 </button>
             </div>
         </div>
@@ -1320,17 +1394,50 @@
             return URL.createObjectURL(new Blob([arr], {type: mime}));
           } catch(e){ return ''; }
         }
+        /* ===== Preview Logic ===== */
+        let previewData = {};
 
-        function setupPreviews(payload, d) {
-          // PDF（iOS Safari対応のためBlob URL）
-          if ($('pdf-frame')._url) URL.revokeObjectURL($('pdf-frame')._url);
-          if ($('detail-frame')._url) URL.revokeObjectURL($('detail-frame')._url);
-          const u1 = b64ToBlobUrl(pdfData, 'application/pdf');
-          const u2 = b64ToBlobUrl(detailPdfData, 'application/pdf');
-          $('pdf-frame').src = u1; $('pdf-frame')._url = u1;
-          $('detail-frame').src = u2; $('detail-frame')._url = u2;
+        function openPreviewModal(d, payload) {
+          previewData = d;
+          $('modal-title').textContent = `📄 ${d.invoice_number || 'PREVIEW'} - プレビュー`;
+          $('modal-preview').style.display = 'flex';
+          
+          // PDF
+          const u1 = b64ToBlobUrl(d.pdf_base64, 'application/pdf');
+          const u2 = b64ToBlobUrl(d.detail_pdf_base64, 'application/pdf');
+          $('modal-pdf-frame').src = u1;
+          $('modal-detail-frame').src = u2;
 
-          // サマリービュー
+          // Excel Grid Preview (SheetJS)
+          renderExcelGrid(d.excel_base64);
+
+          // Summary
+          renderSummaryView(payload, d, 'modal-summary-content');
+
+          // Download Buttons
+          document.querySelector('.btn-dl-pdf').onclick = () => dl64(d.pdf_base64, `納品書_${d.invoice_number}.pdf`, 'application/pdf');
+          document.querySelector('.btn-dl-xl').onclick = () => dl64(d.excel_base64, `納品書_${d.invoice_number}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+          document.querySelector('.btn-dl-dpdf').onclick = () => dl64(d.detail_pdf_base64, `明細表_${d.invoice_number}.pdf`, 'application/pdf');
+          document.querySelector('.btn-dl-dxl').onclick = () => dl64(d.detail_excel_base64, `明細表_${d.invoice_number}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        }
+
+        function closePreviewModal() {
+          $('modal-preview').style.display = 'none';
+          $('modal-pdf-frame').src = 'about:blank';
+          $('modal-detail-frame').src = 'about:blank';
+        }
+
+        function renderExcelGrid(b64) {
+          try {
+            const wb = XLSX.read(b64, {type: 'base64'});
+            const ws = wb.Sheets[wb.SheetNames[0]];
+            $('excel-preview-grid').innerHTML = XLSX.utils.sheet_to_html(ws);
+          } catch(e) {
+            $('excel-preview-grid').innerHTML = '<div style="padding:20px;color:red">Excelの解析に失敗しました</div>';
+          }
+        }
+
+        function renderSummaryView(payload, d, targetId) {
           const items = payload.items;
           const rate = payload.discount_rate;
           let totalNet = 0, totalQty = 0;
@@ -1357,7 +1464,7 @@
             </tr>`;
           });
 
-          $('summary-content').innerHTML = `
+          $(targetId).innerHTML = `
             <div class="summary-card">
               <div class="summary-row"><span class="lbl">伝票番号</span><span class="val">${d.invoice_number}</span></div>
               <div class="summary-row"><span class="lbl">取引先</span><span class="val">${payload.customer_name}</span></div>
@@ -1377,13 +1484,22 @@
           `;
         }
 
-        // プレビュータブ切替
-        document.querySelectorAll('.preview-tab').forEach(t => t.addEventListener('click', () => {
-          document.querySelectorAll('.preview-tab').forEach(x => x.classList.remove('active'));
-          document.querySelectorAll('.preview-pane').forEach(x => x.classList.remove('active'));
+        // モーダルのタブ切替
+        $('modal-preview').querySelectorAll('.preview-tab').forEach(t => t.addEventListener('click', () => {
+          $('modal-preview').querySelectorAll('.preview-tab').forEach(x => x.classList.remove('active'));
+          $('modal-preview').querySelectorAll('.preview-pane').forEach(x => x.classList.remove('active'));
           t.classList.add('active');
           $('ppane-' + t.dataset.ptab).classList.add('active');
         }));
+
+        function setupPreviews(payload, d) {
+          // 既存のdl-section用（モーダルとほぼ同じだがIDが違う）
+          const u1 = b64ToBlobUrl(pdfData, 'application/pdf');
+          const u2 = b64ToBlobUrl(detailPdfData, 'application/pdf');
+          $('pdf-frame').src = u1;
+          $('detail-frame').src = u2;
+          renderSummaryView(payload, d, 'summary-content');
+        }
 
         async function loadCustomers() {
             const r = await fetch('/api/customers'); const data = await r.json();
@@ -1511,6 +1627,31 @@
             renderHistory(f);
         });
         async function delHist(id) { if (confirm('この伝票を削除しますか？')) { await fetch(`/api/history/${id}`, { method: 'DELETE' }); loadHistory(); } }
+
+        async function quickPreview(id) {
+            try {
+                toast('プレビューを取得中...', 'info');
+                const r = await fetch(`/api/history/${id}/data`); // データを一括取得する口が必要
+                const d = await r.json();
+                // プレビュー用にデータを整形
+                const payload = {
+                    customer_name: d.customer_name,
+                    discount_rate: d.discount_rate,
+                    items: d.items
+                };
+                openPreviewModal(d, payload);
+            } catch (e) { toast('エラー: ' + e.message, 'err'); }
+        }
+
+        async function quickPreview(id) {
+            try {
+                toast('プレビューを取得中...', 'info');
+                const r = await fetch(`/api/history/${id}/data`);
+                const d = await r.json();
+                const payload = { customer_name: d.customer_name, discount_rate: d.discount_rate, items: d.items };
+                openPreviewModal(d, payload);
+            } catch (e) { toast('エラー: ' + e.message, 'err'); }
+        }
 
         async function editHist(id) {
             try {
@@ -1739,16 +1880,34 @@ $('drop-area').addEventListener('click', () => $('file-input').click());
         });
         $('inp-rate').addEventListener('input', () => { if (extractedItems.length) renderPreview(); });
 
-        $('btn-generate').addEventListener('click', async () => {
-            $('btn-generate').disabled = true; $('sp2').style.display = 'block'; $('toast').style.display = 'none';
+        $('btn-preview-only')?.addEventListener('click', async () => {
             syncInputs();
-            let cn = '';
+            if (!extractedItems.length) return toast('商品がありません', 'err');
+            const cn = getCustomerName();
+            const payload = { customer_name: cn, discount_rate: parseInt($('inp-rate').value) || 0, items: extractedItems };
+            try {
+                toast('プレビュー生成中...', 'info');
+                const r = await fetch('/api/preview', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                const d = await r.json();
+                openPreviewModal(d, payload);
+            } catch (e) { toast(e.message, 'err'); }
+        });
+
+        function getCustomerName() {
             const selVal = $('sel-customer').value;
-            if (selVal === '') {
-                cn = $('inp-manual-customer').value.trim() || '取引先不明';
-            } else {
-                try { cn = JSON.parse(selVal).name; } catch { cn = $('sel-customer').options[$('sel-customer').selectedIndex]?.textContent?.replace(/ \(\d+%\)/, '') || '取引先不明'; }
-            }
+            if (!selVal) return $('inp-manual-customer').value.trim() || '取引先不明';
+            try { return JSON.parse(selVal).name; } catch { return $('sel-customer').options[$('sel-customer').selectedIndex]?.textContent?.replace(/ \(\d+%\)/, '') || '取引先不明'; }
+        }
+
+        $('btn-generate').addEventListener('click', async () => {
+            if ($('btn-generate').disabled) return;
+            syncInputs();
+            if (!extractedItems.length) return toast('商品がありません', 'err');
+            
+            $('btn-generate').disabled = true;
+            $('sp2').style.display = 'block';
+            
+            const cn = getCustomerName();
             const payload = { invoice_id: currentEditingInvId, customer_name: cn, discount_rate: parseInt($('inp-rate').value) || 0, items: extractedItems };
             try {
                 toast('PDF・Excelを生成中...', 'info');
@@ -1763,7 +1922,7 @@ $('drop-area').addEventListener('click', () => $('file-input').click());
                 $('inv-num-display').textContent = `伝票番号: ${d.invoice_number}`;
                 $('preview-card').style.display = 'none'; 
                 $('dl-section').style.display = 'block';
-                setupPreviews(payload, d);   // ★追加
+                setupPreviews(payload, d);
                 toast('✦ 保存完了（下書き）', 'ok');
             } catch (e) { toast(e.message, 'err'); }
             finally { $('btn-generate').disabled = false; $('sp2').style.display = 'none'; }

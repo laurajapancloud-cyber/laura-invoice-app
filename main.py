@@ -722,6 +722,19 @@ async def generate_documents(request: Request, username: Annotated[str, Depends(
             "detail_pdf_base64": base64.b64encode(files["detail_pdf"]).decode(), "detail_excel_base64": base64.b64encode(files["detail_excel"]).decode(),
         })
     except HTTPException: raise
+@app.post("/api/preview")
+async def get_preview(request: Request, username: Annotated[str, Depends(authenticate)], payload: DocumentRequest):
+    try:
+        # DB保存せずに生成データだけ作成
+        inv_data = assemble_invoice_data({"invoice_number": "PREVIEW-0000", "customer_name": payload.customer_name}, payload.items, payload.discount_rate)
+        files = build_all_files(inv_data)
+        return JSONResponse({
+            "invoice_number": inv_data["invoice_number"],
+            "pdf_base64": base64.b64encode(files["pdf"]).decode(),
+            "excel_base64": base64.b64encode(files["excel"]).decode(),
+            "detail_pdf_base64": base64.b64encode(files["detail_pdf"]).decode(),
+            "detail_excel_base64": base64.b64encode(files["detail_excel"]).decode(),
+        })
     except Exception as e:
         import traceback; traceback.print_exc()
         raise HTTPException(500, str(e))
@@ -819,6 +832,31 @@ def serve_file(inv_id: int, kind: str):
     files = build_all_files(inv_data)
     return Response(content=files[cfg["files_key"]], media_type=cfg["mime"],
                     headers={"Content-Disposition": f'attachment; filename="{fname}"'})
+
+@app.get("/api/history/{inv_id}/data")
+async def get_history_data(inv_id: int, username: Annotated[str, Depends(authenticate)]):
+    conn = get_db()
+    with conn.cursor() as cur:
+        cur.execute("SELECT * FROM invoices WHERE id=%s", (inv_id,))
+        inv = cur.fetchone()
+        if not inv: raise HTTPException(404, "Not found")
+        cur.execute("SELECT code, color, size, unit_price, quantity, net_amount FROM invoice_items WHERE invoice_id=%s", (inv_id,))
+        items = [dict(r) for r in cur.fetchall()]
+    
+    inv_data = assemble_invoice_data(dict(inv), items, inv["discount_rate"])
+    files = build_all_files(inv_data)
+    
+    return JSONResponse({
+        "invoice_id": inv["id"],
+        "invoice_number": inv["invoice_number"],
+        "customer_name": inv["customer_name"],
+        "discount_rate": inv["discount_rate"],
+        "items": items,
+        "pdf_base64": base64.b64encode(files["pdf"]).decode(),
+        "excel_base64": base64.b64encode(files["excel"]).decode(),
+        "detail_pdf_base64": base64.b64encode(files["detail_pdf"]).decode(),
+        "detail_excel_base64": base64.b64encode(files["detail_excel"]).decode(),
+    })
 
 @app.get("/api/history/{inv_id}/pdf")
 async def dl_pdf(inv_id: int, username: Annotated[str, Depends(authenticate)]):
