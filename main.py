@@ -553,7 +553,7 @@ def build_invoice_excel(invoice_data: dict) -> bytes:
     fill_blue = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
     border_thin = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
     
-    ws.merge_cells("A1:I1")
+    ws.merge_cells("A1:E1")
     ws["A1"] = "御 納 品 書"
     ws["A1"].font = Font(size=24, bold=True)
     ws["A1"].alignment = Alignment(horizontal="center")
