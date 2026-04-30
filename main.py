@@ -1,7 +1,8 @@
 import os
 import json
 import secrets
-import sqlite3
+import psycopg2
+from psycopg2.extras import RealDictCursor
 from typing import Annotated, List, Dict, Any, Optional
 import base64
 from io import BytesIO
@@ -109,71 +110,67 @@ def get_drive_service():
         print(f"Drive init failed: {e}")
         return None
 
-# ==================== SQLite Database ====================
-DB_PATH = "invoices.db"
+# ==================== PostgreSQL (Supabase) Database ====================
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 def get_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
+    if not DATABASE_URL:
+        raise Exception("DATABASE_URL environment variable is not set.")
+    # SupabaseのURIに含まれるSSLモードに対応
+    conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
     return conn
 
 def init_db():
+    # テーブル作成はSupabaseのSQL Editorで行うことを推奨しますが、念のためここでも試行します
     conn = get_db()
-    conn.executescript("""
-        CREATE TABLE IF NOT EXISTS customers (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            discount_rate INTEGER NOT NULL DEFAULT 35,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-        CREATE TABLE IF NOT EXISTS invoices (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            invoice_number TEXT NOT NULL UNIQUE,
-            customer_name TEXT NOT NULL,
-            discount_rate INTEGER NOT NULL,
-            total_net_amount INTEGER DEFAULT 0,
-            total_tax_amount INTEGER DEFAULT 0,
-            total_grand_total INTEGER DEFAULT 0,
-            item_count INTEGER DEFAULT 0,
-            pdf_data BLOB,
-            excel_data BLOB,
-            detail_pdf_data BLOB,
-            detail_excel_data BLOB,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-        CREATE TABLE IF NOT EXISTS invoice_items (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            invoice_id INTEGER NOT NULL,
-            code TEXT,
-            color TEXT,
-            size TEXT,
-            unit_price INTEGER DEFAULT 0,
-            quantity INTEGER DEFAULT 1,
-            net_amount INTEGER DEFAULT 0,
-            FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE CASCADE
-        );
-        CREATE TABLE IF NOT EXISTS api_usage (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            ai_model TEXT NOT NULL,
-            image_count INTEGER DEFAULT 0,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-    """)
-    # 既存DBへの後方互換マイグレーション
-    cols = [r[1] for r in conn.execute("PRAGMA table_info(invoices)").fetchall()]
-    if "detail_pdf_data" not in cols:
-        conn.execute("ALTER TABLE invoices ADD COLUMN detail_pdf_data BLOB")
-    if "detail_excel_data" not in cols:
-        conn.execute("ALTER TABLE invoices ADD COLUMN detail_excel_data BLOB")
-    
-    # Insert default customers if table is empty
-    count = conn.execute("SELECT COUNT(*) FROM customers").fetchone()[0]
-    if count == 0:
-        conn.executemany("INSERT INTO customers (name, discount_rate) VALUES (?, ?)", [
-            ("株式会社 タム 御中", 35),
-            ("株式会社 サンプル 御中", 40),
-        ])
+    with conn.cursor() as cur:
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS customers (
+                id SERIAL PRIMARY KEY,
+                name TEXT NOT NULL,
+                discount_rate INTEGER NOT NULL DEFAULT 35,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS invoices (
+                id SERIAL PRIMARY KEY,
+                invoice_number TEXT NOT NULL UNIQUE,
+                customer_name TEXT NOT NULL,
+                discount_rate INTEGER NOT NULL,
+                total_net_amount INTEGER DEFAULT 0,
+                total_tax_amount INTEGER DEFAULT 0,
+                total_grand_total INTEGER DEFAULT 0,
+                item_count INTEGER DEFAULT 0,
+                pdf_data BYTEA,
+                excel_data BYTEA,
+                detail_pdf_data BYTEA,
+                detail_excel_data BYTEA,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS invoice_items (
+                id SERIAL PRIMARY KEY,
+                invoice_id INTEGER NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+                code TEXT,
+                color TEXT,
+                size TEXT,
+                unit_price INTEGER DEFAULT 0,
+                quantity INTEGER DEFAULT 1,
+                net_amount INTEGER DEFAULT 0
+            );
+            CREATE TABLE IF NOT EXISTS api_usage (
+                id SERIAL PRIMARY KEY,
+                ai_model TEXT NOT NULL,
+                image_count INTEGER DEFAULT 0,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+        
+        # 初期データの投入（空の場合のみ）
+        cur.execute("SELECT COUNT(*) FROM customers")
+        if cur.fetchone()['count'] == 0:
+            cur.executemany("INSERT INTO customers (name, discount_rate) VALUES (%s, %s)", [
+                ("株式会社 タム 御中", 35),
+                ("株式会社 サンプル 御中", 40),
+            ])
     conn.commit()
     conn.close()
 
@@ -181,11 +178,10 @@ def generate_invoice_number():
     now = get_jst_now()
     prefix = f"LJ-{now.strftime('%Y%m')}"
     conn = get_db()
-    row = conn.execute(
-        "SELECT COUNT(*) FROM invoices WHERE invoice_number LIKE ?",
-        (f"{prefix}%",)
-    ).fetchone()
-    seq = (row[0] or 0) + 1
+    with conn.cursor() as cur:
+        cur.execute("SELECT COUNT(*) FROM invoices WHERE invoice_number LIKE %s", (f"{prefix}%",))
+        row = cur.fetchone()
+        seq = (row['count'] or 0) + 1
     conn.close()
     return f"{prefix}-{seq:04d}"
 
@@ -218,26 +214,30 @@ async def health():
 @app.get("/api/dashboard")
 async def get_dashboard(username: Annotated[str, Depends(authenticate)]):
     conn = get_db()
-    now = get_jst_now()
-    month_start = now.strftime("%Y-%m-01")
-    
-    # This month stats
-    inv_stats = conn.execute(
-        "SELECT COUNT(*) as cnt, COALESCE(SUM(total_grand_total),0) as total FROM invoices WHERE created_at >= ?",
-        (month_start,)
-    ).fetchone()
-    
-    # Monthly history (last 6 months)
-    monthly = conn.execute(
-        "SELECT strftime('%Y-%m', created_at) as month, COUNT(*) as cnt, COALESCE(SUM(total_grand_total),0) as total FROM invoices GROUP BY month ORDER BY month DESC LIMIT 6"
-    ).fetchall()
-    
-    # API usage this month
-    usage = conn.execute(
-        "SELECT ai_model, COUNT(*) as cnt, COALESCE(SUM(image_count),0) as imgs FROM api_usage WHERE created_at >= ? GROUP BY ai_model",
-        (month_start,)
-    ).fetchall()
-    
+    with conn.cursor() as cur:
+        now = get_jst_now()
+        month_start = now.strftime("%Y-%m-01")
+        
+        # This month stats
+        cur.execute(
+            "SELECT COUNT(*) as cnt, COALESCE(SUM(total_grand_total),0) as total FROM invoices WHERE created_at >= %s",
+            (month_start,)
+        )
+        inv_stats = cur.fetchone()
+        
+        # Monthly history (last 6 months)
+        # Postgres uses to_char for formatting
+        cur.execute(
+            "SELECT to_char(created_at, 'YYYY-MM') as month, COUNT(*) as cnt, COALESCE(SUM(total_grand_total),0) as total FROM invoices GROUP BY month ORDER BY month DESC LIMIT 6"
+        )
+        monthly = cur.fetchall()
+        
+        # API usage this month
+        cur.execute(
+            "SELECT ai_model, COUNT(*) as cnt, COALESCE(SUM(image_count),0) as imgs FROM api_usage WHERE created_at >= %s GROUP BY ai_model",
+            (month_start,)
+        )
+        usage = cur.fetchall()
     conn.close()
     
     # Estimate costs
@@ -246,7 +246,7 @@ async def get_dashboard(username: Annotated[str, Depends(authenticate)]):
         model = u["ai_model"]
         imgs = u["imgs"]
         if model == "gemini":
-            cost = round(imgs * 0.1, 1)  # ~0.1 yen per image
+            cost = round(imgs * 0.1, 1)
         elif model in ["azure", "openai"]:
             cost = round(imgs * 0.5, 1)
         else:
@@ -263,14 +263,17 @@ async def get_dashboard(username: Annotated[str, Depends(authenticate)]):
 @app.get("/api/customers")
 async def get_customers(username: Annotated[str, Depends(authenticate)]):
     conn = get_db()
-    rows = conn.execute("SELECT id, name, discount_rate FROM customers ORDER BY id").fetchall()
+    with conn.cursor() as cur:
+        cur.execute("SELECT id, name, discount_rate FROM customers ORDER BY id")
+        rows = cur.fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
 @app.post("/api/customers")
 async def add_customer(username: Annotated[str, Depends(authenticate)], name: str = Form(...), discount_rate: int = Form(35)):
     conn = get_db()
-    conn.execute("INSERT INTO customers (name, discount_rate) VALUES (?, ?)", (name, discount_rate))
+    with conn.cursor() as cur:
+        cur.execute("INSERT INTO customers (name, discount_rate) VALUES (%s, %s)", (name, discount_rate))
     conn.commit()
     conn.close()
     return {"status": "ok"}
@@ -278,7 +281,8 @@ async def add_customer(username: Annotated[str, Depends(authenticate)], name: st
 @app.delete("/api/customers/{cid}")
 async def delete_customer(cid: int, username: Annotated[str, Depends(authenticate)]):
     conn = get_db()
-    conn.execute("DELETE FROM customers WHERE id = ?", (cid,))
+    with conn.cursor() as cur:
+        cur.execute("DELETE FROM customers WHERE id = %s", (cid,))
     conn.commit()
     conn.close()
     return {"status": "ok"}
@@ -337,8 +341,11 @@ async def download_detail_excel(inv_id: int, username: Annotated[str, Depends(au
 @app.get("/api/history/{inv_id}/items")
 async def get_history_items(inv_id: int, username: Annotated[str, Depends(authenticate)]):
     conn = get_db()
-    rows = conn.execute("SELECT code, color, size, unit_price, quantity FROM invoice_items WHERE invoice_id = ?", (inv_id,)).fetchall()
-    inv = conn.execute("SELECT invoice_number, customer_name, discount_rate FROM invoices WHERE id = ?", (inv_id,)).fetchone()
+    with conn.cursor() as cur:
+        cur.execute("SELECT code, color, size, unit_price, quantity FROM invoice_items WHERE invoice_id = %s", (inv_id,))
+        rows = cur.fetchall()
+        cur.execute("SELECT invoice_number, customer_name, discount_rate FROM invoices WHERE id = %s", (inv_id,))
+        inv = cur.fetchone()
     conn.close()
     if not inv:
         raise HTTPException(status_code=404, detail="Invoice not found")
@@ -347,8 +354,9 @@ async def get_history_items(inv_id: int, username: Annotated[str, Depends(authen
 @app.delete("/api/history/{inv_id}")
 async def delete_history(inv_id: int, username: Annotated[str, Depends(authenticate)]):
     conn = get_db()
-    conn.execute("DELETE FROM invoice_items WHERE invoice_id = ?", (inv_id,))
-    conn.execute("DELETE FROM invoices WHERE id = ?", (inv_id,))
+    with conn.cursor() as cur:
+        cur.execute("DELETE FROM invoice_items WHERE invoice_id = %s", (inv_id,))
+        cur.execute("DELETE FROM invoices WHERE id = %s", (inv_id,))
     conn.commit()
     conn.close()
     return {"status": "ok"}
@@ -447,7 +455,8 @@ async def analyze_images(
         # Record API usage
         try:
             conn = get_db()
-            conn.execute("INSERT INTO api_usage (ai_model, image_count) VALUES (?, ?)", (ai_model, len(files)))
+            with conn.cursor() as cur:
+                cur.execute("INSERT INTO api_usage (ai_model, image_count) VALUES (%s, %s)", (ai_model, len(files)))
             conn.commit()
             conn.close()
         except: pass
@@ -651,14 +660,16 @@ async def generate_documents(
         discount_rate = payload.discount_rate
         
         conn = get_db()
-        if payload.invoice_id:
-            row = conn.execute("SELECT invoice_number FROM invoices WHERE id = ?", (payload.invoice_id,)).fetchone()
-            if not row:
-                conn.close()
-                raise HTTPException(status_code=404, detail="Invoice not found for update")
-            invoice_number = row["invoice_number"]
-        else:
-            invoice_number = generate_invoice_number()
+        with conn.cursor() as cur:
+            if payload.invoice_id:
+                cur.execute("SELECT invoice_number FROM invoices WHERE id = %s", (payload.invoice_id,))
+                row = cur.fetchone()
+                if not row:
+                    conn.close()
+                    raise HTTPException(status_code=404, detail="Invoice not found for update")
+                invoice_number = row["invoice_number"]
+            else:
+                invoice_number = generate_invoice_number()
         conn.close()
 
         processed_items = []
@@ -807,25 +818,26 @@ async def generate_documents(
         detail_excel_bytes = build_detail_excel(invoice_number, customer_name, processed_items)
         detail_pdf_bytes = build_detail_pdf(invoice_number, customer_name, processed_items)
 
-        # Save to SQLite
+        # Save to PostgreSQL
         conn = get_db()
-        if payload.invoice_id:
-            conn.execute(
-                "UPDATE invoices SET customer_name=?, discount_rate=?, total_net_amount=?, total_tax_amount=?, total_grand_total=?, item_count=?, pdf_data=?, excel_data=?, detail_pdf_data=?, detail_excel_data=?, created_at=CURRENT_TIMESTAMP WHERE id=?",
-                (customer_name, discount_rate, total_net_amount, total_tax_amount, total_grand_total, len(processed_items), pdf_bytes, excel_bytes, detail_pdf_bytes, detail_excel_bytes, payload.invoice_id)
-            )
-            conn.execute("DELETE FROM invoice_items WHERE invoice_id=?", (payload.invoice_id,))
-            inv_id = payload.invoice_id
-        else:
-            cursor = conn.execute(
-                "INSERT INTO invoices (invoice_number, customer_name, discount_rate, total_net_amount, total_tax_amount, total_grand_total, item_count, pdf_data, excel_data, detail_pdf_data, detail_excel_data) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-                (invoice_number, customer_name, discount_rate, total_net_amount, total_tax_amount, total_grand_total, len(processed_items), pdf_bytes, excel_bytes, detail_pdf_bytes, detail_excel_bytes)
-            )
-            inv_id = cursor.lastrowid
+        with conn.cursor() as cur:
+            if payload.invoice_id:
+                cur.execute(
+                    "UPDATE invoices SET customer_name=%s, discount_rate=%s, total_net_amount=%s, total_tax_amount=%s, total_grand_total=%s, item_count=%s, pdf_data=%s, excel_data=%s, detail_pdf_data=%s, detail_excel_data=%s, created_at=CURRENT_TIMESTAMP WHERE id=%s",
+                    (customer_name, discount_rate, total_net_amount, total_tax_amount, total_grand_total, len(processed_items), pdf_bytes, excel_bytes, detail_pdf_bytes, detail_excel_bytes, payload.invoice_id)
+                )
+                cur.execute("DELETE FROM invoice_items WHERE invoice_id=%s", (payload.invoice_id,))
+                inv_id = payload.invoice_id
+            else:
+                cur.execute(
+                    "INSERT INTO invoices (invoice_number, customer_name, discount_rate, total_net_amount, total_tax_amount, total_grand_total, item_count, pdf_data, excel_data, detail_pdf_data, detail_excel_data) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id",
+                    (invoice_number, customer_name, discount_rate, total_net_amount, total_tax_amount, total_grand_total, len(processed_items), pdf_bytes, excel_bytes, detail_pdf_bytes, detail_excel_bytes)
+                )
+                inv_id = cur.fetchone()['id']
             
-        for item in processed_items:
-            conn.execute("INSERT INTO invoice_items (invoice_id, code, color, size, unit_price, quantity, net_amount) VALUES (?,?,?,?,?,?,?)",
-                         (inv_id, item["code"], item["color"], item["size"], item["unit_price"], item["quantity"], item["net_amount"]))
+            for item in processed_items:
+                cur.execute("INSERT INTO invoice_items (invoice_id, code, color, size, unit_price, quantity, net_amount) VALUES (%s,%s,%s,%s,%s,%s,%s)",
+                             (inv_id, item["code"], item["color"], item["size"], item["unit_price"], item["quantity"], item["net_amount"]))
         conn.commit()
         conn.close()
 
@@ -853,10 +865,12 @@ async def upload_to_drive(inv_id: int, username: Annotated[str, Depends(authenti
         raise HTTPException(status_code=500, detail="GDRIVE_WEBHOOK_URLが未設定です。Renderの設定を確認してください。")
 
     conn = get_db()
-    row = conn.execute(
-        "SELECT invoice_number, customer_name, pdf_data, excel_data, detail_pdf_data, detail_excel_data FROM invoices WHERE id = ?",
-        (inv_id,)
-    ).fetchone()
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT invoice_number, customer_name, pdf_data, excel_data, detail_pdf_data, detail_excel_data FROM invoices WHERE id = %s",
+            (inv_id,)
+        )
+        row = cur.fetchone()
     conn.close()
     if not row:
         raise HTTPException(status_code=404, detail="Invoice not found")
