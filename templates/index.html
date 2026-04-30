@@ -1148,60 +1148,457 @@
 /* ===== DESKTOP LAYOUT (≥ 1024px) =========== */
 /* ========================================== */
 @media (min-width: 1024px) {
-  .app-header { padding: 18px 40px 0; display: grid; grid-template-columns: auto 1fr auto; grid-template-rows: auto auto; grid-template-areas: "logo divider tabs" "logo divider tabs"; align-items: center; gap: 0 32px; text-align: left; }
-  .logo { grid-area: logo; font-size: 28px; margin-bottom: 0; text-indent: 0; letter-spacing: 0.32em; }
-  .logo-sub { grid-area: logo; font-size: 9px; margin: 30px 0 0 0; text-indent: 0; }
-  .divider-gold { grid-area: divider; width: 1px; height: 38px; margin: 0; background: linear-gradient(180deg, transparent, var(--gold), transparent); }
-  .tabs { grid-area: tabs; gap: 4px; width: auto; }
-  .tab { flex: 0 0 auto; padding: 10px 22px; font-size: 11px; border-radius: 8px; border: 1px solid transparent; border-bottom: none; cursor: pointer; }
-  .tab.active { background: var(--gold-soft); border-color: var(--border); border-bottom: none; }
-  .tab.active::before { display: none; }
-  .page { max-width: 1280px; padding: 32px 40px 80px; }
-  #page-create.active { display: grid; grid-template-columns: 380px 1fr; gap: 24px; align-items: start; }
-  #page-create > .card:nth-child(1), #page-create > .card:nth-child(2) { grid-column: 1; }
-  #page-create > .card:nth-child(2) { position: sticky; top: 100px; }
+  
+  /* ===== App shell: Sidebar + Main ===== */
+  body {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    grid-template-rows: 44px 1fr 28px;
+    grid-template-areas:
+      "sidebar topbar"
+      "sidebar main"
+      "sidebar statusbar";
+    min-height: 100vh;
+    height: 100vh;
+    overflow: hidden;
+  }
+  
+  /* ===== Top header → 横長スリム topbar に変身 ===== */
+  .app-header {
+    grid-area: topbar;
+    padding: 0 24px;
+    display: flex !important;
+    align-items: center;
+    gap: 16px;
+    background: linear-gradient(180deg, rgba(20,20,20,0.98), rgba(15,15,15,0.95));
+    border-bottom: 1px solid var(--border);
+    border-top: 2px solid;
+    border-image: linear-gradient(90deg, var(--verde-italia, #2e5e3e), var(--text-primary), #c8332e) 1;
+    height: 44px;
+    position: relative;
+    z-index: 100;
+  }
+  .app-header .logo,
+  .app-header .logo-sub,
+  .app-header .divider-gold {
+    display: none; /* ロゴはサイドバーへ移動 */
+  }
+  .app-header .tabs { display: none; } /* タブもサイドバーへ */
+  .topbar-breadcrumb {
+    display: flex; align-items: center; gap: 10px;
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 14px; letter-spacing: 0.05em;
+    color: var(--text-secondary); flex: 1;
+  }
+  .topbar-breadcrumb .crumb-active { color: var(--gold-bright); }
+  .topbar-breadcrumb .sep { opacity: 0.4; font-size: 11px; }
+  .topbar-actions { display: flex; gap: 8px; align-items: center; }
+  .cmdk-trigger {
+    display: flex; align-items: center; gap: 8px;
+    padding: 5px 10px 5px 12px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    color: var(--text-muted);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all .2s;
+    min-width: 220px;
+  }
+  .cmdk-trigger:hover { border-color: var(--border-strong); color: var(--text-secondary); }
+  .cmdk-trigger .cmdk-shortcut {
+    margin-left: auto;
+    padding: 2px 6px;
+    background: var(--bg-base);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 10px;
+    font-family: monospace;
+  }
+  
+  /* ===== Sidebar ===== */
+  .sidebar {
+    grid-area: sidebar;
+    display: flex !important;
+    flex-direction: column;
+    background: linear-gradient(180deg, #0f0f0f 0%, var(--bg-base) 100%);
+    border-right: 1px solid var(--border);
+    padding: 18px 0 0;
+  }
+  .sidebar-brand {
+    padding: 0 22px 22px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 14px;
+  }
+  .sidebar-brand .logo {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 22px; font-weight: 600;
+    letter-spacing: 0.32em;
+    background: linear-gradient(135deg, var(--gold-bright), var(--gold), var(--gold-deep));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    text-indent: 0.32em; margin-bottom: 2px;
+  }
+  .sidebar-brand .logo-sub {
+    font-size: 8px; letter-spacing: 0.4em;
+    color: var(--text-muted);
+  }
+  .sidebar-nav { flex: 1; padding: 0 12px; display: flex; flex-direction: column; gap: 2px; }
+  .sidebar-tab {
+    display: flex; align-items: center; gap: 12px;
+    padding: 9px 12px;
+    border-radius: 7px;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: 13px; font-weight: 500;
+    letter-spacing: 0.02em;
+    transition: all .2s;
+    position: relative;
+  }
+  .sidebar-tab:hover { background: rgba(201,169,97,0.05); color: var(--text-secondary); }
+  .sidebar-tab.active {
+    background: var(--gold-soft);
+    color: var(--gold-bright);
+  }
+  .sidebar-tab.active::before {
+    content: ''; position: absolute;
+    left: -12px; top: 8px; bottom: 8px;
+    width: 3px;
+    background: linear-gradient(180deg, var(--gold-bright), var(--gold));
+    border-radius: 0 3px 3px 0;
+  }
+  .sidebar-tab-icon {
+    width: 18px; height: 18px;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 14px;
+    color: var(--gold);
+    flex-shrink: 0;
+  }
+  .sidebar-tab-shortcut {
+    margin-left: auto; font-size: 10px;
+    color: var(--text-muted);
+    font-family: monospace;
+    opacity: 0.6;
+  }
+  .sidebar-divider {
+    height: 1px; background: var(--border);
+    margin: 12px 18px;
+  }
+  .sidebar-footer {
+    padding: 12px 22px 18px;
+    font-size: 10px; color: var(--text-muted);
+    letter-spacing: 0.1em;
+  }
+  
+  /* ===== Status bar ===== */
+  .statusbar {
+    grid-area: statusbar;
+    display: flex !important;
+    align-items: center;
+    padding: 0 16px;
+    background: var(--bg-elevated);
+    border-top: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--text-muted);
+    letter-spacing: 0.04em;
+    gap: 20px;
+  }
+  .statusbar-item { display: flex; align-items: center; gap: 6px; }
+  .statusbar-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: pulse-dot 2s ease-in-out infinite; }
+  @keyframes pulse-dot { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+  .statusbar-spacer { flex: 1; }
+  
+  /* ===== Main content area ===== */
+  main, #app-main {
+    grid-area: main;
+    overflow-y: auto;
+    overflow-x: hidden;
+    background: 
+      radial-gradient(ellipse 60% 30% at 50% 0%, rgba(201,169,97,0.04), transparent 60%),
+      var(--bg-base);
+  }
+  
+  .page {
+    max-width: 1400px;
+    padding: 28px 36px 60px;
+  }
+  
+  /* ===== History as Master-Detail Split ===== */
+  #page-history.active {
+    display: grid !important;
+    grid-template-columns: minmax(420px, 480px) 1fr;
+    gap: 0;
+    max-width: none;
+    padding: 0;
+    height: 100%;
+  }
+  #page-history > .card {
+    margin: 0;
+    border-radius: 0;
+    border: none;
+    border-right: 1px solid var(--border);
+    height: 100%;
+    overflow-y: auto;
+    padding: 24px 24px;
+    box-shadow: none;
+  }
+  #page-history > .card::before { display: none; }
+  #hist-detail-pane {
+    overflow-y: auto;
+    padding: 24px 36px;
+    background: var(--bg-base);
+    display: flex;
+    flex-direction: column;
+  }
+  #hist-detail-pane:empty::before {
+    content: '"Scegli un documento per visualizzarlo"';
+    display: block; margin: auto;
+    font-family: 'Cormorant Garamond', serif;
+    font-style: italic; font-size: 18px;
+    color: var(--gold-deep);
+    text-align: center;
+    letter-spacing: 0.03em;
+  }
+  
+  /* History list as proper data table */
+  .hist-table-header {
+    display: grid !important;
+    grid-template-columns: 130px 1fr 110px 80px;
+    gap: 12px;
+    padding: 10px 12px;
+    font-size: 9px; color: var(--gold);
+    letter-spacing: 0.18em; text-transform: uppercase;
+    border-bottom: 1px solid var(--border-strong);
+    margin-bottom: 6px;
+    font-weight: 700;
+  }
+  .hist-table-header span {
+    cursor: pointer; user-select: none;
+    transition: color .15s;
+  }
+  .hist-table-header span:hover { color: var(--gold-bright); }
+  .hist-table-header span.sort-asc::after { content: ' ▲'; opacity: 0.7; }
+  .hist-table-header span.sort-desc::after { content: ' ▼'; opacity: 0.7; }
+  
+  .hist-item {
+    display: grid !important;
+    grid-template-columns: 130px 1fr 110px 80px;
+    gap: 12px;
+    align-items: center;
+    padding: 12px !important;
+    border-radius: 6px;
+    margin-bottom: 2px;
+    border-bottom: none !important;
+    cursor: pointer;
+    transition: all .15s;
+    position: relative;
+  }
+  .hist-item:nth-child(even) { background: rgba(255,255,255,0.008); } /* zebra */
+  .hist-item:hover { background: rgba(201,169,97,0.06); }
+  .hist-item.selected {
+    background: var(--gold-soft) !important;
+    box-shadow: inset 3px 0 0 var(--gold);
+  }
+  .hist-item .hist-info { display: contents !important; }
+  .hist-item .hist-amt { text-align: right; }
+  .hist-item .hist-actions-row {
+    display: none !important; /* アクションは詳細パネル側に集約 */
+  }
+  
+  /* ===== Detail pane content ===== */
+  .detail-header {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    margin-bottom: 20px; padding-bottom: 18px;
+    border-bottom: 1px solid var(--border);
+  }
+  .detail-header-info h2 {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 28px; color: var(--gold-bright);
+    letter-spacing: 0.05em; margin-bottom: 4px;
+  }
+  .detail-header-meta {
+    font-size: 11px; color: var(--text-muted);
+    letter-spacing: 0.08em;
+  }
+  .detail-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  .detail-actions .btn { width: auto !important; margin: 0 !important; }
+  .detail-tabs { margin: 0; }
+  
+  /* ===== Create page: 3-column on desktop ===== */
+  #page-create.active {
+    display: grid;
+    grid-template-columns: 360px 1fr;
+    gap: 24px; align-items: start;
+  }
+  #page-create > .card:nth-child(1),
+  #page-create > .card:nth-child(2) { grid-column: 1; }
+  #page-create > .card:nth-child(2) { position: sticky; top: 16px; }
   #preview-card, #dl-section { grid-column: 2; grid-row: 1 / span 2; margin-bottom: 0; }
-  .upload-area { padding: 60px 30px; cursor: pointer; }
-  .upload-icon { font-size: 48px; }
-  .upload-text { font-size: 16px; }
-  .upload-area::before { content: 'またはここにドラッグ&ドロップ'; display: block; font-size: 11px; color: var(--text-muted); margin-top: 12px; letter-spacing: 0.1em; }
-  .item-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  .pdf-preview-frame { height: 75vh; min-height: 700px; }
-  #page-history .card { padding: 24px 28px; }
-  .hist-item { display: grid !important; grid-template-columns: 140px 1fr 120px 90px 220px; gap: 16px; align-items: center; padding: 14px 12px !important; border-radius: 8px; margin-bottom: 4px; border-bottom: 1px solid var(--border); cursor: default; }
-  .hist-item:hover { background: rgba(201,169,97,0.04); }
-  .hist-info { display: contents !important; }
-  .hist-info > div:nth-child(1) { display: contents !important; }
-  .hist-table-header { display: grid !important; grid-template-columns: 140px 1fr 120px 90px 220px; gap: 16px; padding: 12px; font-size: 10px; color: var(--gold); letter-spacing: 0.15em; text-transform: uppercase; border-bottom: 1px solid var(--border-strong); margin-bottom: 8px; font-family: 'Cormorant Garamond', serif; font-weight: 600; }
-  #page-dashboard.active { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  
+  .upload-area { padding: 50px 30px; }
+  .upload-icon { font-size: 44px; }
+  .upload-text { font-size: 15px; }
+  .upload-area::before {
+    content: 'またはここにドラッグ&ドロップ';
+    display: block; font-size: 11px; color: var(--text-muted);
+    margin-top: 10px; letter-spacing: 0.1em;
+  }
+  
+  .item-cards {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  .pdf-preview-frame { height: 70vh; min-height: 580px; }
+  
+  /* ===== Dashboard: 2x2 ===== */
+  #page-dashboard.active {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 22px;
+  }
   #page-dashboard > .card:nth-child(1) { grid-column: 1 / -1; }
   .stat-grid { grid-template-columns: repeat(4, 1fr); }
-  .stat-val { font-size: 36px; }
-  .bar-chart { height: 200px; }
-  #page-settings.active { display: grid; grid-template-columns: 360px 1fr; gap: 24px; }
+  .stat-val { font-size: 38px; }
+  .bar-chart { height: 220px; }
+  
+  /* ===== Settings: form left, list right ===== */
+  #page-settings.active {
+    display: grid;
+    grid-template-columns: 360px 1fr;
+    gap: 22px;
+  }
   #page-settings > .card { margin-bottom: 0; }
-  #cust-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
-  .cust-item { border-radius: 12px !important; background: var(--bg-elevated); border: 1px solid var(--border); padding: 14px !important; cursor: default; }
+  #cust-list {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+  .cust-item {
+    border-radius: 10px !important;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    padding: 12px 14px !important;
+  }
+  
+  /* ===== Toast → Stack at bottom-right ===== */
+  .toast-stack {
+    position: fixed;
+    bottom: 36px; right: 16px;
+    display: flex; flex-direction: column-reverse;
+    gap: 8px;
+    z-index: 9000;
+    pointer-events: none;
+  }
+  .toast-stack .toast {
+    pointer-events: auto;
+    margin: 0; min-width: 280px; max-width: 360px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+    animation: toastSlideIn .4s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  @keyframes toastSlideIn {
+    from { transform: translateX(20px); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+  
+  /* ===== Command Palette ===== */
+  .cmdk-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.6); backdrop-filter: blur(6px);
+    z-index: 99000; display: none;
+    align-items: flex-start; justify-content: center;
+    padding-top: 12vh;
+  }
+  .cmdk-overlay.active { display: flex; }
+  .cmdk-panel {
+    width: min(620px, 92vw);
+    background: var(--bg-card);
+    border: 1px solid var(--border-strong);
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.6), 0 0 60px rgba(201,169,97,0.1);
+    animation: cmdkIn .25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  @keyframes cmdkIn { from { transform: translateY(-20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+  .cmdk-input {
+    width: 100%; padding: 18px 22px;
+    background: transparent; border: none;
+    color: var(--text-primary);
+    font-size: 16px; font-family: inherit;
+    border-bottom: 1px solid var(--border);
+  }
+  .cmdk-input:focus { outline: none; }
+  .cmdk-list { max-height: 440px; overflow-y: auto; padding: 8px; }
+  .cmdk-section { padding: 8px 12px 4px; font-size: 9px; color: var(--gold); letter-spacing: 0.18em; text-transform: uppercase; }
+  .cmdk-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 14px; border-radius: 8px;
+    cursor: pointer; transition: background .1s;
+    font-size: 13px; color: var(--text-secondary);
+  }
+  .cmdk-item:hover, .cmdk-item.selected {
+    background: var(--gold-soft); color: var(--text-primary);
+  }
+  .cmdk-item-icon { font-size: 16px; width: 20px; }
+  .cmdk-item-label { flex: 1; }
+  .cmdk-item-meta { font-size: 11px; color: var(--text-muted); font-family: monospace; }
+  .cmdk-empty {
+    padding: 40px 20px; text-align: center;
+    font-family: 'Cormorant Garamond', serif; font-style: italic;
+    color: var(--gold-deep);
+  }
+  
+  /* ===== Smooth focus rings ===== */
+  *:focus-visible {
+    outline: 2px solid var(--gold);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  
+  /* ===== Scrollbar polish ===== */
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(201,169,97,0.3); border-radius: 4px;
+    border: 2px solid transparent; background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(201,169,97,0.5); background-clip: padding-box; border: 2px solid transparent; }
+  
+  /* ===== Tooltips ===== */
+  [data-tip] { position: relative; }
+  [data-tip]::after {
+    content: attr(data-tip);
+    position: absolute; bottom: calc(100% + 6px); left: 50%;
+    transform: translateX(-50%) translateY(4px);
+    background: var(--bg-base); color: var(--gold-bright);
+    border: 1px solid var(--border-strong);
+    padding: 5px 9px; border-radius: 5px;
+    font-size: 11px; white-space: nowrap;
+    opacity: 0; pointer-events: none;
+    transition: all .18s; z-index: 100;
+  }
+  [data-tip]:hover::after { opacity: 1; transform: translateX(-50%) translateY(0); }
+  
+  /* ===== Modal sizing ===== */
+  .modal-content { max-width: 1100px !important; }
+  
+  /* ===== Hide mobile-only elements ===== */
+  .kbd { display: inline-block; }
+  
+  /* hover lift */
   .btn:hover:not(:disabled) { transform: translateY(-1px); }
   .btn:active:not(:disabled) { transform: translateY(0); }
-  .kbd { display: inline-block; }
-  .item-card, .doc-card, .stat-box { cursor: default; }
-  .item-card-num, .item-card-del, .badge, .qty-btn, .preview-tab { cursor: pointer; }
-  ::-webkit-scrollbar { width: 10px; height: 10px; }
-  ::-webkit-scrollbar-track { background: var(--bg-base); border-left: 1px solid var(--border); }
-  ::-webkit-scrollbar-thumb { background: linear-gradient(180deg, var(--gold-deep), var(--gold)); border: 2px solid var(--bg-base); border-radius: 6px; }
-  ::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, var(--gold), var(--gold-bright)); }
-  [data-tip] { position: relative; }
-  [data-tip]::after { content: attr(data-tip); position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%) translateY(4px); background: var(--bg-base); color: var(--gold-bright); border: 1px solid var(--border); padding: 6px 10px; border-radius: 6px; font-size: 11px; white-space: nowrap; opacity: 0; pointer-events: none; transition: all .2s; z-index: 100; }
-  [data-tip]:hover::after { opacity: 1; transform: translateX(-50%) translateY(0); }
-  .modal-content { max-width: 1100px !important; }
 }
 
 @media (min-width: 1440px) {
-  .page { max-width: 1480px; padding: 40px 60px 100px; }
-  #page-create.active { grid-template-columns: 420px 1fr 360px; }
-  #preview-summary-wrap { grid-column: 3; grid-row: 1 / -1; position: sticky; top: 100px; }
+  body { grid-template-columns: 240px 1fr; }
+  .page { padding: 32px 48px 80px; }
+  #page-create.active { grid-template-columns: 400px 1fr 340px; }
+  #preview-summary-wrap {
+    grid-column: 3; grid-row: 1 / -1;
+    position: sticky; top: 16px;
+  }
   .item-cards { grid-template-columns: 1fr 1fr 1fr; }
+  #page-history.active { grid-template-columns: minmax(480px, 540px) 1fr; }
 }
 
 @media (min-width: 769px) and (max-width: 1023px) {
@@ -1210,7 +1607,18 @@
   .item-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 }
 
-.kbd { display: none; padding: 2px 6px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 4px; font-family: monospace; font-size: 10px; color: var(--text-muted); margin-left: 8px; }
+.kbd {
+  display: none; padding: 2px 6px;
+  background: var(--bg-input); border: 1px solid var(--border);
+  border-radius: 4px; font-family: monospace;
+  font-size: 10px; color: var(--text-muted); margin-left: 8px;
+}
+
+/* mobile (default) - sidebar/statusbar hidden */
+@media (max-width: 1023px) {
+  .sidebar, .statusbar { display: none !important; }
+  .topbar-breadcrumb, .topbar-actions { display: none !important; }
+}
 
 /* ===== Generation Overlay (PDF/Excel生成中の全画面オーバーレイ) ===== */
 .gen-overlay {
@@ -1358,20 +1766,77 @@
         </div>
       </div>
     </div>
-    <div class="app-header">
-        <div class="logo">LAURA JAPAN</div>
-        <div class="logo-sub">INVOICE · DATA MANAGEMENT</div>
-        <div class="divider-gold"></div>
-        <div class="tabs">
-            <div class="tab active" data-tab="create">新規作成 <span class="kbd">⌘1</span></div>
-            <div class="tab" data-tab="history">履歴 <span class="kbd">⌘2</span></div>
-            <div class="tab" data-tab="dashboard">分析 <span class="kbd">⌘3</span></div>
-            <div class="tab" data-tab="settings">設定 <span class="kbd">⌘4</span></div>
+    <!-- ===== Desktop Sidebar ===== -->
+    <aside class="sidebar" style="display:none">
+      <div class="sidebar-brand">
+        <div class="logo">LAURA · J</div>
+        <div class="logo-sub">SARTORIA · MMXXIV</div>
+      </div>
+      <nav class="sidebar-nav">
+        <div class="sidebar-tab active" data-tab="create">
+          <span class="sidebar-tab-icon">✂</span>
+          <span>新規作成</span>
+          <span class="sidebar-tab-shortcut">⌘1</span>
         </div>
+        <div class="sidebar-tab" data-tab="history">
+          <span class="sidebar-tab-icon">📒</span>
+          <span>履歴</span>
+          <span class="sidebar-tab-shortcut">⌘2</span>
+        </div>
+        <div class="sidebar-tab" data-tab="dashboard">
+          <span class="sidebar-tab-icon">📊</span>
+          <span>分析</span>
+          <span class="sidebar-tab-shortcut">⌘3</span>
+        </div>
+        <div class="sidebar-divider"></div>
+        <div class="sidebar-tab" data-tab="settings">
+          <span class="sidebar-tab-icon">⚙</span>
+          <span>設定</span>
+          <span class="sidebar-tab-shortcut">⌘4</span>
+        </div>
+      </nav>
+      <div class="sidebar-footer">v1.0 · MILANO</div>
+    </aside>
+
+    <!-- ===== Command Palette (⌘K) ===== -->
+    <div id="cmdk-overlay" class="cmdk-overlay">
+      <div class="cmdk-panel">
+        <input type="text" id="cmdk-input" class="cmdk-input" placeholder="コマンドや伝票番号、取引先を検索..." autocomplete="off">
+        <div id="cmdk-list" class="cmdk-list"></div>
+      </div>
     </div>
 
-    <!-- ========== TAB 1: CREATE ========== -->
-    <div class="page active" id="page-create">
+    <!-- ===== Toast Stack ===== -->
+    <div id="toast-stack" class="toast-stack"></div>
+
+    <div class="app-header">
+      <!-- モバイル用（既存） -->
+      <div class="logo">LAURA JAPAN</div>
+      <div class="logo-sub">SARTORIA · MILANO · MMXXIV</div>
+      <div class="divider-gold"></div>
+      <div class="tabs">
+        <div class="tab active" data-tab="create">新規作成 <span class="kbd">⌘1</span></div>
+        <div class="tab" data-tab="history">履歴 <span class="kbd">⌘2</span></div>
+        <div class="tab" data-tab="dashboard">分析 <span class="kbd">⌘3</span></div>
+        <div class="tab" data-tab="settings">設定 <span class="kbd">⌘4</span></div>
+      </div>
+      <!-- デスクトップ用 -->
+      <div class="topbar-breadcrumb">
+        <span style="font-family:'Cormorant Garamond',serif; color:var(--gold)">LAURA</span>
+        <span class="sep">›</span>
+        <span class="crumb-active" id="topbar-current">新規作成</span>
+      </div>
+      <div class="topbar-actions">
+        <button class="cmdk-trigger" id="cmdk-trigger">
+          <span>🔍</span><span>検索...</span>
+          <span class="cmdk-shortcut">⌘K</span>
+        </button>
+      </div>
+    </div>
+
+    <main id="app-main">
+        <!-- ========== TAB 1: CREATE ========== -->
+        <div class="page active" id="page-create">
         <div class="card">
             <div class="card-title">⚜ 伝票設定</div>
             <div class="form-row">
@@ -1483,19 +1948,22 @@
     <div class="page" id="page-history">
         <div class="card">
             <div class="card-title">⌘ 伝票履歴</div>
-            <div style="margin-bottom:18px"><input type="text" id="hist-search" placeholder="伝票番号や名前で検索..."></div>
+            <div style="margin-bottom:14px">
+                <input type="text" id="hist-search" placeholder="伝票番号や名前で検索..." />
+            </div>
             <!-- デスクトップでだけ表示されるテーブルヘッダー -->
             <div class="hist-table-header" style="display:none">
-              <span>伝票番号</span>
-              <span>取引先 / 件数</span>
-              <span style="text-align:right">金額</span>
-              <span>状態</span>
-              <span>アクション</span>
+              <span data-sort="invoice_number">伝票番号</span>
+              <span data-sort="customer_name">取引先 / 件数</span>
+              <span data-sort="total_grand_total" style="text-align:right">金額</span>
+              <span data-sort="status">状態</span>
             </div>
             <div id="hist-list">
                 <div class="empty-state">読込中...</div>
             </div>
         </div>
+        <!-- ↓ デスクトップ用、詳細ペイン -->
+        <div id="hist-detail-pane"></div>
     </div>
 
     <!-- ========== TAB 3: DASHBOARD ========== -->
@@ -1543,6 +2011,24 @@
                     取引先を追加</button>
             </div>
         </div>
+    </div>
+    </main>
+
+    <div class="statusbar" style="display:none">
+      <div class="statusbar-item">
+        <span class="statusbar-dot"></span>
+        <span>接続済み</span>
+      </div>
+      <div class="statusbar-item">
+        <span id="statusbar-saved">最終保存: -</span>
+      </div>
+      <div class="statusbar-spacer"></div>
+      <div class="statusbar-item">
+        <span>⌘K で検索 · / で履歴フィルタ · N で新規</span>
+      </div>
+      <div class="statusbar-item">
+        <span id="statusbar-clock">-</span>
+      </div>
     </div>
 
     <script>
@@ -1616,43 +2102,49 @@
 
         // ===== Generation Progress (疑似プログレス) =====
         let genTimer = null;
-        function showGenProgress(estimatedSec = 6) {
+        function showGenProgress(estimatedSec = 6, mode = 'gen') {
           $('gen-overlay').classList.add('active');
           $('gen-fill').style.width = '0%';
           $('gen-pct').textContent = '0%';
-          $('gen-status').textContent = 'データを整形しています...';
-          ['gen-step-1','gen-step-2','gen-step-3','gen-step-4'].forEach(id => {
-            $(id).classList.remove('done','active');
+          
+          const steps = mode === 'drive' 
+            ? ['Drive接続', '認証チェック', 'データ転送', '完了']
+            : ['データ整形', 'PDF生成', 'Excel生成', '完了'];
+          
+          ['gen-step-1','gen-step-2','gen-step-3','gen-step-4'].forEach((id, i) => {
+            const el = $(id);
+            el.classList.remove('done','active');
+            el.textContent = steps[i];
           });
+          
+          $('gen-status').textContent = mode === 'drive' ? 'Google Driveに接続中...' : 'データを整形しています...';
           $('gen-step-1').classList.add('active');
           
           let progress = 0;
-          const target = 92; // 92%まで進めて、完了時に100%へ
+          const target = 94; 
           const totalMs = estimatedSec * 1000;
           const startTime = Date.now();
           
           genTimer = setInterval(() => {
             const elapsed = Date.now() - startTime;
-            // イージング: 最初速く→ゆっくり (1 - (1-x)^3)
             const t = Math.min(elapsed / totalMs, 1);
             progress = target * (1 - Math.pow(1 - t, 3));
             
             $('gen-fill').style.width = progress + '%';
             $('gen-pct').textContent = Math.floor(progress) + '%';
             
-            // ステップ切り替え
             if (progress < 25) {
-              $('gen-status').textContent = 'データを整形しています...';
+              $('gen-status').textContent = mode === 'drive' ? 'Drive認証を検証中...' : 'データを整形しています...';
             } else if (progress < 55) {
               $('gen-step-1').classList.remove('active'); $('gen-step-1').classList.add('done');
               $('gen-step-2').classList.add('active');
-              $('gen-status').textContent = '納品書PDFをレンダリング中...';
+              $('gen-status').textContent = mode === 'drive' ? 'ファイルをアップロード中...' : '納品書PDFをレンダリング中...';
             } else if (progress < 85) {
               $('gen-step-2').classList.remove('active'); $('gen-step-2').classList.add('done');
               $('gen-step-3').classList.add('active');
-              $('gen-status').textContent = 'Excel管理伝票を組み立て中...';
+              $('gen-status').textContent = mode === 'drive' ? 'クラウドに同期中...' : 'Excel管理伝票を組み立て中...';
             } else {
-              $('gen-status').textContent = '仕上げ中...';
+              $('gen-status').textContent = '最終処理を実行中...';
             }
           }, 100);
         }
@@ -1662,11 +2154,11 @@
           $('gen-fill').style.width = '100%';
           $('gen-pct').textContent = '100%';
           $('gen-status').textContent = '✦ 完了';
-          ['gen-step-2','gen-step-3'].forEach(id => {
+          ['gen-step-1','gen-step-2','gen-step-3'].forEach(id => {
             $(id).classList.remove('active'); $(id).classList.add('done');
           });
           $('gen-step-4').classList.add('done');
-          setTimeout(() => $('gen-overlay').classList.remove('active'), 600);
+          setTimeout(() => $('gen-overlay').classList.remove('active'), 800);
         }
 
         function setupPreviews(payload, d) {
@@ -2085,13 +2577,15 @@
             if (sp) sp.style.display = 'block';
             if (btnEl) btnEl.disabled = true;
             try {
-                toast('Google Driveにアップロード中...', 'info');
+                showGenProgress(5, 'drive');
                 const r = await fetch(`/api/history/${invId}/upload-drive`, { method: 'POST' });
                 if (!r.ok) { const e = await r.json(); throw new Error(e.detail); }
                 const d = await r.json();
+                hideGenProgress();
                 const links = d.uploaded.map(u => `<a href="${u.url}" target="_blank" style="color:var(--gold-bright);text-decoration:underline">${u.type.toUpperCase()}</a>`).join(' / ');
-                toast(`✦ Driveに保存しました: ${links}`, 'ok', 0); // 消えないように0を指定
+                toast(`✦ Driveに保存しました: ${links}`, 'ok', 0); 
             } catch (e) {
+                hideGenProgress();
                 toast(`Drive保存失敗: ${e.message}`, 'err');
             } finally {
                 if (sp) sp.style.display = 'none';
@@ -2119,6 +2613,315 @@
           if (e.key === 'Escape') {
             closePreviewModal();
             if ($('confirm-modal')) $('confirm-modal').style.display = 'none';
+          }
+        });
+
+        // =========================================
+        // ===== Desktop Enhancements =============
+        // =========================================
+
+        // Sidebar tab sync
+        document.querySelectorAll('.sidebar-tab').forEach(t => t.addEventListener('click', () => {
+          const tab = t.dataset.tab;
+          document.querySelector(`.tab[data-tab="${tab}"]`)?.click();
+        }));
+
+        // Mirror active state to sidebar + topbar breadcrumb
+        const tabLabels = { create: '新規作成', history: '履歴', dashboard: '分析', settings: '設定' };
+        const observer = new MutationObserver(() => {
+          document.querySelectorAll('.tab').forEach(t => {
+            if (t.classList.contains('active')) {
+              document.querySelectorAll('.sidebar-tab').forEach(s => s.classList.remove('active'));
+              document.querySelector(`.sidebar-tab[data-tab="${t.dataset.tab}"]`)?.classList.add('active');
+              const tc = $('topbar-current'); if (tc) tc.textContent = tabLabels[t.dataset.tab] || '';
+            }
+          });
+        });
+        document.querySelectorAll('.tab').forEach(t => observer.observe(t, { attributes: true, attributeFilter: ['class'] }));
+
+        // Statusbar clock
+        function updateClock() {
+          const d = new Date();
+          const t = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+          const el = $('statusbar-clock'); if (el) el.textContent = t;
+        }
+        setInterval(updateClock, 30000); updateClock();
+
+        // =========================================
+        // ===== Toast Stack (desktop) ============
+        // =========================================
+        const isDesktopUI = () => window.matchMedia('(min-width: 1024px)').matches;
+        const originalToast = toast;
+        window.toast = function(msg, type, duration = 4000) {
+          if (!isDesktopUI()) return originalToast(msg, type, duration);
+          const stack = $('toast-stack');
+          const el = document.createElement('div');
+          el.className = 'toast toast-' + type;
+          el.style.display = 'block';
+          el.innerHTML = msg;
+          stack.appendChild(el);
+          if (duration > 0) {
+            setTimeout(() => {
+              el.style.transition = 'all .3s';
+              el.style.opacity = '0';
+              el.style.transform = 'translateX(20px)';
+              setTimeout(() => el.remove(), 300);
+            }, duration);
+          } else {
+            // 永続トーストにクローズボタン
+            const close = document.createElement('button');
+            close.textContent = '✕';
+            close.style.cssText = 'background:none;border:none;color:inherit;cursor:pointer;margin-left:auto;font-size:14px;padding:0 0 0 12px';
+            close.onclick = () => el.remove();
+            el.style.display = 'flex';
+            el.style.alignItems = 'center';
+            el.appendChild(close);
+          }
+          // 最終保存時刻を更新
+          if (type === 'ok') {
+            const ss = $('statusbar-saved');
+            if (ss) ss.textContent = `最終保存: ${new Date().toLocaleTimeString('ja-JP', {hour:'2-digit',minute:'2-digit'})}`;
+          }
+        };
+
+        // =========================================
+        // ===== Command Palette (⌘K) =============
+        // =========================================
+        const cmdkOverlay = $('cmdk-overlay');
+        const cmdkInput = $('cmdk-input');
+        const cmdkList = $('cmdk-list');
+        let cmdkSelected = 0, cmdkResults = [];
+
+        const cmdkActions = [
+          { id: 'tab-create', label: '新規作成へ移動', icon: '✂', meta: '⌘1', section: 'NAVIGATION', exec: () => document.querySelector('.tab[data-tab="create"]').click() },
+          { id: 'tab-history', label: '履歴へ移動', icon: '📒', meta: '⌘2', section: 'NAVIGATION', exec: () => document.querySelector('.tab[data-tab="history"]').click() },
+          { id: 'tab-dashboard', label: '分析へ移動', icon: '📊', meta: '⌘3', section: 'NAVIGATION', exec: () => document.querySelector('.tab[data-tab="dashboard"]').click() },
+          { id: 'tab-settings', label: '設定へ移動', icon: '⚙', meta: '⌘4', section: 'NAVIGATION', exec: () => document.querySelector('.tab[data-tab="settings"]').click() },
+          { id: 'new', label: '新しい伝票を作成', icon: '✦', meta: 'N', section: 'ACTIONS', exec: () => { document.querySelector('.tab[data-tab="create"]').click(); $('btn-new')?.click(); } },
+          { id: 'reload', label: '履歴を再読込', icon: '↻', section: 'ACTIONS', exec: () => loadHistory() },
+        ];
+
+        function openCmdk() {
+          cmdkOverlay.classList.add('active');
+          cmdkInput.value = '';
+          cmdkInput.focus();
+          renderCmdk('');
+        }
+        function closeCmdk() { cmdkOverlay.classList.remove('active'); }
+        function renderCmdk(q) {
+          q = q.toLowerCase().trim();
+          cmdkResults = [];
+          // Actions
+          const actions = q ? cmdkActions.filter(a => a.label.toLowerCase().includes(q)) : cmdkActions;
+          cmdkResults.push(...actions);
+          // Invoices
+          if (Array.isArray(allHistory) && allHistory.length) {
+            const hits = allHistory.filter(inv => 
+              !q || (inv.invoice_number||'').toLowerCase().includes(q) || (inv.customer_name||'').toLowerCase().includes(q)
+            ).slice(0, 8).map(inv => ({
+              id: 'inv-' + inv.id,
+              label: `${inv.invoice_number} — ${inv.customer_name}`,
+              icon: inv.status === 'locked' ? '🔒' : '📄',
+              meta: `¥${(inv.total_grand_total||0).toLocaleString()}`,
+              section: 'INVOICES',
+              exec: () => { document.querySelector('.tab[data-tab="history"]').click(); setTimeout(() => quickPreview(inv.id), 200); }
+            }));
+            cmdkResults.push(...hits);
+          }
+          // Render
+          if (!cmdkResults.length) {
+            cmdkList.innerHTML = '<div class="cmdk-empty">"Niente di trovato"<br><span style="font-size:11px;color:var(--text-muted);letter-spacing:0.1em">該当するものがありません</span></div>';
+            return;
+          }
+          let html = '', currentSection = '';
+          cmdkResults.forEach((r, i) => {
+            if (r.section !== currentSection) {
+              html += `<div class="cmdk-section">${r.section}</div>`;
+              currentSection = r.section;
+            }
+            html += `<div class="cmdk-item ${i === cmdkSelected ? 'selected' : ''}" data-i="${i}">
+              <span class="cmdk-item-icon">${r.icon}</span>
+              <span class="cmdk-item-label">${r.label}</span>
+              ${r.meta ? `<span class="cmdk-item-meta">${r.meta}</span>` : ''}
+            </div>`;
+          });
+          cmdkList.innerHTML = html;
+          cmdkList.querySelectorAll('.cmdk-item').forEach(el => {
+            el.onclick = () => { cmdkResults[parseInt(el.dataset.i)].exec(); closeCmdk(); };
+          });
+        }
+        cmdkInput?.addEventListener('input', e => { cmdkSelected = 0; renderCmdk(e.target.value); });
+        cmdkInput?.addEventListener('keydown', e => {
+          if (e.key === 'ArrowDown') { e.preventDefault(); cmdkSelected = Math.min(cmdkSelected+1, cmdkResults.length-1); renderCmdk(cmdkInput.value); }
+          if (e.key === 'ArrowUp') { e.preventDefault(); cmdkSelected = Math.max(cmdkSelected-1, 0); renderCmdk(cmdkInput.value); }
+          if (e.key === 'Enter') { e.preventDefault(); cmdkResults[cmdkSelected]?.exec(); closeCmdk(); }
+          if (e.key === 'Escape') closeCmdk();
+        });
+        cmdkOverlay?.addEventListener('click', e => { if (e.target === cmdkOverlay) closeCmdk(); });
+        $('cmdk-trigger')?.addEventListener('click', openCmdk);
+
+        // global ⌘K shortcut
+        document.addEventListener('keydown', e => {
+          if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+            e.preventDefault(); openCmdk();
+          }
+        });
+
+        // =========================================
+        // ===== History Master-Detail (desktop) ==
+        // =========================================
+        let selectedHistId = null;
+        const _origRenderHistory = renderHistory;
+        window.renderHistory = function(data) {
+          if (!isDesktopUI()) return _origRenderHistory(data);
+          
+          const list = $('hist-list');
+          list.innerHTML = '';
+          if (!data.length) {
+            list.innerHTML = '<div class="empty-state">伝票が見つかりません</div>';
+            return;
+          }
+          data.forEach(inv => {
+            const d = document.createElement('div');
+            d.className = 'hist-item' + (inv.id === selectedHistId ? ' selected' : '');
+            const statusBadge = inv.status === 'locked'
+              ? '<span class="badge badge-locked">LOCKED</span>'
+              : '<span class="badge badge-draft">DRAFT</span>';
+            d.innerHTML = `
+              <div class="hist-num">${inv.invoice_number}</div>
+              <div>
+                <div style="color:var(--text-primary); font-weight:500; font-size:13px">${inv.customer_name}</div>
+                <div class="hist-meta">${inv.item_count}点 · ${inv.created_at?.split('T')[0] || ''}</div>
+              </div>
+              <div class="hist-amt">¥${(inv.total_grand_total||0).toLocaleString()}</div>
+              <div>${statusBadge}</div>`;
+            d.onclick = () => selectHistItem(inv);
+            list.appendChild(d);
+          });
+        };
+
+        async function selectHistItem(inv) {
+          selectedHistId = inv.id;
+          document.querySelectorAll('.hist-item').forEach(el => el.classList.remove('selected'));
+          event?.currentTarget?.classList.add('selected');
+          const pane = $('hist-detail-pane');
+          pane.innerHTML = `<div class="empty-state" style="margin:auto"><div class="spinner" style="display:inline-block;border-color:rgba(201,169,97,0.3);border-top-color:var(--gold)"></div> 読込中...</div>`;
+          
+          try {
+            const r = await fetch(`/api/history/${inv.id}/data`);
+            if (!r.ok) throw new Error('読込失敗');
+            const d = await r.json();
+            d.id = inv.id;
+            const payload = { customer_name: d.customer_name, discount_rate: d.discount_rate, items: d.items };
+            
+            const lockBtn = inv.status === 'locked'
+              ? `<button class="btn btn-outline btn-sm" onclick="unlockHist(${inv.id})">解除</button>`
+              : `<button class="btn btn-gold btn-sm" onclick="lockHist(${inv.id})">確定</button>`;
+            const driveBtn = inv.status === 'locked'
+              ? `<button class="btn btn-blue btn-sm" onclick="uploadDrive(${inv.id}, this)">☁️ Drive保存</button>`
+              : '';
+            
+            pane.innerHTML = `
+              <div class="detail-header">
+                <div class="detail-header-info">
+                  <h2>${d.invoice_number}</h2>
+                  <div class="detail-header-meta">${d.customer_name} · ${inv.item_count}点 · ¥${(inv.total_grand_total||0).toLocaleString()}</div>
+                </div>
+                <div class="detail-actions">
+                  <button class="btn btn-gold btn-sm" onclick="editHist(${inv.id})">✎ 編集</button>
+                  ${lockBtn}
+                  ${driveBtn}
+                  <button class="btn btn-red btn-sm" onclick="delHist(${inv.id})">✕ 削除</button>
+                </div>
+              </div>
+              <div class="preview-tabs detail-tabs" data-target-prefix="dpane-">
+                <div class="preview-tab active" data-ptab="pdf">📄 納品書</div>
+                <div class="preview-tab" data-ptab="excel">📊 Excel</div>
+                <div class="preview-tab" data-ptab="detail">📋 明細表</div>
+                <div class="preview-tab" data-ptab="summary">⚜ 概要</div>
+              </div>
+              <div class="preview-pane active" id="dpane-pdf">
+                <iframe class="pdf-preview-frame" src="${b64ToBlobUrl(d.pdf_base64,'application/pdf')}"></iframe>
+                <div class="preview-actions">
+                  <button class="btn btn-red" onclick="dl64('${d.pdf_base64}','納品書_${d.invoice_number}.pdf','application/pdf')">📄 PDF保存</button>
+                  <button class="btn btn-green" onclick="dl64('${d.excel_base64}','納品書_${d.invoice_number}.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')">📊 Excel保存</button>
+                </div>
+              </div>
+              <div class="preview-pane" id="dpane-excel"><div id="dpane-excel-grid" class="excel-preview-container"></div></div>
+              <div class="preview-pane" id="dpane-detail">
+                <iframe class="pdf-preview-frame" src="${b64ToBlobUrl(d.detail_pdf_base64,'application/pdf')}"></iframe>
+                <div class="preview-actions">
+                  <button class="btn btn-red" onclick="dl64('${d.detail_pdf_base64}','明細表_${d.invoice_number}.pdf','application/pdf')">📄 PDF保存</button>
+                  <button class="btn btn-green" onclick="dl64('${d.detail_excel_base64}','明細表_${d.invoice_number}.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')">📊 Excel保存</button>
+                </div>
+              </div>
+              <div class="preview-pane" id="dpane-summary"></div>`;
+            
+            // Excel grid
+            try {
+              const wb = XLSX.read(d.excel_base64, {type: 'base64'});
+              $('dpane-excel-grid').innerHTML = XLSX.utils.sheet_to_html(wb.Sheets[wb.SheetNames[0]]);
+            } catch(e) {}
+            renderSummaryView(payload, d, 'dpane-summary');
+            initTabSwitchers(); // 詳細ペイン内のタブを再初期化
+          } catch (e) {
+            pane.innerHTML = `<div class="empty-state" style="color:var(--red)">エラー: ${e.message}</div>`;
+          }
+        }
+
+        // 履歴に切り替えたとき、デスクトップなら最初の項目を自動選択
+        const _origLoadHistory = loadHistory;
+        window.loadHistory = async function() {
+          await _origLoadHistory();
+          if (isDesktopUI() && allHistory.length && !selectedHistId) {
+            setTimeout(() => $('hist-list')?.firstChild?.click(), 100);
+          }
+        };
+
+        // =========================================
+        // ===== Sortable history table ===========
+        // =========================================
+        let sortKey = 'created_at', sortDir = 'desc';
+        document.querySelectorAll('.hist-table-header span').forEach(th => {
+          th.addEventListener('click', () => {
+            const k = th.dataset.sort;
+            if (sortKey === k) sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+            else { sortKey = k; sortDir = 'asc'; }
+            document.querySelectorAll('.hist-table-header span').forEach(x => x.classList.remove('sort-asc','sort-desc'));
+            th.classList.add('sort-' + sortDir);
+            const sorted = [...allHistory].sort((a,b) => {
+              const va = a[sortKey], vb = b[sortKey];
+              if (typeof va === 'number') return sortDir === 'asc' ? va-vb : vb-va;
+              return sortDir === 'asc' ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
+            });
+            renderHistory(sorted);
+          });
+        });
+
+        // =========================================
+        // ===== History live search =============
+        // =========================================
+        $('hist-search')?.addEventListener('input', e => {
+          const q = e.target.value.toLowerCase().trim();
+          const filtered = !q ? allHistory : allHistory.filter(inv =>
+            (inv.invoice_number||'').toLowerCase().includes(q) ||
+            (inv.customer_name||'').toLowerCase().includes(q)
+          );
+          renderHistory(filtered);
+        });
+
+        // 起動時にデスクトップ要素を表示
+        if (isDesktopUI()) {
+          document.querySelector('.sidebar').style.display = 'flex';
+          document.querySelector('.statusbar').style.display = 'flex';
+        }
+        window.addEventListener('resize', () => {
+          if (isDesktopUI()) {
+            document.querySelector('.sidebar').style.display = 'flex';
+            document.querySelector('.statusbar').style.display = 'flex';
+          } else {
+            document.querySelector('.sidebar').style.display = 'none';
+            document.querySelector('.statusbar').style.display = 'none';
           }
         });
 
