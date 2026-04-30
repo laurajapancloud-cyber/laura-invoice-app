@@ -58,6 +58,7 @@ GOOGLE_CREDENTIALS_JSON = os.getenv("GOOGLE_CREDENTIALS_JSON")
 AZURE_OPENAI_KEY = os.getenv("AZURE_OPENAI_KEY")
 AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT")
 GDRIVE_FOLDER_ID = os.getenv("GDRIVE_FOLDER_ID")
+GDRIVE_WEBHOOK_URL = os.getenv("GDRIVE_WEBHOOK_URL")
 
 if not all([APP_USERNAME, APP_PASSWORD, GEMINI_API_KEY]):
     print("Warning: Missing required environment variables.")
@@ -640,9 +641,8 @@ async def generate_documents(
 
 @app.post("/api/history/{inv_id}/upload-drive")
 async def upload_to_drive(inv_id: int, username: Annotated[str, Depends(authenticate)]):
-    service = get_drive_service()
-    if not service:
-        raise HTTPException(status_code=500, detail="Google Driveが未設定です。GOOGLE_CREDENTIALS_JSONを確認してください。")
+    if not GDRIVE_WEBHOOK_URL:
+        raise HTTPException(status_code=500, detail="GDRIVE_WEBHOOK_URLが未設定です。Renderの設定を確認してください。")
 
     conn = get_db()
     row = conn.execute(
@@ -657,35 +657,36 @@ async def upload_to_drive(inv_id: int, username: Annotated[str, Depends(authenti
     cust = (row["customer_name"] or "").replace("/", "_").replace("\\", "_")
     uploaded = []
 
-    def _upload(filename, mime, data):
-        print(f"DEBUG: Uploading {filename} to Folder ID: {GDRIVE_FOLDER_ID}")
-        meta = {"name": filename}
-        if GDRIVE_FOLDER_ID:
-            meta["parents"] = [GDRIVE_FOLDER_ID.strip()]
-        media = MediaInMemoryUpload(data, mimetype=mime, resumable=False)
-        f = service.files().create(
-            body=meta, media_body=media,
-            fields="id,name,webViewLink",
-            supportsAllDrives=True
-        ).execute()
-        return f
+    async def _upload_via_gas(filename, mime, data):
+        import base64
+        import requests
+        payload = {
+            "folderId": GDRIVE_FOLDER_ID,
+            "filename": filename,
+            "mime": mime,
+            "base64": base64.b64encode(data).decode('utf-8')
+        }
+        resp = requests.post(GDRIVE_WEBHOOK_URL, json=payload, timeout=30)
+        if resp.status_code != 200:
+            raise Exception(f"GAS error: {resp.status_code} - {resp.text}")
+        return resp.json()
 
     try:
         if row["pdf_data"]:
-            f = _upload(f"{inv_num}_{cust}.pdf", "application/pdf", row["pdf_data"])
-            uploaded.append({"type": "pdf", "name": f["name"], "url": f.get("webViewLink"), "id": f["id"]})
+            res = await _upload_via_gas(f"{inv_num}_{cust}.pdf", "application/pdf", row["pdf_data"])
+            uploaded.append({"type": "pdf", "name": f"{inv_num}_{cust}.pdf", "url": res.get("url")})
         if row["excel_data"]:
-            f = _upload(
+            res = await _upload_via_gas(
                 f"{inv_num}_{cust}.xlsx",
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 row["excel_data"]
             )
-            uploaded.append({"type": "excel", "name": f["name"], "url": f.get("webViewLink"), "id": f["id"]})
+            uploaded.append({"type": "excel", "name": f"{inv_num}_{cust}.xlsx", "url": res.get("url")})
 
-        return {"status": "ok", "uploaded": uploaded, "folder_id": GDRIVE_FOLDER_ID}
+        return {"status": "ok", "uploaded": uploaded}
     except Exception as e:
         import traceback; traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Drive upload error: {e}")
+        raise HTTPException(status_code=500, detail=f"Drive保存失敗(GAS): {e}")
 
 if __name__ == "__main__":
     import uvicorn
