@@ -1207,7 +1207,7 @@ async def upload_to_drive(inv_id: int, username: Annotated[str, Depends(authenti
     return job['result']
 
 @app.post("/api/jobs/drive-upload")
-async def enqueue_drive_upload(bt: BackgroundTasks, inv_id: int, username: Annotated[str, Depends(authenticate)]):
+async def enqueue_drive_upload(bt: BackgroundTasks, username: Annotated[str, Depends(authenticate)], inv_id: int = Form(...)):
     jid = db_create_job('drive_upload', {"invoice_id": inv_id})
     bt.add_task(upload_drive_internal, jid, inv_id)
     return {"job_id": jid, "status": "pending"}
