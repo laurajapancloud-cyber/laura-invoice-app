@@ -1,47 +1,325 @@
 <!DOCTYPE html>
 <html lang="ja">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="LAURA JAPAN 伝票システムの操作マニュアル">
+    <meta name="theme-color" content="#1a1a1a">
     <title>LAURA JAPAN | 伝票システム 操作マニュアル</title>
-    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Inter:wght@300;400;600&family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@500&display=swap"
+        rel="stylesheet">
     <style>
         :root {
             --gold: #d4af37;
             --gold-bright: #f1d279;
-            --bg-dark: #1a1a1a;
-            --bg-card: #242424;
+            --gold-soft: rgba(212, 175, 55, .12);
+            --gold-line: rgba(212, 175, 55, .3);
+            --bg-dark: #121212;
+            --bg-darker: #0a0a0a;
+            --bg-card: #1e1e1e;
             --text-main: #f0f0f0;
             --text-muted: #a0a0a0;
+            --text-dim: #6a6a6a;
+            --pc: #6ba6ee;
+            --mobile: #ee6b6b;
+            --tip: #6bdb8a;
+            --warn: #ffa940;
+            --info: #6bb6ee;
+            --shadow: 0 12px 32px rgba(0, 0, 0, .45);
+            --glow: 0 0 40px rgba(212, 175, 55, .15);
+            --radius: 16px;
+            --ease: .3s cubic-bezier(.4, 0, .2, 1);
         }
 
-        * { box-sizing: border-box; margin: 0; padding: 0; }
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0
+        }
+
+        html {
+            scroll-behavior: smooth;
+            scroll-padding-top: 30px
+        }
+
+        @media (prefers-reduced-motion:reduce) {
+            html {
+                scroll-behavior: auto
+            }
+
+            *,
+            *::before,
+            *::after {
+                animation-duration: .01ms !important;
+                transition-duration: .01ms !important
+            }
+        }
+
         body {
-            background: var(--bg-dark);
+            background: radial-gradient(ellipse at top left, rgba(212, 175, 55, .08), transparent 50%), radial-gradient(ellipse at bottom right, rgba(212, 175, 55, .05), transparent 50%), var(--bg-dark);
             color: var(--text-main);
-            font-family: 'Inter', sans-serif;
-            line-height: 1.7;
-            padding: 40px 20px;
+            font-family: 'Inter', 'Hiragino Sans', 'Yu Gothic', sans-serif;
+            line-height: 1.8;
+            min-height: 100vh;
+            overflow-x: hidden;
         }
 
-        .container {
-            max-width: 1000px;
+        .progress {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 3px;
+            width: 0;
+            background: linear-gradient(90deg, var(--gold), var(--gold-bright));
+            z-index: 1000;
+            box-shadow: 0 0 10px var(--gold);
+            transition: width .1s
+        }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            max-width: 1400px;
             margin: 0 auto;
+            gap: 60px;
+            padding: 0 30px
         }
 
-        header {
+        /* sidebar */
+        .sidebar {
+            position: sticky;
+            top: 0;
+            height: 100vh;
+            padding: 50px 0;
+            overflow-y: auto;
+            border-right: 1px solid rgba(255, 255, 255, .06)
+        }
+
+        .brand {
+            font-family: 'Cormorant Garamond', serif;
+            font-size: 1.5rem;
+            color: var(--gold);
+            letter-spacing: 2px;
+            padding-bottom: 18px;
+            margin-bottom: 22px;
+            border-bottom: 1px solid var(--gold-line)
+        }
+
+        .brand small {
+            display: block;
+            font-family: 'Outfit', sans-serif;
+            font-size: .65rem;
+            color: var(--text-dim);
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            margin-top: 4px;
+            font-weight: 300
+        }
+
+        .toc {
+            list-style: none
+        }
+
+        .toc li {
+            margin-bottom: 4px
+        }
+
+        .toc a {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 11px 14px;
+            border-radius: 10px;
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: .92rem;
+            transition: var(--ease);
+            position: relative
+        }
+
+        .toc a:hover {
+            background: var(--gold-soft);
+            color: var(--gold-bright);
+            transform: translateX(4px)
+        }
+
+        .toc a.active {
+            background: linear-gradient(90deg, var(--gold-soft), transparent);
+            color: var(--gold-bright);
+            font-weight: 500
+        }
+
+        .toc a.active::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 25%;
+            bottom: 25%;
+            width: 3px;
+            background: var(--gold);
+            border-radius: 2px
+        }
+
+        .toc-num {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: rgba(212, 175, 55, .1);
+            color: var(--gold);
+            font-size: .7rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 600;
+            flex-shrink: 0
+        }
+
+        .toc a.active .toc-num {
+            background: var(--gold);
+            color: var(--bg-darker)
+        }
+
+        .sidebar-foot {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, .06);
+            font-size: .75rem;
+            color: var(--text-dim);
+            line-height: 1.9
+        }
+
+        .kbd {
+            display: inline-block;
+            padding: 1px 6px;
+            background: rgba(255, 255, 255, .08);
+            border: 1px solid rgba(255, 255, 255, .12);
+            border-radius: 4px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: .7rem;
+            color: var(--text-main)
+        }
+
+        /* mobile menu */
+        .menu-btn {
+            display: none;
+            position: fixed;
+            top: 16px;
+            right: 16px;
+            z-index: 998;
+            width: 46px;
+            height: 46px;
+            background: var(--bg-card);
+            border: 1px solid var(--gold-line);
+            border-radius: 12px;
+            cursor: pointer;
+            align-items: center;
+            justify-content: center;
+            box-shadow: var(--shadow);
+            color: var(--gold);
+            font-size: 1.4rem
+        }
+
+        main {
+            padding: 50px 0 80px;
+            max-width: 920px;
+            min-width: 0
+        }
+
+        /* hero */
+        .hero {
             text-align: center;
-            margin-bottom: 60px;
-            border-bottom: 1px solid rgba(212, 175, 55, 0.3);
-            padding-bottom: 30px;
+            margin-bottom: 80px;
+            padding: 70px 30px;
+            border: 1px solid var(--gold-line);
+            border-radius: 24px;
+            background: radial-gradient(ellipse at center, var(--gold-soft), transparent 70%), linear-gradient(180deg, rgba(255, 255, 255, .02), transparent);
+            position: relative;
+            overflow: hidden
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60' viewBox='0 0 60 60'%3E%3Cpath d='M30 0L60 30L30 60L0 30Z' fill='none' stroke='%23d4af37' stroke-width='.3' opacity='.15'/%3E%3C/svg%3E");
+            opacity: .4;
+            z-index: 0
+        }
+
+        .hero>* {
+            position: relative;
+            z-index: 1
+        }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 14px;
+            border: 1px solid var(--gold-line);
+            border-radius: 100px;
+            font-family: 'Outfit', sans-serif;
+            font-size: .7rem;
+            letter-spacing: 3px;
+            color: var(--gold-bright);
+            text-transform: uppercase;
+            margin-bottom: 24px;
+            background: rgba(212, 175, 55, .05)
+        }
+
+        .hero-badge::before {
+            content: '';
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--gold);
+            box-shadow: 0 0 8px var(--gold);
+            animation: pulse 2s ease-in-out infinite
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+                transform: scale(1)
+            }
+
+            50% {
+                opacity: .5;
+                transform: scale(1.2)
+            }
         }
 
         h1 {
             font-family: 'Cormorant Garamond', serif;
-            font-size: 3rem;
+            font-size: clamp(2.4rem, 5vw, 3.8rem);
+            font-weight: 600;
             color: var(--gold);
-            letter-spacing: 2px;
-            margin-bottom: 10px;
+            letter-spacing: 6px;
+            line-height: 1.2;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, var(--gold), var(--gold-bright), var(--gold));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            filter: drop-shadow(0 0 20px rgba(212, 175, 55, .3))
+        }
+
+        h1 .ja {
+            display: block;
+            font-family: 'Inter', sans-serif;
+            font-size: 1rem;
+            font-weight: 400;
+            letter-spacing: 8px;
+            color: var(--text-main);
+            -webkit-text-fill-color: var(--text-main);
+            margin-top: 14px
         }
 
         .subtitle {
@@ -50,216 +328,841 @@
             color: var(--text-muted);
             text-transform: uppercase;
             letter-spacing: 4px;
-            font-size: 0.9rem;
+            font-size: .85rem;
+            margin-top: 20px
         }
 
+        .hero-meta {
+            display: flex;
+            justify-content: center;
+            gap: 24px;
+            margin-top: 30px;
+            flex-wrap: wrap;
+            font-size: .78rem;
+            color: var(--text-dim)
+        }
+
+        .hero-meta span {
+            display: flex;
+            align-items: center;
+            gap: 6px
+        }
+
+        .hero-meta .dot {
+            width: 4px;
+            height: 4px;
+            border-radius: 50%;
+            background: var(--gold)
+        }
+
+        /* section */
         section {
             margin-bottom: 80px;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity .7s, transform .7s
+        }
+
+        section.visible {
+            opacity: 1;
+            transform: translateY(0)
         }
 
         .section-title {
             display: flex;
             align-items: center;
-            margin-bottom: 30px;
+            gap: 18px;
+            margin-bottom: 32px;
             font-family: 'Outfit', sans-serif;
-            font-size: 1.5rem;
+            font-size: 1.6rem;
+            font-weight: 500;
             color: var(--gold-bright);
+            scroll-margin-top: 30px
         }
 
         .section-number {
-            background: var(--gold);
-            color: var(--bg-dark);
-            width: 32px;
-            height: 32px;
+            background: linear-gradient(135deg, var(--gold), var(--gold-bright));
+            color: var(--bg-darker);
+            width: 42px;
+            height: 42px;
             display: flex;
             align-items: center;
             justify-content: center;
-            border-radius: 50%;
+            border-radius: 12px;
+            font-family: 'Outfit', sans-serif;
             font-weight: 700;
-            margin-right: 15px;
             font-size: 1rem;
+            flex-shrink: 0;
+            box-shadow: 0 4px 14px rgba(212, 175, 55, .4)
         }
 
+        .section-title-text {
+            display: flex;
+            flex-direction: column
+        }
+
+        .section-title-en {
+            font-size: .65rem;
+            color: var(--text-dim);
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            font-weight: 300;
+            margin-top: 2px
+        }
+
+        /* card */
         .card {
-            background: var(--bg-card);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            border-radius: 16px;
-            padding: 30px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-            margin-bottom: 40px;
+            background: linear-gradient(180deg, var(--bg-card), var(--bg-darker));
+            border: 1px solid rgba(255, 255, 255, .06);
+            border-radius: var(--radius);
+            padding: 36px;
+            box-shadow: var(--shadow);
+            margin-bottom: 32px;
+            transition: var(--ease);
+            position: relative;
+            overflow: hidden
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--gold-line), transparent)
+        }
+
+        .card:hover {
+            border-color: var(--gold-line);
+            box-shadow: var(--shadow), var(--glow);
+            transform: translateY(-2px)
         }
 
         .card h3 {
-            margin-bottom: 20px;
+            margin-bottom: 16px;
             color: var(--gold);
             font-weight: 600;
+            font-size: 1.2rem;
+            display: flex;
+            align-items: center;
+            gap: 10px
         }
 
-        p { margin-bottom: 15px; }
+        .card p {
+            margin-bottom: 16px
+        }
 
+        /* images */
         .img-container {
-            margin: 20px 0;
+            margin: 24px 0;
             border-radius: 12px;
             overflow: hidden;
-            border: 1px solid rgba(212, 175, 55, 0.2);
+            border: 1px solid rgba(212, 175, 55, .18);
             background: #000;
+            cursor: zoom-in;
+            position: relative
+        }
+
+        .img-container::after {
+            content: '🔍 クリックで拡大';
+            position: absolute;
+            bottom: 12px;
+            right: 12px;
+            background: rgba(0, 0, 0, .7);
+            color: var(--gold-bright);
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: .75rem;
+            opacity: 0;
+            transition: var(--ease);
+            pointer-events: none;
+            border: 1px solid var(--gold-line)
+        }
+
+        .img-container:hover::after {
+            opacity: 1
         }
 
         .img-container img {
             width: 100%;
             display: block;
-            transition: transform 0.3s ease;
+            transition: transform .5s
         }
 
         .img-container:hover img {
-            transform: scale(1.02);
+            transform: scale(1.03)
         }
 
-        .label-pc { border-left: 4px solid #4a90e2; padding-left: 10px; margin-bottom: 10px; color: #4a90e2; font-weight: 600; font-size: 0.8rem; }
-        .label-mobile { border-left: 4px solid #e24a4a; padding-left: 10px; margin-bottom: 10px; color: #e24a4a; font-weight: 600; font-size: 0.8rem; }
+        /* lightbox */
+        .lightbox {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, .92);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            padding: 20px;
+            cursor: zoom-out;
+            backdrop-filter: blur(8px)
+        }
 
+        .lightbox.active {
+            display: flex
+        }
+
+        .lightbox img {
+            max-width: 95%;
+            max-height: 95vh;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, .8)
+        }
+
+        .lightbox-close {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: var(--bg-card);
+            border: 1px solid var(--gold-line);
+            color: var(--gold);
+            font-size: 1.4rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center
+        }
+
+        /* device labels */
+        .label {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: .72rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            margin-bottom: 12px;
+            font-family: 'Outfit', sans-serif
+        }
+
+        .label-pc {
+            background: rgba(107, 166, 238, .12);
+            color: var(--pc);
+            border-left: 3px solid var(--pc)
+        }
+
+        .label-mobile {
+            background: rgba(238, 107, 107, .12);
+            color: var(--mobile);
+            border-left: 3px solid var(--mobile)
+        }
+
+        /* badges */
         .badge {
             display: inline-block;
-            background: rgba(212, 175, 55, 0.1);
+            background: rgba(212, 175, 55, .1);
             color: var(--gold-bright);
-            padding: 2px 10px;
+            padding: 3px 10px;
             border-radius: 4px;
-            font-size: 0.85rem;
-            border: 1px solid rgba(212, 175, 55, 0.3);
+            font-size: .78rem;
+            border: 1px solid var(--gold-line);
             margin-right: 8px;
+            font-family: 'Outfit', sans-serif;
+            font-weight: 500;
+            letter-spacing: 1px
         }
 
+        /* feature list */
         .feature-list {
             list-style: none;
             margin: 20px 0;
+            display: grid;
+            gap: 14px
         }
 
         .feature-list li {
             position: relative;
-            padding-left: 25px;
-            margin-bottom: 12px;
+            padding: 14px 14px 14px 50px;
+            background: rgba(255, 255, 255, .02);
+            border-radius: 10px;
+            border-left: 2px solid var(--gold);
+            transition: var(--ease)
+        }
+
+        .feature-list li:hover {
+            background: rgba(212, 175, 55, .06);
+            transform: translateX(4px)
         }
 
         .feature-list li::before {
             content: '✓';
             position: absolute;
-            left: 0;
+            left: 18px;
+            top: 14px;
             color: var(--gold);
-            font-weight: bold;
+            font-weight: 700;
+            font-size: 1.1rem;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center
         }
 
+        .feature-list li b {
+            color: var(--gold-bright)
+        }
+
+        /* responsive grid */
         .responsive-grid {
             display: grid;
-            grid-template-columns: 2fr 1fr;
-            gap: 30px;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px
         }
 
-        @media (max-width: 768px) {
-            .responsive-grid { grid-template-columns: 1fr; }
-            h1 { font-size: 2rem; }
+        /* callouts */
+        .callout {
+            display: flex;
+            gap: 14px;
+            padding: 18px 20px;
+            border-radius: 12px;
+            margin: 22px 0;
+            border: 1px solid;
+            align-items: flex-start;
+            font-size: .92rem
         }
 
+        .callout-icon {
+            font-size: 1.3rem;
+            flex-shrink: 0;
+            line-height: 1
+        }
+
+        .callout strong {
+            display: block;
+            margin-bottom: 4px;
+            font-weight: 600;
+            font-family: 'Outfit', sans-serif;
+            letter-spacing: .5px
+        }
+
+        .callout-tip {
+            background: rgba(107, 219, 138, .08);
+            border-color: rgba(107, 219, 138, .25);
+            color: #cfead7
+        }
+
+        .callout-tip strong {
+            color: var(--tip)
+        }
+
+        .callout-warn {
+            background: rgba(255, 169, 64, .08);
+            border-color: rgba(255, 169, 64, .25);
+            color: #f0dcc0
+        }
+
+        .callout-warn strong {
+            color: var(--warn)
+        }
+
+        .callout-info {
+            background: rgba(107, 182, 238, .08);
+            border-color: rgba(107, 182, 238, .25);
+            color: #cfdde9
+        }
+
+        .callout-info strong {
+            color: var(--info)
+        }
+
+        /* steps */
+        .steps {
+            counter-reset: step;
+            list-style: none;
+            margin: 24px 0
+        }
+
+        .steps li {
+            counter-increment: step;
+            position: relative;
+            padding: 14px 0 14px 56px;
+            border-bottom: 1px dashed rgba(255, 255, 255, .08)
+        }
+
+        .steps li:last-child {
+            border-bottom: none
+        }
+
+        .steps li::before {
+            content: counter(step);
+            position: absolute;
+            left: 0;
+            top: 14px;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--gold), var(--gold-bright));
+            color: var(--bg-darker);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Outfit', sans-serif;
+            font-weight: 700;
+            font-size: .95rem;
+            box-shadow: 0 2px 10px rgba(212, 175, 55, .3)
+        }
+
+        /* footer */
         footer {
             text-align: center;
-            padding: 40px;
-            color: var(--text-muted);
-            font-size: 0.8rem;
-            border-top: 1px solid rgba(255,255,255,0.05);
+            padding: 60px 30px 40px;
+            color: var(--text-dim);
+            font-size: .78rem;
+            border-top: 1px solid rgba(255, 255, 255, .05);
+            margin-top: 60px;
+            letter-spacing: 1px
+        }
+
+        footer .gold {
+            color: var(--gold);
+            font-family: 'Cormorant Garamond', serif;
+            letter-spacing: 3px;
+            font-size: 1rem
+        }
+
+        /* responsive */
+        @media (max-width:1024px) {
+            .layout {
+                grid-template-columns: 1fr;
+                gap: 0;
+                padding: 0 20px
+            }
+
+            .sidebar {
+                position: fixed;
+                top: 0;
+                left: -300px;
+                width: 280px;
+                height: 100vh;
+                background: var(--bg-darker);
+                z-index: 997;
+                padding: 80px 24px 40px;
+                transition: left .3s ease;
+                border-right: 1px solid var(--gold-line);
+                box-shadow: 8px 0 40px rgba(0, 0, 0, .5)
+            }
+
+            .sidebar.open {
+                left: 0
+            }
+
+            .menu-btn {
+                display: flex
+            }
+
+            main {
+                padding: 30px 0 60px;
+                max-width: 100%
+            }
+
+            .hero {
+                padding: 50px 24px;
+                margin-bottom: 50px
+            }
+
+            .responsive-grid {
+                grid-template-columns: 1fr
+            }
+
+            .card {
+                padding: 24px
+            }
+
+            .overlay {
+                position: fixed;
+                inset: 0;
+                background: rgba(0, 0, 0, .6);
+                z-index: 996;
+                display: none;
+                backdrop-filter: blur(4px)
+            }
+
+            .overlay.active {
+                display: block
+            }
+        }
+
+        @media (max-width:480px) {
+            body {
+                padding: 0
+            }
+
+            h1 {
+                letter-spacing: 3px
+            }
+
+            .section-title {
+                font-size: 1.3rem;
+                gap: 12px
+            }
+
+            .section-number {
+                width: 36px;
+                height: 36px
+            }
+
+            .feature-list li {
+                padding-left: 42px
+            }
+
+            .feature-list li::before {
+                left: 14px
+            }
+        }
+
+        /* print */
+        @media print {
+            body {
+                background: #fff;
+                color: #000
+            }
+
+            .sidebar,
+            .menu-btn,
+            .progress,
+            .lightbox,
+            .overlay {
+                display: none !important
+            }
+
+            .layout {
+                grid-template-columns: 1fr;
+                padding: 0
+            }
+
+            main {
+                padding: 0;
+                max-width: 100%
+            }
+
+            .hero,
+            .card {
+                break-inside: avoid;
+                border-color: #ccc;
+                box-shadow: none;
+                background: #fff;
+                color: #000
+            }
+
+            h1,
+            .section-title,
+            .card h3 {
+                color: #8a7320 !important;
+                -webkit-text-fill-color: #8a7320 !important
+            }
+
+            section {
+                opacity: 1 !important;
+                transform: none !important;
+                page-break-inside: avoid
+            }
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(212, 175, 55, .2);
+            border-radius: 4px
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(212, 175, 55, .4)
+        }
+
+        a:focus-visible,
+        button:focus-visible {
+            outline: 2px solid var(--gold);
+            outline-offset: 2px;
+            border-radius: 4px
         }
     </style>
 </head>
+
 <body>
-    <div class="container">
-        <header>
-            <h1>LAURA JAPAN</h1>
-            <div class="subtitle">Invoice System User Manual</div>
-        </header>
 
-        <section id="login">
-            <div class="section-title">
-                <span class="section-number">1</span>
-                ログインと初期設定
+    <div class="progress" id="progress" role="progressbar" aria-label="読了進捗"></div>
+
+    <button class="menu-btn" id="menuBtn" aria-label="メニューを開く">☰</button>
+    <div class="overlay" id="overlay"></div>
+
+    <div class="layout">
+
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar" aria-label="目次">
+            <div class="brand">
+                LAURA JAPAN
+                <small>User Manual</small>
             </div>
-            <div class="card">
-                <p>システムを利用するには、指定のユーザーIDとパスワードでログインしてください。</p>
-                <div class="responsive-grid">
-                    <div>
-                        <div class="label-pc">PC View</div>
-                        <div class="img-container">
-                            <img src="/static/manual/dashboard_pc.png" alt="Dashboard PC">
+            <nav>
+                <ul class="toc">
+                    <li><a href="#login" data-section="login"><span class="toc-num">01</span>ログインと初期設定</a></li>
+                    <li><a href="#create" data-section="create"><span class="toc-num">02</span>伝票の作成（AI解析）</a></li>
+                    <li><a href="#preview" data-section="preview"><span class="toc-num">03</span>プレビューと返品処理</a></li>
+                    <li><a href="#history" data-section="history"><span class="toc-num">04</span>履歴管理とZIP出力</a></li>
+                </ul>
+            </nav>
+            <div class="sidebar-foot">
+                <div style="margin-bottom:8px;color:var(--gold-bright);font-weight:500">ショートカット</div>
+                <span class="kbd">1</span>〜<span class="kbd">4</span> セクションへ移動<br>
+                <span class="kbd">Esc</span> 拡大画像を閉じる<br>
+                <span class="kbd">P</span> 印刷
+            </div>
+        </aside>
+
+        <!-- Main -->
+        <main>
+            <header class="hero">
+                <div class="hero-badge">Sophisticated Invoice System</div>
+                <h1>LAURA JAPAN<span class="ja">伝票システム 操作マニュアル</span></h1>
+                <div class="subtitle">Invoice System User Manual</div>
+                <div class="hero-meta">
+                    <span><span class="dot"></span>Version 2.0</span>
+                    <span><span class="dot"></span>2026 Edition</span>
+                    <span><span class="dot"></span>Web &amp; Mobile</span>
+                </div>
+            </header>
+
+            <!-- Section 1 -->
+            <section id="login">
+                <div class="section-title">
+                    <div class="section-number">1</div>
+                    <div class="section-title-text">
+                        ログインと初期設定
+                        <span class="section-title-en">Login &amp; Initial Setup</span>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3>🔐 アカウント認証とオペレーター選択</h3>
+                    <p>システムを利用するには、指定のユーザーIDとパスワードでログインしてください。ログイン後、業務を行うオペレーター（担当者）を選択します。</p>
+
+                    <ol class="steps">
+                        <li>ブラウザでシステムURLにアクセス</li>
+                        <li>ユーザーID / パスワードを入力してログイン</li>
+                        <li>担当オペレーターを選択して業務開始</li>
+                    </ol>
+
+                    <div class="responsive-grid">
+                        <div>
+                            <span class="label label-pc">💻 PC View</span>
+                            <div class="img-container"><img src="/static/manual/dashboard_pc.png" alt="PC ダッシュボード画面">
+                            </div>
+                        </div>
+                        <div>
+                            <span class="label label-mobile">📱 Mobile View</span>
+                            <div class="img-container"><img src="/static/manual/dashboard_mobile.png"
+                                    alt="モバイル ダッシュボード画面"></div>
                         </div>
                     </div>
-                    <div>
-                        <div class="label-mobile">Mobile View</div>
-                        <div class="img-container">
-                            <img src="/static/manual/dashboard_mobile.png" alt="Dashboard Mobile">
-                        </div>
+
+                    <div class="callout callout-info">
+                        <span class="callout-icon">💡</span>
+                        <div><strong>モバイル端末でのナビゲーション</strong>サイドメニュー（ハンバーガーアイコン）から「新規作成」「履歴」へ素早くアクセスできます。</div>
                     </div>
                 </div>
-                <p>ログイン後、オペレーター（担当者）を選択します。モバイル端末ではサイドメニューから「新規作成」や「履歴」へ素早くアクセスできます。</p>
-            </div>
-        </section>
+            </section>
 
-        <section id="create">
-            <div class="section-title">
-                <span class="section-number">2</span>
-                伝票の作成（AI解析）
-            </div>
-            <div class="card">
-                <h3>高度なAIによる自動データ化</h3>
-                <p>「新規作成」から商品タグの写真をアップロード（複数枚一括OK）すると、AIが内容を瞬時に解析します。</p>
-                <ul class="feature-list">
-                    <li><span class="badge">POINT</span> <b>背番号認識:</b> 大量の同じタグを撮影しても、AIが1枚ずつ識別して重複なくデータ化します。</li>
-                    <li><span class="badge">POINT</span> <b>チャンク処理:</b> 100枚以上の画像でも、20枚ずつの自動分割処理により安定して解析可能です。</li>
-                </ul>
-                <div class="label-pc">伝票種別の選択</div>
-                <div class="img-container" style="max-width: 600px;">
-                    <img src="/static/manual/toggle.png" alt="Document Type Toggle">
+            <!-- Section 2 -->
+            <section id="create">
+                <div class="section-title">
+                    <div class="section-number">2</div>
+                    <div class="section-title-text">
+                        伝票の作成（AI解析）
+                        <span class="section-title-en">Create Invoice with AI</span>
+                    </div>
                 </div>
-                <p>上部のタブで「納品・仮納品・返品・仮返品」を切り替えることができます。選択した種別に応じて、書類のタイトルや計算ロジックが自動で切り替わります。</p>
-            </div>
-        </section>
 
-        <section id="preview">
-            <div class="section-title">
-                <span class="section-number">3</span>
-                プレビューと返品処理
-            </div>
-            <div class="card">
-                <h3>返品時のマイナス自動計算</h3>
-                <p>「返品」を選択した場合、入力された数量はそのままに、計算結果と書類上の表記がすべて「マイナス」に反転します。</p>
-                <div class="img-container">
-                    <img src="/static/manual/preview.png" alt="Return Preview">
+                <div class="card">
+                    <h3>🤖 高度なAIによる自動データ化</h3>
+                    <p>「新規作成」から商品タグの写真をアップロードすると、AIが内容を瞬時に解析します。<b>複数枚の一括アップロードに対応</b>しているため、現場での作業時間を大幅に削減できます。</p>
+
+                    <ul class="feature-list">
+                        <li><span class="badge">POINT 01</span><b>背番号認識：</b>大量の同じタグを撮影しても、AIが1枚ずつ識別して重複なくデータ化します。</li>
+                        <li><span class="badge">POINT 02</span><b>チャンク処理：</b>100枚以上の画像でも、20枚ずつの自動分割処理により安定して解析可能です。</li>
+                        <li><span class="badge">POINT 03</span><b>マルチデバイス対応：</b>スマホで撮影 → そのままアップロードでデスクから現場まで一気通貫。</li>
+                    </ul>
+
+                    <div class="callout callout-tip">
+                        <span class="callout-icon">✅</span>
+                        <div><strong>撮影のコツ</strong>タグ全体が画面に収まるように、明るい場所で撮影すると認識精度が向上します。</div>
+                    </div>
+
+                    <h3 style="margin-top:32px">🗂️ 伝票種別の選択</h3>
+                    <span class="label label-pc">💻 PC View</span>
+                    <div class="img-container" style="max-width:600px"><img src="/static/manual/toggle.png"
+                            alt="伝票種別の切り替えタブ"></div>
+                    <p>上部のタブで <b>「納品 / 仮納品 / 返品 / 仮返品」</b> を切り替えることができます。選択した種別に応じて、書類のタイトルや計算ロジックが自動で切り替わります。</p>
+
+                    <div class="callout callout-warn">
+                        <span class="callout-icon">⚠️</span>
+                        <div><strong>確定前にご確認ください</strong>伝票種別は確定後の変更ができません。アップロード前に必ず種別をご確認ください。</div>
+                    </div>
                 </div>
-                <ul class="feature-list">
-                    <li>プレビュー画面で「× -1点」のように表示され、合計金額もマイナスになります。</li>
-                    <li>数値が赤字で表示されるなど、視覚的に返品であることが分かりやすくなっています。</li>
-                    <li>Math.truncロジックにより、消費税計算も1円の狂いなく正確に行われます。</li>
-                </ul>
-            </div>
-        </section>
+            </section>
 
-        <section id="history">
-            <div class="section-title">
-                <span class="section-number">4</span>
-                履歴管理とZIP出力
-            </div>
-            <div class="card">
-                <p>「履歴」画面では、過去に作成したすべての伝票を閲覧できます。</p>
-                <div class="img-container">
-                    <img src="/static/manual/history.png" alt="History List">
+            <!-- Section 3 -->
+            <section id="preview">
+                <div class="section-title">
+                    <div class="section-number">3</div>
+                    <div class="section-title-text">
+                        プレビューと返品処理
+                        <span class="section-title-en">Preview &amp; Return Processing</span>
+                    </div>
                 </div>
-                <ul class="feature-list">
-                    <li><b>ステータス管理:</b> 「下書き」「確定済み」などの状態が一目でわかります。</li>
-                    <li><b>ZIPダウンロード:</b> 納品書・商品明細表のPDFとExcelを1クリックでまとめて保存できます。</li>
-                    <li><b>Google Drive連携:</b> 確定した伝票は、自動的に日付と種別ごとのフォルダへ整理されて保存されます。</li>
-                </ul>
-            </div>
-        </section>
 
-        <footer>
-            &copy; 2026 LAURA JAPAN | Sophisticated Invoice Management System
-        </footer>
+                <div class="card">
+                    <h3>↩️ 返品時のマイナス自動計算</h3>
+                    <p>「返品」を選択した場合、入力された数量はそのままに、<b>計算結果と書類上の表記がすべて「マイナス」に反転</b>します。手作業での符号変更は不要です。</p>
+
+                    <div class="img-container"><img src="/static/manual/preview.png" alt="返品プレビュー画面"></div>
+
+                    <ul class="feature-list">
+                        <li>プレビュー画面で <b style="font-family:'JetBrains Mono',monospace">× -1点</b>
+                            のように表示され、合計金額もマイナスになります。</li>
+                        <li>数値が <b style="color:#ee6b6b">赤字</b> で表示されるなど、視覚的に返品であることが分かりやすくなっています。</li>
+                        <li><b>Math.truncロジック</b> により、消費税計算も1円の狂いなく正確に行われます。</li>
+                    </ul>
+
+                    <div class="callout callout-info">
+                        <span class="callout-icon">🔢</span>
+                        <div><strong>計算精度について</strong>JavaScriptの浮動小数点誤差を回避するため、税計算には <code
+                                style="background:rgba(255,255,255,.06);padding:2px 6px;border-radius:4px;font-family:'JetBrains Mono',monospace;font-size:.85em;color:var(--gold-bright)">Math.trunc</code>
+                            を採用。1円単位まで正確です。</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Section 4 -->
+            <section id="history">
+                <div class="section-title">
+                    <div class="section-number">4</div>
+                    <div class="section-title-text">
+                        履歴管理とZIP出力
+                        <span class="section-title-en">History &amp; ZIP Export</span>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3>📂 すべての伝票を一元管理</h3>
+                    <p>「履歴」画面では、過去に作成したすべての伝票を閲覧できます。検索・フィルタ・一括ダウンロードに対応しており、月次の経理処理がスムーズに進みます。</p>
+
+                    <div class="img-container"><img src="/static/manual/history.png" alt="履歴一覧画面"></div>
+
+                    <ul class="feature-list">
+                        <li><b>ステータス管理：</b>「下書き」「確定済み」などの状態が一目でわかります。</li>
+                        <li><b>ZIPダウンロード：</b>納品書・商品明細表のPDFとExcelを <b>1クリック</b> でまとめて保存できます。</li>
+                        <li><b>Google Drive連携：</b>確定した伝票は、自動的に <b>日付と種別ごとのフォルダ</b> へ整理されて保存されます。</li>
+                    </ul>
+
+                    <div class="callout callout-tip">
+                        <span class="callout-icon">☁️</span>
+                        <div><strong>クラウド連携で安心</strong>Google Driveに自動バックアップされるため、端末トラブル時もデータが守られます。</div>
+                    </div>
+                </div>
+            </section>
+
+            <footer>
+                <div class="gold">LAURA JAPAN</div>
+                <div style="margin-top:10px">© 2026 Sophisticated Invoice Management System</div>
+                <div style="margin-top:6px;color:var(--text-dim)">All rights reserved.</div>
+            </footer>
+        </main>
     </div>
+
+    <!-- Lightbox -->
+    <div class="lightbox" id="lightbox" role="dialog" aria-label="画像を拡大表示">
+        <button class="lightbox-close" id="lightboxClose" aria-label="閉じる">×</button>
+        <img id="lightboxImg" src="" alt="">
+    </div>
+
+    <script>
+        // progress bar
+        const progressEl = document.getElementById('progress');
+        const updateProgress = () => {
+            const h = document.documentElement;
+            const scrolled = (h.scrollTop) / (h.scrollHeight - h.clientHeight) * 100;
+            progressEl.style.width = Math.min(scrolled, 100) + '%';
+        };
+        window.addEventListener('scroll', updateProgress, { passive: true });
+        updateProgress();
+
+        // section reveal
+        const io = new IntersectionObserver((entries) => {
+            entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible') });
+        }, { threshold: .12 });
+        document.querySelectorAll('section').forEach(s => io.observe(s));
+
+        // active toc
+        const sections = document.querySelectorAll('section');
+        const tocLinks = document.querySelectorAll('.toc a');
+        const setActive = () => {
+            let cur = sections[0]?.id;
+            sections.forEach(s => { if (window.scrollY + 120 >= s.offsetTop) cur = s.id });
+            tocLinks.forEach(a => a.classList.toggle('active', a.dataset.section === cur));
+        };
+        window.addEventListener('scroll', setActive, { passive: true });
+        setActive();
+
+        // mobile menu
+        const sidebar = document.getElementById('sidebar');
+        const menuBtn = document.getElementById('menuBtn');
+        const overlay = document.getElementById('overlay');
+        const toggleMenu = (open) => {
+            const isOpen = open !== undefined ? open : !sidebar.classList.contains('open');
+            sidebar.classList.toggle('open', isOpen);
+            overlay.classList.toggle('active', isOpen);
+            menuBtn.textContent = isOpen ? '×' : '☰';
+        };
+        menuBtn.addEventListener('click', () => toggleMenu());
+        overlay.addEventListener('click', () => toggleMenu(false));
+        tocLinks.forEach(a => a.addEventListener('click', () => { if (window.innerWidth <= 1024) toggleMenu(false) }));
+
+        // lightbox
+        const lb = document.getElementById('lightbox');
+        const lbImg = document.getElementById('lightboxImg');
+        const lbClose = document.getElementById('lightboxClose');
+        document.querySelectorAll('.img-container img').forEach(img => {
+            img.addEventListener('click', () => { lbImg.src = img.src; lbImg.alt = img.alt; lb.classList.add('active') });
+        });
+        const closeLB = () => lb.classList.remove('active');
+        lb.addEventListener('click', e => { if (e.target === lb || e.target === lbImg) closeLB() });
+        lbClose.addEventListener('click', closeLB);
+
+        // keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.target.matches('input,textarea')) return;
+            if (e.key === 'Escape') { closeLB(); toggleMenu(false); return }
+            if (e.key === 'p' && !e.ctrlKey && !e.metaKey) { window.print(); return }
+            const map = { '1': 'login', '2': 'create', '3': 'preview', '4': 'history' };
+            if (map[e.key]) {
+                const el = document.getElementById(map[e.key]);
+                if (el) { el.scrollIntoView({ behavior: 'smooth' }); history.replaceState(null, '', '#' + map[e.key]) }
+            }
+        });
+    </script>
 </body>
+
 </html>

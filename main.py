@@ -1476,7 +1476,7 @@ async def get_history_data(inv_id: int, username: Annotated[str, Depends(authent
 
 @app.get("/manual", response_class=HTMLResponse)
 async def get_manual(request: Request):
-    return templates.TemplateResponse("manual.html", {"request": request})
+    return templates.TemplateResponse(request=request, name="manual.html")
 
 
 if __name__ == "__main__":
