@@ -3050,7 +3050,12 @@
         });
         function updProg(label, cur, tot) { $('prog-label').textContent = label; const p = Math.round(cur / tot * 100); $('prog-pct').textContent = p + '%'; $('prog-fill').style.width = p + '%'; }
 
-        function getRate() { return parseInt($('inp-rate').value) || 35; }
+        function getRate() { 
+            const v = $('inp-rate').value;
+            if (v === '' || isNaN(parseInt(v))) return 35;
+            const r = parseInt(v);
+            return r > 0 ? r : 100; // 掛率0の場合は割引なし(100%)として計算
+        }
         function calcItemAmount(it) { const q = parseInt(it.quantity) || 1; const u = parseInt(it.unit_price) || 0; return Math.floor(u * (getRate() / 100) * q); }
 
         function renderPreview() {
