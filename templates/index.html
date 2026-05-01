@@ -2995,19 +2995,22 @@
           $('prog-wrap').style.display = 'block';
           updProg('画像を圧縮して送信準備中...', 0, 100);
 
-          try {
+            try {
             const blobs = [];
             for (let i = 0; i < total; i++) { 
               updProg(`画像を圧縮中 (${i + 1}/${total})`, Math.round((i/total)*20), 100); 
               blobs.push(await compress(selectedFiles[i])); 
             }
 
+            updProg('サーバーへアップロード中...', 20, 100);
+
             const fd = new FormData();
             fd.append('ai_model', ai);
             blobs.forEach((b, i) => fd.append('files', b, `img_${i}.jpg`));
 
-            jobManager.enqueue('analyze', '/api/jobs/analyze', fd, {
+            const jid = await jobManager.enqueue('analyze', '/api/jobs/analyze', fd, {
               onSuccess: (res) => {
+                $('prog-fill').style.transition = 'width 0.2s';
                 const merged = {};
                 res.items.forEach(it => {
                   const code = (it.code || '-').trim().toUpperCase();
@@ -3035,12 +3038,26 @@
                 window.scrollTo({ top: $('preview-card').offsetTop - 20, behavior: 'smooth' });
               },
               onError: (err) => {
+                $('prog-fill').style.transition = 'width 0.2s';
                 $('prog-wrap').style.display = 'none';
                 $('btn-analyze').disabled = false;
                 $('sp1').style.display = 'none';
                 $('btn-analyze-text').textContent = '解析失敗';
               }
             });
+
+            if (jid) {
+                $('prog-label').textContent = 'AI解析中... (数秒〜数十秒かかります)';
+                $('prog-pct').textContent = '';
+                $('prog-fill').style.transition = 'width 15s cubic-bezier(0.1, 0.7, 0.1, 1)';
+                $('prog-fill').style.width = '95%';
+                $('btn-analyze-text').textContent = 'AIが解析中...';
+            } else {
+                $('prog-wrap').style.display = 'none';
+                $('btn-analyze').disabled = false;
+                $('sp1').style.display = 'none';
+                $('btn-analyze-text').textContent = 'エラーが発生しました';
+            }
 
           } catch (e) { 
             toast(e.message, 'err'); 
