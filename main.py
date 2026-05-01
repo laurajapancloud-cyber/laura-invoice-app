@@ -1474,6 +1474,11 @@ async def get_history_data(inv_id: int, username: Annotated[str, Depends(authent
     }
 
 
+@app.get("/manual", response_class=HTMLResponse)
+async def get_manual(request: Request):
+    return templates.TemplateResponse("manual.html", {"request": request})
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
