@@ -177,6 +177,12 @@ def get_db():
     conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
     return conn
 
+def require_db():
+    conn = get_db()
+    if not conn:
+        raise HTTPException(status_code=500, detail="DATABASE_URL is not configured")
+    return conn
+
 def init_db():
     conn = get_db()
     if not conn: return
@@ -279,7 +285,7 @@ def init_db():
     conn.close()
 
 def generate_invoice_number(doc_type='delivery'):
-    conn = get_db()
+    conn = require_db()
     if not conn: return f"LJ-ERROR"
     with conn.cursor() as cur:
         res = generate_invoice_number_safe(cur, doc_type)
@@ -419,7 +425,7 @@ async def health():
 # ==================== Dashboard API ====================
 @app.get("/api/dashboard")
 async def get_dashboard(username: Annotated[str, Depends(authenticate)]):
-    conn = get_db()
+    conn = require_db()
     if not conn:
         return {"this_month": {"invoices": 0, "total_amount": 0}, "monthly": [], "api_usage": []}
     
@@ -497,7 +503,7 @@ async def get_dashboard(username: Annotated[str, Depends(authenticate)]):
 # ==================== User Master API ====================
 @app.get("/api/users")
 async def get_users(username: Annotated[str, Depends(authenticate)]):
-    conn = get_db()
+    conn = require_db()
     if not conn: return []
     with conn.cursor() as cur:
         cur.execute("SELECT id, name, color FROM users ORDER BY id")
@@ -507,7 +513,7 @@ async def get_users(username: Annotated[str, Depends(authenticate)]):
 
 @app.post("/api/users")
 async def add_user(username: Annotated[str, Depends(authenticate)], name: str = Form(...), color: str = Form("#c9a961")):
-    conn = get_db()
+    conn = require_db()
     if not conn: return {"status": "no-db-mode"}
     with conn.cursor() as cur:
         cur.execute("INSERT INTO users (name, color) VALUES (%s, %s)", (name, color))
@@ -517,7 +523,7 @@ async def add_user(username: Annotated[str, Depends(authenticate)], name: str = 
 
 @app.delete("/api/users/{uid}")
 async def delete_user(uid: int, username: Annotated[str, Depends(authenticate)]):
-    conn = get_db()
+    conn = require_db()
     if not conn: return {"status": "no-db-mode"}
     with conn.cursor() as cur:
         cur.execute("DELETE FROM users WHERE id = %s", (uid,))
@@ -528,7 +534,7 @@ async def delete_user(uid: int, username: Annotated[str, Depends(authenticate)])
 # ==================== Customer Master API ====================
 @app.get("/api/customers")
 async def get_customers(username: Annotated[str, Depends(authenticate)]):
-    conn = get_db()
+    conn = require_db()
     if not conn: return []
     with conn.cursor() as cur:
         cur.execute("SELECT id, name, discount_rate FROM customers ORDER BY id")
@@ -538,7 +544,7 @@ async def get_customers(username: Annotated[str, Depends(authenticate)]):
 
 @app.post("/api/customers")
 async def add_customer(username: Annotated[str, Depends(authenticate)], name: str = Form(...), discount_rate: int = Form(35)):
-    conn = get_db()
+    conn = require_db()
     if not conn: return {"status": "no-db-mode"}
     with conn.cursor() as cur:
         cur.execute("INSERT INTO customers (name, discount_rate) VALUES (%s, %s)", (name, discount_rate))
@@ -548,7 +554,7 @@ async def add_customer(username: Annotated[str, Depends(authenticate)], name: st
 
 @app.delete("/api/customers/{cid}")
 async def delete_customer(cid: int, username: Annotated[str, Depends(authenticate)]):
-    conn = get_db()
+    conn = require_db()
     if not conn: return {"status": "no-db-mode"}
     with conn.cursor() as cur:
         cur.execute("DELETE FROM customers WHERE id = %s", (cid,))
@@ -626,7 +632,7 @@ async def analyze_images_internal(jid: str, image_parts: list, ai_model: str):
         
         # Record usage
         try:
-            conn = get_db()
+            conn = require_db()
             if conn:
                 with conn.cursor() as cur: cur.execute("INSERT INTO api_usage (ai_model, image_count) VALUES (%s, %s)", (ai_model, len(image_parts)))
                 conn.commit(); conn.close()
@@ -945,7 +951,7 @@ async def preview_documents(username: Annotated[str, Depends(authenticate)], pay
 @app.post("/generate-documents")
 async def generate_documents(request: Request, username: Annotated[str, Depends(authenticate)], payload: DocumentRequest):
     try:
-        conn = get_db()
+        conn = require_db()
         doc_type = payload.doc_type or "delivery"
         with conn.cursor() as cur:
             if payload.invoice_id:
@@ -991,8 +997,7 @@ async def generate_documents(request: Request, username: Annotated[str, Depends(
 
 @app.post("/api/history/{inv_id}/lock")
 async def lock_invoice(inv_id: int, username: Annotated[str, Depends(authenticate)]):
-    conn = get_db()
-    if not conn: return {"status": "no-db-mode"}
+    conn = require_db()
     with conn.cursor() as cur:
         cur.execute("SELECT * FROM invoices WHERE id=%s", (inv_id,))
         inv = cur.fetchone()
@@ -1024,7 +1029,7 @@ async def lock_invoice(inv_id: int, username: Annotated[str, Depends(authenticat
 
 @app.post("/api/history/{inv_id}/unlock")
 async def unlock_invoice(inv_id: int, username: Annotated[str, Depends(authenticate)]):
-    conn = get_db()
+    conn = require_db()
     if not conn: return {"status": "no-db-mode"}
     with conn.cursor() as cur:
         cur.execute("UPDATE invoices SET status='draft', locked_at=NULL WHERE id=%s", (inv_id,))
@@ -1035,7 +1040,7 @@ async def unlock_invoice(inv_id: int, username: Annotated[str, Depends(authentic
 # ==================== History & Serving API ====================
 @app.get("/api/history")
 async def get_history(username: Annotated[str, Depends(authenticate)], doc_type: Optional[str] = None, user_id: Optional[int] = None):
-    conn = get_db()
+    conn = require_db()
     if not conn: return []
     with conn.cursor() as cur:
         query = """
@@ -1071,7 +1076,7 @@ KIND_CONFIG = {
 
 def serve_file(inv_id: int, kind: str):
     cfg = KIND_CONFIG[kind]
-    conn = get_db()
+    conn = require_db()
     if not conn: raise HTTPException(500, "DB required for this action")
     with conn.cursor() as cur:
         cur.execute("SELECT * FROM invoices WHERE id=%s", (inv_id,))
@@ -1121,7 +1126,7 @@ async def dl_detail_excel(inv_id: int, username: Annotated[str, Depends(authenti
 
 @app.get("/api/history/{inv_id}/items")
 async def get_history_items(inv_id: int, username: Annotated[str, Depends(authenticate)]):
-    conn = get_db()
+    conn = require_db()
     if not conn: return {"items": []}
     with conn.cursor() as cur:
         cur.execute("SELECT code, color, size, unit_price, quantity FROM invoice_items WHERE invoice_id = %s", (inv_id,))
@@ -1134,7 +1139,7 @@ async def get_history_items(inv_id: int, username: Annotated[str, Depends(authen
 
 @app.delete("/api/history/{inv_id}")
 async def delete_history(inv_id: int, username: Annotated[str, Depends(authenticate)]):
-    conn = get_db()
+    conn = require_db()
     if not conn: return {"status": "no-db-mode"}
     with conn.cursor() as cur:
         cur.execute("DELETE FROM invoice_items WHERE invoice_id = %s", (inv_id,))
@@ -1147,7 +1152,7 @@ async def upload_drive_internal(jid: str, inv_id: int):
     try:
         db_update_job(jid, 'processing')
         if not GDRIVE_WEBHOOK_URL: raise Exception("GDRIVE_WEBHOOK_URLが未設定です")
-        conn = get_db()
+        conn = require_db()
         with conn.cursor() as cur:
             cur.execute("SELECT * FROM invoices WHERE id=%s", (inv_id,))
             inv = cur.fetchone()
@@ -1209,7 +1214,7 @@ async def enqueue_drive_upload(bt: BackgroundTasks, inv_id: int, username: Annot
 
 @app.get("/api/jobs")
 async def get_jobs(limit: int = 20, username: Annotated[str, Depends(authenticate)] = None):
-    conn = get_db()
+    conn = require_db()
     if not conn: return []
     with conn.cursor() as cur:
         cur.execute("SELECT id, type, status, created_at, updated_at FROM jobs ORDER BY created_at DESC LIMIT %s", (limit,))
@@ -1225,7 +1230,7 @@ async def get_job_status(job_id: str, username: Annotated[str, Depends(authentic
 
 @app.get("/api/history/{inv_id}/data")
 async def get_history_data(inv_id: int, username: Annotated[str, Depends(authenticate)]):
-    conn = get_db()
+    conn = require_db()
     with conn.cursor() as cur:
         cur.execute("SELECT * FROM invoices WHERE id=%s", (inv_id,))
         row = cur.fetchone()
