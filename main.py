@@ -637,30 +637,64 @@ def analyze_images_internal(jid: str, image_parts: list, ai_model: str):
             return
 
 
-        elif ai_model == "azure":
-            if not azure_client: raise Exception("Azure OpenAIのキー/エンドポイントが未設定です。")
-            content_list = [{"type": "text", "text": prompt}]
-            for part in image_parts: content_list.append({"type": "image_url", "image_url": {"url": f"data:{part['mime_type']};base64,{part['base64']}"}})
-            response = azure_client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": content_list}], max_completion_tokens=2000)
-            raw_text = response.choices[0].message.content.strip()
-        elif ai_model == "openai":
-            if not openai_client: raise Exception("OpenAI APIキーが未設定です。")
-            content_list = [{"type": "text", "text": prompt}]
-            for part in image_parts: content_list.append({"type": "image_url", "image_url": {"url": f"data:{part['mime_type']};base64,{part['base64']}"}})
-            response = openai_client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": content_list}], max_tokens=2000)
-            raw_text = response.choices[0].message.content.strip()
-        else:
-            contents = [prompt] + [{"mime_type": p["mime_type"], "data": p["data"]} for p in image_parts]
-            response = gemini_model.generate_content(contents)
-            raw_text = response.text.strip()
+        elif ai_model in ["azure", "openai"]:
+            CHUNK_SIZE = 20
+            items_data = []
+            
+            client = azure_client if ai_model == "azure" else openai_client
+            if not client: raise Exception(f"{ai_model.capitalize()} OpenAIのキー/エンドポイントが未設定です。")
+            model_name = "gpt-4o" if ai_model == "azure" else "gpt-4o-mini"
+            max_tokens_param = {"max_completion_tokens": 4000} if ai_model == "azure" else {"max_tokens": 4000}
 
-        try:
-            chunk_data = extract_json_array(raw_text)
-        except Exception as e:
-            print(f"JSON Parsing failed: {e}\nRaw text: {raw_text}")
-            raise Exception("AIの解析結果をJSONとして読み取れませんでした。もう一度お試しください。")
+            for i in range(0, len(image_parts), CHUNK_SIZE):
+                chunk = image_parts[i:i + CHUNK_SIZE]
+                content_list = [{"type": "text", "text": prompt}]
+                for part in chunk:
+                    content_list.append({
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:{part['mime_type']};base64,{part['base64']}",
+                            "detail": "low"
+                        }
+                    })
+                
+                try:
+                    response = client.chat.completions.create(
+                        model=model_name,
+                        messages=[{"role": "user", "content": content_list}],
+                        **max_tokens_param
+                    )
+                    raw_text = response.choices[0].message.content.strip()
+                    chunk_data = extract_json_array(raw_text)
+                    if not isinstance(chunk_data, list): chunk_data = [chunk_data]
+                    for item in chunk_data:
+                        if isinstance(item, dict) and "source_image_no" in item:
+                            item["source_image_no"] += i
+                    items_data.extend(chunk_data)
+                except Exception as e:
+                    print(f"Chunk parsing failed ({ai_model}, offset {i}): {e}")
+
+        elif ai_model == "gemini":
+            CHUNK_SIZE = 20
+            items_data = []
+
+            for i in range(0, len(image_parts), CHUNK_SIZE):
+                chunk = image_parts[i:i + CHUNK_SIZE]
+                contents = [prompt] + [{"mime_type": p["mime_type"], "data": p["data"]} for p in chunk]
+                
+                try:
+                    response = gemini_model.generate_content(contents)
+                    raw_text = response.text.strip()
+                    chunk_data = extract_json_array(raw_text)
+                    if not isinstance(chunk_data, list): chunk_data = [chunk_data]
+                    for item in chunk_data:
+                        if isinstance(item, dict) and "source_image_no" in item:
+                            item["source_image_no"] += i
+                    items_data.extend(chunk_data)
+                except Exception as e:
+                    print(f"Chunk parsing failed (gemini, offset {i}): {e}")
         
-        if not isinstance(chunk_data, list): chunk_data = [chunk_data]
+        chunk_data = items_data  # normalize variable name for the rest of the function
         
         # Record usage
         try:
