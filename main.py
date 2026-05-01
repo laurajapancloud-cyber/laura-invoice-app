@@ -20,6 +20,7 @@ from fastapi.security import APIKeyCookie
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, RedirectResponse, StreamingResponse
 import zipfile
+import urllib.parse
 import hashlib
 import google.generativeai as genai
 try:
@@ -168,18 +169,30 @@ def get_drive_service():
         return None
 
 def extract_json_array(text: str):
-    """AIのレスポンスからJSON配列を抽出する"""
-    text = text.strip()
-    # ```json ... ``` を除去
-    text = re.sub(r"^```json\s*", "", text, flags=re.MULTILINE)
-    text = re.sub(r"^```\s*", "", text, flags=re.MULTILINE)
-    text = re.sub(r"\s*```$", "", text, flags=re.MULTILINE)
-    # 最初の [ から最後の ] まで抽出
-    start = text.find("[")
-    end = text.rfind("]")
-    if start != -1 and end != -1 and end >= start:
-        text = text[start:end+1]
-    return json.loads(text)
+	"""AIのレスポンスからJSON配列を抽出する"""
+	if not text:
+		raise ValueError("empty response")
+
+	text = text.strip()
+
+	# ```json ... ``` / ``` ... ``` を除去
+	text = re.sub(r"^```json\s*", "", text, flags=re.IGNORECASE)
+	text = re.sub(r"^```\s*", "", text)
+	text = re.sub(r"\s*```$", "", text)
+
+	# 最初の [ から最後の ] まで抽出
+	start = text.find("[")
+	end = text.rfind("]")
+
+	if start != -1 and end != -1 and end >= start:
+		text = text[start:end + 1]
+
+	data = json.loads(text)
+
+	if not isinstance(data, list):
+		data = [data]
+
+	return data
 
 # ==================== PostgreSQL (Supabase) Database ====================
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -1193,28 +1206,35 @@ def get_invoice_generated_files(inv_id: int):
 
 @app.get("/api/history/{inv_id}/zip")
 async def dl_zip(inv_id: int, username: Annotated[str, Depends(authenticate)]):
-    """伝票に関連する4ファイルをZIPにまとめてダウンロードする"""
-    inv, files = get_invoice_generated_files(inv_id)
-    titles = DOC_TYPE_TITLES.get(inv.get("doc_type", "delivery"), DOC_TYPE_TITLES["delivery"])
-    
-    inv_num = safe_filename(inv["invoice_number"])
-    customer = safe_filename(inv["customer_name"])
-    
-    zip_buffer = BytesIO()
-    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as z:
-        z.writestr(f"{inv_num}_{customer}_{titles['pdf_title']}.pdf", files["pdf"])
-        z.writestr(f"{inv_num}_{customer}_{titles['pdf_title']}.xlsx", files["excel"])
-        z.writestr(f"{inv_num}_{customer}_{titles['detail_pdf_title']}.pdf", files["detail_pdf"])
-        z.writestr(f"{inv_num}_{customer}_{titles['detail_pdf_title']}.xlsx", files["detail_excel"])
-    
-    zip_buffer.seek(0)
-    zip_name = f"{inv_num}_{customer}_documents.zip"
-    
-    return StreamingResponse(
-        zip_buffer,
-        media_type="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="{zip_name}"'}
-    )
+    try:
+        inv, files = get_invoice_generated_files(inv_id)
+        titles = DOC_TYPE_TITLES.get(inv.get("doc_type", "delivery"), DOC_TYPE_TITLES["delivery"])
+        
+        inv_num = safe_filename(inv.get("invoice_number") or "Unknown")
+        customer = safe_filename(inv.get("customer_name") or "Unknown")
+        
+        zip_buffer = BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as z:
+            z.writestr(f"{inv_num}_{customer}_{titles['pdf_title']}.pdf", files["pdf"])
+            z.writestr(f"{inv_num}_{customer}_{titles['pdf_title']}.xlsx", files["excel"])
+            z.writestr(f"{inv_num}_{customer}_{titles['detail_pdf_title']}.pdf", files["detail_pdf"])
+            z.writestr(f"{inv_num}_{customer}_{titles['detail_pdf_title']}.xlsx", files["detail_excel"])
+        
+        zip_buffer.seek(0)
+        zip_name = f"{inv_num}_{customer}_documents.zip"
+        # 日本語ファイル名を安全にヘッダーに含めるためのエンコード
+        encoded_filename = urllib.parse.quote(zip_name)
+        
+        return StreamingResponse(
+            zip_buffer,
+            media_type="application/zip",
+            headers={
+                "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"
+            }
+        )
+    except Exception as e:
+        print(f"ZIP download failed for inv_id {inv_id}: {e}")
+        raise HTTPException(500, detail=f"ZIP生成に失敗しました: {str(e)}")
 
 @app.get("/api/history/{inv_id}/items")
 async def get_history_items(inv_id: int, username: Annotated[str, Depends(authenticate)]):
