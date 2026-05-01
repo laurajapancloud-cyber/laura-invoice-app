@@ -492,6 +492,55 @@
             border-color: var(--border-strong);
         }
 
+        .item-card.ai-error {
+            border-color: rgba(212, 87, 78, 0.75) !important;
+            box-shadow: 0 0 0 1px rgba(212, 87, 78, 0.35);
+        }
+
+        .item-card.ai-warning {
+            border-color: rgba(232, 196, 104, 0.75) !important;
+            box-shadow: 0 0 0 1px rgba(232, 196, 104, 0.25);
+        }
+
+        .ai-badges {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 10px;
+        }
+
+        .ai-badge {
+            font-size: 10px;
+            padding: 3px 8px;
+            border-radius: 999px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+        }
+
+        .ai-badge-error {
+            background: rgba(212, 87, 78, 0.15);
+            color: var(--red);
+            border: 1px solid rgba(212, 87, 78, 0.35);
+        }
+
+        .ai-badge-warning {
+            background: rgba(232, 196, 104, 0.12);
+            color: var(--gold-bright);
+            border: 1px solid rgba(232, 196, 104, 0.35);
+        }
+
+        .ai-badge-ok {
+            background: rgba(127, 176, 105, 0.12);
+            color: var(--green);
+            border: 1px solid rgba(127, 176, 105, 0.35);
+        }
+
+        .merge-note {
+            font-size: 11px;
+            color: var(--blue);
+            margin-top: 6px;
+        }
+
         @keyframes cardIn {
             from {
                 opacity: 0;
@@ -3036,8 +3085,9 @@
                   const key = `${code}|${color}|${size}|${up}`;
                   if (merged[key]) {
                     merged[key].quantity += qty;
+                    merged[key].source_count += 1;
                   } else {
-                    merged[key] = { code, color, size, unit_price: up, quantity: qty };
+                    merged[key] = { code, color, size, unit_price: up, quantity: qty, source_count: 1 };
                   }
                 });
                 extractedItems = Object.values(merged);
@@ -3086,6 +3136,27 @@
             return r > 0 ? r : 100; // 掛率0の場合は割引なし(100%)として計算
         }
         function calcItemAmount(it) { const q = parseInt(it.quantity) || 1; const u = parseInt(it.unit_price) || 0; return Math.floor(u * (getRate() / 100) * q); }
+
+        const VALID_SIZES = ['44', '46', '48', '50', '52'];
+        function validateItem(it) {
+            const warnings = [];
+            const errors = [];
+            const code = String(it.code || '').trim();
+            const size = String(it.size || '').trim();
+            const unitPrice = parseInt(it.unit_price) || 0;
+            const qty = parseInt(it.quantity) || 0;
+
+            if (!code || code === '-') errors.push('品番未読取');
+            if (unitPrice <= 0) errors.push('単価未読取');
+            if (!size || !VALID_SIZES.includes(size)) warnings.push('サイズ確認');
+            if (qty <= 0) errors.push('数量不正');
+
+            return {
+                level: errors.length ? 'error' : (warnings.length ? 'warning' : 'ok'),
+                errors,
+                warnings
+            };
+        }
 
         function renderPreview() {
             const container = $('item-cards'); container.innerHTML = '';
@@ -3138,19 +3209,48 @@
                     tbody.appendChild(tr);
                 });
             } else {
-                container.className = isDesktop ? 'item-cards' : 'item-cards item-cards-grid'; // PC(1024-1200)でもカード2列
+                container.className = isDesktop ? 'item-cards' : 'item-cards item-cards-grid';
                 extractedItems.forEach((it, i) => {
                     const amt = calcItemAmount(it);
-                    const card = document.createElement('div'); card.className = 'item-card';
-                    card.innerHTML = `<div class="item-card-header"><span class="item-card-num">N° ${String(i + 1).padStart(2, '0')}</span><button class="item-card-del" onclick="delRow(${i})">✕</button></div>
-                    <div class="item-card-body">
-                      <div class="item-field full"><label>品番</label><input value="${it.code || ''}" data-i="${i}" data-k="code"></div>
-                      <div class="item-field"><label>カラー</label><input value="${it.color || ''}" data-i="${i}" data-k="color"></div>
-                      <div class="item-field"><label>サイズ</label><input value="${it.size || ''}" data-i="${i}" data-k="size"></div>
-                      <div class="item-field"><label>数量</label><div class="qty-stepper"><button onclick="adjustQty(${i},-1)">−</button><input type="number" value="${it.quantity || 1}" data-i="${i}" data-k="quantity"><button onclick="adjustQty(${i},1)">＋</button></div></div>
-                      <div class="item-field"><label>単価</label><input type="number" value="${it.unit_price || 0}" data-i="${i}" data-k="unit_price"></div>
-                    </div>
-                    <div class="item-card-footer"><span class="item-card-price">${getRate()}% × ${it.quantity}点</span><span class="item-card-total">¥${amt.toLocaleString()}</span></div>`;
+                    const check = validateItem(it);
+                    const card = document.createElement('div');
+                    card.className = `item-card ai-${check.level}`;
+
+                    const badges = [
+                        ...check.errors.map(x => `<span class="ai-badge ai-badge-error">⚠ ${x}</span>`),
+                        ...check.warnings.map(x => `<span class="ai-badge ai-badge-warning">確認 ${x}</span>`)
+                    ];
+                    if (!badges.length) badges.push(`<span class="ai-badge ai-badge-ok">✓ 読取OK</span>`);
+
+                    const mergeNote = it.source_count && it.source_count > 1
+                        ? `<div class="merge-note">${it.source_count}件の読取結果をまとめました</div>`
+                        : '';
+
+                    card.innerHTML = `
+                        <div class="item-card-header">
+                            <span class="item-card-num">N° ${String(i + 1).padStart(2, '0')}</span>
+                            <button class="item-card-del" onclick="delRow(${i})">✕</button>
+                        </div>
+                        <div class="ai-badges">${badges.join('')}</div>
+                        ${mergeNote}
+                        <div class="item-card-body">
+                            <div class="item-field full"><label>品番</label><input value="${it.code || ''}" data-i="${i}" data-k="code"></div>
+                            <div class="item-field"><label>カラー</label><input value="${it.color || ''}" data-i="${i}" data-k="color"></div>
+                            <div class="item-field"><label>サイズ</label><input value="${it.size || ''}" data-i="${i}" data-k="size"></div>
+                            <div class="item-field"><label>数量</label>
+                                <div class="qty-stepper">
+                                    <button onclick="adjustQty(${i},-1)">−</button>
+                                    <input type="number" value="${it.quantity || 1}" data-i="${i}" data-k="quantity">
+                                    <button onclick="adjustQty(${i},1)">＋</button>
+                                </div>
+                            </div>
+                            <div class="item-field"><label>単価</label><input type="number" value="${it.unit_price || 0}" data-i="${i}" data-k="unit_price"></div>
+                        </div>
+                        <div class="item-card-footer">
+                            <span class="item-card-price">${getRate()}% × ${it.quantity}点</span>
+                            <span class="item-card-total">¥${amt.toLocaleString()}</span>
+                        </div>
+                    `;
                     container.appendChild(card);
                 });
             }
