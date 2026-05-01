@@ -2321,7 +2321,7 @@
     </div>
     </main>
 
-    <div class="statusbar" style="display:none">
+    <div class="statusbar">
       <div class="statusbar-item">
         <span class="statusbar-dot"></span>
         <span>接続済み</span>
@@ -3359,6 +3359,62 @@
         function delRow(i) { syncInputs(); extractedItems.splice(i, 1); renderPreview(); }
         function adjustQty(i, delta) { syncInputs(); extractedItems[i].quantity = Math.max(1, (parseInt(extractedItems[i].quantity)||1) + delta); renderPreview(); }
         function syncInputs() { $('item-cards').querySelectorAll('input').forEach(inp => { const i = inp.dataset.i, k = inp.dataset.k; let v = inp.value; if (k === 'unit_price' || k === 'quantity') v = parseInt(v) || 0; extractedItems[i][k] = v; }); }
+        
+        // --- Autosave logic ---
+        let autosaveTimer = null;
+        function scheduleAutosave() {
+            clearTimeout(autosaveTimer);
+            autosaveTimer = setTimeout(autosaveDraft, 800);
+        }
+        function autosaveDraft() {
+            try {
+                syncInputs();
+                const draft = {
+                    customer_name: getCustomerName(),
+                    manual_customer: $('inp-manual-customer')?.value || '',
+                    customer_select_value: $('sel-customer')?.value || 'manual',
+                    rate: $('inp-rate')?.value || '',
+                    doc_type: currentDocType,
+                    items: extractedItems,
+                    currentEditingInvId,
+                    updated_at: new Date().toISOString()
+                };
+                localStorage.setItem('laura-draft', JSON.stringify(draft));
+                const ss = $('statusbar-saved');
+                if (ss) {
+                    ss.textContent = `下書き保存: ${new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}`;
+                }
+            } catch (e) { console.warn('autosave failed', e); }
+        }
+        function restoreDraftIfExists() {
+            const raw = localStorage.getItem('laura-draft');
+            if (!raw) return;
+            let draft;
+            try { draft = JSON.parse(raw); } catch { return; }
+            if (!draft.items || !draft.items.length) return;
+            const updated = draft.updated_at ? new Date(draft.updated_at).toLocaleString('ja-JP') : '';
+            if (!confirm(`保存途中の下書きがあります。\n\n保存日時: ${updated}\n\n復元しますか？`)) return;
+            currentDocType = draft.doc_type || 'delivery';
+            currentEditingInvId = draft.currentEditingInvId || null;
+            extractedItems = draft.items || [];
+            document.querySelectorAll('.doctype-btn').forEach(b => { b.classList.toggle('active', b.dataset.type === currentDocType); });
+            if ($('sel-customer')) $('sel-customer').value = draft.customer_select_value || 'manual';
+            if ($('inp-manual-customer')) $('inp-manual-customer').value = draft.manual_customer || draft.customer_name || '';
+            if ($('inp-rate')) $('inp-rate').value = draft.rate || '';
+            $('manual-customer-group').style.display = $('sel-customer').value === 'manual' ? 'block' : 'none';
+            renderPreview();
+            toast('下書きを復元しました', 'ok');
+        }
+        document.addEventListener('input', e => {
+            if (e.target.closest('#preview-card') || e.target.id === 'inp-rate' || e.target.id === 'inp-manual-customer') {
+                scheduleAutosave();
+            }
+        });
+        document.addEventListener('change', e => {
+            if (e.target.id === 'sel-customer' || e.target.closest('.doctype-btn')) {
+                scheduleAutosave();
+            }
+        });
         $('btn-add-row').addEventListener('click', () => { syncInputs(); extractedItems.push({ code: '', color: '', size: '', quantity: 1, unit_price: 0 }); renderPreview(); });
 
         $('btn-generate').addEventListener('click', async () => {
@@ -3385,6 +3441,7 @@
                 $('dl-section').style.display = 'block';
                 setupPreviews(payload, d);
                 hideGenProgress();
+                localStorage.removeItem('laura-draft');
                 toast('✦ 保存完了（下書き）', 'ok');
             } catch (e) { 
                 hideGenProgress();
@@ -3416,6 +3473,7 @@
             $('btn-analyze').style.display = ''; $('btn-analyze').disabled = true; $('btn-analyze-text').textContent = 'AIでデータを抽出する'; 
             $('sp1').style.display = 'none'; $('preview-card').style.display = 'none'; $('dl-section').style.display = 'none'; 
             $('toast').style.display = 'none'; $('btn-generate').disabled = false; $('sp2').style.display = 'none'; 
+            localStorage.removeItem('laura-draft');
         });
 
         $('btn-line').addEventListener('click', () => {
@@ -3833,7 +3891,9 @@
         }
 
         // ===== Existing App Initialization =====
-        loadCustomers();
+        loadCustomers().then(() => {
+            restoreDraftIfExists();
+        });
         initTabSwitchers();
     </script>
 </body>
