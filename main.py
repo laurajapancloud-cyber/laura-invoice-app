@@ -596,14 +596,13 @@ def analyze_images_internal(jid: str, image_parts: list, ai_model: str):
     try:
         db_update_job(jid, 'processing')
         prompt = """
-あなたはアパレルブランドのデータ入力アシスタントです。提供された複数の商品タグの画像からそれぞれの情報を抽出し、厳密にJSON配列（リスト）の形式のみで出力してください。
+あなたはアパレルブランドのデータ入力アシスタントです。
 【重要指示】
-1. 複数の画像（または1枚の中に複数のタグ）がある場合、写っているすべてのタグを漏れなくカウントしてください。
-2. 同じ商品のタグが複数ある場合は、その枚数を `quantity` フィールドに反映させるか、同じ内容のオブジェクトを枚数分出力してください。
-3. 画像内のタグの総数と、出力データの合計数量が必ず一致するようにしてください。
-4. 提供された画像には順番（0, 1, 2...）があります。各オブジェクトに必ず `source_image_no` (0始まりの数値) を含めてください。
+1. 画像の前に「--- 画像 X ---」という番号を付与しています。送信された画像の枚数と、出力するJSON配列の要素数は【必ず一致】させてください。全く同じ画像でも省略は厳禁です。
+2. 出力データの `source_image_no` には、対象画像の X の数値をそのまま入れてください。
+3. 金額は必ず「本体価格（税抜）」を抽出してください。
 
-スキーマ: [{"code": "品番", "color": "カラー", "size": "サイズ", "unit_price": 単価の数値, "quantity": 数量(デフォルト1), "source_image_no": 画像番号}]
+スキーマ: [{"code": "品番", "color": "カラー", "size": "サイズ", "unit_price": 本体価格の数値, "quantity": 1, "source_image_no": 画像番号}]
 """.strip()
 
         raw_text = ""
@@ -649,7 +648,9 @@ def analyze_images_internal(jid: str, image_parts: list, ai_model: str):
             for i in range(0, len(image_parts), CHUNK_SIZE):
                 chunk = image_parts[i:i + CHUNK_SIZE]
                 content_list = [{"type": "text", "text": prompt}]
-                for part in chunk:
+                for idx, part in enumerate(chunk):
+                    global_idx = i + idx
+                    content_list.append({"type": "text", "text": f"--- 画像 {global_idx} ---"})
                     content_list.append({
                         "type": "image_url",
                         "image_url": {
@@ -667,9 +668,6 @@ def analyze_images_internal(jid: str, image_parts: list, ai_model: str):
                     raw_text = response.choices[0].message.content.strip()
                     chunk_data = extract_json_array(raw_text)
                     if not isinstance(chunk_data, list): chunk_data = [chunk_data]
-                    for item in chunk_data:
-                        if isinstance(item, dict) and "source_image_no" in item:
-                            item["source_image_no"] += i
                     items_data.extend(chunk_data)
                 except Exception as e:
                     print(f"Chunk parsing failed ({ai_model}, offset {i}): {e}")
@@ -680,16 +678,17 @@ def analyze_images_internal(jid: str, image_parts: list, ai_model: str):
 
             for i in range(0, len(image_parts), CHUNK_SIZE):
                 chunk = image_parts[i:i + CHUNK_SIZE]
-                contents = [prompt] + [{"mime_type": p["mime_type"], "data": p["data"]} for p in chunk]
+                contents = [prompt]
+                for idx, part in enumerate(chunk):
+                    global_idx = i + idx
+                    contents.append(f"--- 画像 {global_idx} ---")
+                    contents.append({"mime_type": part["mime_type"], "data": part["data"]})
                 
                 try:
                     response = gemini_model.generate_content(contents)
                     raw_text = response.text.strip()
                     chunk_data = extract_json_array(raw_text)
                     if not isinstance(chunk_data, list): chunk_data = [chunk_data]
-                    for item in chunk_data:
-                        if isinstance(item, dict) and "source_image_no" in item:
-                            item["source_image_no"] += i
                     items_data.extend(chunk_data)
                 except Exception as e:
                     print(f"Chunk parsing failed (gemini, offset {i}): {e}")
