@@ -954,13 +954,23 @@ def assemble_invoice_data(inv_info: dict, items_input: list, discount_rate: int,
     total_net = total_tax = total_grand = 0
     # 掛け率が0（手動入力等）の場合は、掛け率なし（100%）として計算
     rate = (discount_rate / 100.0) if discount_rate > 0 else 1.0
+    
+    # 追加: 返品系なら数量と金額をマイナスにするための係数
+    sign = -1 if doc_type in ['return', 'prov_return'] else 1
+
     for it in items_input:
         up = it.get("unit_price", 0)
         if isinstance(up, str): up = int(up.replace(',','').replace('¥','').strip() or '0')
-        qty = max(1, int(it.get("quantity") or 1))
+        
+        # 変更: 絶対値にしてから sign（1 または -1）を掛ける
+        qty = abs(int(it.get("quantity") or 1)) or 1
+        qty = qty * sign
+        
+        # Pythonの int() は0方向に切り捨てるため、マイナスでも正しく計算される
         net = int(up * rate * qty)
         tax = int(net * 0.1)
         grand = net + tax
+        
         processed.append({
             "code": it.get("code") or "-", "color": it.get("color") or "-", "size": it.get("size") or "-",
             "unit_price": up, "quantity": qty, "net_amount": net, "tax_amount": tax, "grand_total": grand

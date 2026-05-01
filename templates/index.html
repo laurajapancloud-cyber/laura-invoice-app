@@ -3430,6 +3430,11 @@
         const titles = TYPE_TITLES[currentDocType];
         document.querySelectorAll('.preview-tab[data-ptab="pdf"]').forEach(t => t.innerText = `📄 ${titles.main}`);
         document.querySelectorAll('.preview-tab[data-ptab="detail"]').forEach(t => t.innerText = `📋 ${titles.detail.replace(' ', '')}`);
+
+        // 追加: 種別を切り替えたらプレビューの金額（プラス・マイナス）を再描画
+        if (extractedItems.length > 0 && $('preview-card').style.display !== 'none') {
+          renderPreview();
+        }
       });
     });
 
@@ -3738,12 +3743,23 @@
     function renderSummaryView(payload, d, targetId) {
       const items = payload.items, rate = payload.discount_rate;
       let totalNet = 0, totalQty = 0;
+      
+      const isReturn = payload.doc_type === 'return' || payload.doc_type === 'prov_return';
+      const sign = isReturn ? -1 : 1;
+
       items.forEach(it => {
-        totalNet += Math.floor((parseInt(it.unit_price) || 0) * (rate / 100) * (parseInt(it.quantity) || 1));
-        totalQty += (parseInt(it.quantity) || 1);
+        const q = Math.abs(parseInt(it.quantity) || 1) * sign;
+        totalNet += Math.trunc((parseInt(it.unit_price) || 0) * (rate / 100) * q);
+        totalQty += q;
       });
-      const tax = Math.floor(totalNet * 0.1), grand = totalNet + tax;
-      const rows = items.map((it, i) => `<tr><td class="left">${i + 1}</td><td class="left">${it.code || '-'}</td><td>${it.color || '-'}</td><td>${it.size || '-'}</td><td>${it.quantity || 1}</td><td>¥${(it.unit_price || 0).toLocaleString()}</td><td>¥${Math.floor((it.unit_price || 0) * (rate / 100) * (it.quantity || 1)).toLocaleString()}</td></tr>`).join('');
+      
+      const tax = Math.trunc(totalNet * 0.1), grand = totalNet + tax;
+      
+      const rows = items.map((it, i) => {
+        const q = Math.abs(parseInt(it.quantity) || 1) * sign;
+        const amt = Math.trunc((it.unit_price || 0) * (rate / 100) * q);
+        return `<tr><td class="left">${i + 1}</td><td class="left">${it.code || '-'}</td><td>${it.color || '-'}</td><td>${it.size || '-'}</td><td>${q}</td><td>¥${(it.unit_price || 0).toLocaleString()}</td><td>¥${amt.toLocaleString()}</td></tr>`;
+      }).join('');
       $(targetId).innerHTML = `<div class="summary-card">
 					<div class="summary-row"><span class="lbl">伝票番号</span><span class="val">${d.invoice_number}</span></div>
 					<div class="summary-row"><span class="lbl">取引先</span><span class="val">${payload.customer_name}</span></div>
@@ -4299,9 +4315,10 @@
       return r > 0 ? r : 100;
     }
     function calcItemAmount(it) {
-      const q = parseInt(it.quantity) || 1;
+      const sign = (currentDocType === 'return' || currentDocType === 'prov_return') ? -1 : 1;
+      const q = Math.abs(parseInt(it.quantity) || 1) * sign;
       const u = parseInt(it.unit_price) || 0;
-      return Math.floor(u * (getRate() / 100) * q);
+      return Math.trunc(u * (getRate() / 100) * q);
     }
 
     const VALID_SIZES = ['44', '46', '48', '50', '52'];
@@ -4424,7 +4441,7 @@
 							<div class="item-field"><label>単価</label><input type="number" value="${it.unit_price || 0}" data-i="${i}" data-k="unit_price"></div>
 						</div>
 						<div class="item-card-footer">
-							<span class="item-card-price">${getRate()}% × ${it.quantity || 1}点</span>
+							<span class="item-card-price">${getRate()}% × ${(currentDocType === 'return' || currentDocType === 'prov_return') ? '-' : ''}${Math.abs(it.quantity || 1)}点</span>
 							<span class="item-card-total">¥${amt.toLocaleString()}</span>
 						</div>
 					`;
@@ -4442,7 +4459,8 @@
             const amt = calcItemAmount(it);
             const priceEl = card.querySelector('.item-card-price');
             const totalEl = card.querySelector('.item-card-total');
-            if (priceEl) priceEl.textContent = `${getRate()}% × ${it.quantity || 1}点`;
+            const sign = (currentDocType === 'return' || currentDocType === 'prov_return') ? -1 : 1;
+            if (priceEl) priceEl.textContent = `${getRate()}% × ${sign === -1 ? '-' : ''}${Math.abs(it.quantity || 1)}点`;
             if (totalEl) totalEl.textContent = `¥${amt.toLocaleString()}`;
           }
         } else {
@@ -4463,7 +4481,7 @@
     function updateSummary() {
       let totalNet = 0;
       extractedItems.forEach(it => { totalNet += calcItemAmount(it); });
-      const tax = Math.floor(totalNet * 0.1), grand = totalNet + tax;
+      const tax = Math.trunc(totalNet * 0.1), grand = totalNet + tax;
       $('preview-summary-wrap').innerHTML = `<div class="preview-summary"><div class="preview-summary-row"><span>小計</span><span>¥${totalNet.toLocaleString()}</span></div><div class="preview-summary-row"><span>消費税</span><span>¥${tax.toLocaleString()}</span></div><div class="preview-summary-row total"><span>合計</span><span>¥${grand.toLocaleString()}</span></div></div>`;
     }
 
