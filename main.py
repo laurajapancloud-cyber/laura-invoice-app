@@ -255,6 +255,12 @@ def init_db():
                 updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             );
             CREATE INDEX IF NOT EXISTS idx_jobs_status_created ON jobs(status, created_at DESC);
+            CREATE TABLE IF NOT EXISTS invoice_sequences (
+                doc_type TEXT NOT NULL,
+                yyyymm TEXT NOT NULL,
+                current_seq INTEGER NOT NULL DEFAULT 1,
+                PRIMARY KEY (doc_type, yyyymm)
+            );
         """)
         
         # Initial users if empty
@@ -273,17 +279,29 @@ def init_db():
     conn.close()
 
 def generate_invoice_number(doc_type='delivery'):
+    conn = get_db()
+    if not conn: return f"LJ-ERROR"
+    with conn.cursor() as cur:
+        res = generate_invoice_number_safe(cur, doc_type)
+    conn.commit()
+    conn.close()
+    return res
+
+def generate_invoice_number_safe(cur, doc_type):
     prefix_code = DOC_TYPE_PREFIXES.get(doc_type, "LJ")
     now = get_jst_now()
-    prefix = f"{prefix_code}-{now.strftime('%Y%m')}"
-    conn = get_db()
-    if not conn: return f"{prefix}-TEST"
-    with conn.cursor() as cur:
-        # doc_typeごとに最新の番号を取得するためにカウント
-        cur.execute("SELECT COUNT(*) AS cnt FROM invoices WHERE invoice_number LIKE %s AND doc_type = %s", (f"{prefix}%", doc_type))
-        row = cur.fetchone()
-        seq = (row['cnt'] or 0) + 1
-    conn.close()
+    month = now.strftime("%Y%m")
+    prefix = f"{prefix_code}-{month}"
+
+    cur.execute("""
+        INSERT INTO invoice_sequences (doc_type, yyyymm, current_seq)
+        VALUES (%s, %s, 1)
+        ON CONFLICT (doc_type, yyyymm)
+        DO UPDATE SET current_seq = invoice_sequences.current_seq + 1
+        RETURNING current_seq
+    """, (doc_type, month))
+
+    seq = cur.fetchone()["current_seq"]
     return f"{prefix}-{seq:04d}"
 
 # ==================== Job Management Helpers ====================
@@ -937,7 +955,7 @@ async def generate_documents(request: Request, username: Annotated[str, Depends(
                 if row["status"] == "locked": raise HTTPException(400, "確定済みの伝票は編集できません。")
                 invoice_number = row["invoice_number"]
             else:
-                invoice_number = generate_invoice_number(doc_type)
+                invoice_number = generate_invoice_number_safe(cur, doc_type)
 
             inv_data = assemble_invoice_data({"invoice_number": invoice_number, "customer_name": payload.customer_name}, payload.items, payload.discount_rate, doc_type)
 
