@@ -1142,6 +1142,15 @@ async def dl_detail_pdf(inv_id: int, username: Annotated[str, Depends(authentica
 async def dl_detail_excel(inv_id: int, username: Annotated[str, Depends(authenticate)]):
     return serve_file(inv_id, "detail_excel")
 
+def get_doc_type_folder_label(doc_type: str) -> str:
+    """Drive保存用のフォルダ名ラベルを返す"""
+    return {
+        "delivery": "納品",
+        "return": "返品",
+        "prov_delivery": "仮納品",
+        "prov_return": "仮返品",
+    }.get(doc_type, "納品")
+
 def safe_filename(name: str) -> str:
     """ファイル名に使えない文字を置換する"""
     name = name or "unknown"
@@ -1259,8 +1268,20 @@ async def upload_drive_internal(jid: str, inv_id: int):
             inv_data = assemble_invoice_data(dict(inv), items, dr, inv.get("doc_type", "delivery"))
             files = build_all_files(inv_data)
 
+        doc_type = inv.get("doc_type", "delivery")
+        dt = inv.get("locked_at") or inv.get("created_at") or get_jst_now()
+        if isinstance(dt, str):
+            try: dt = datetime.datetime.fromisoformat(dt.replace("Z", "+00:00"))
+            except: dt = get_jst_now()
+
+        folder_path = [
+            str(dt.year),
+            dt.strftime("%Y-%m"),
+            get_doc_type_folder_label(doc_type)
+        ]
+
         inv_num = inv["invoice_number"]
-        cust = (inv["customer_name"] or "無名").replace("/", "_").replace("\\", "_")
+        cust = safe_filename(inv["customer_name"] or "無名")
         
         title_map = DOC_TYPE_TITLES.get(inv.get("doc_type", "delivery"), DOC_TYPE_TITLES["delivery"])
         main_label   = title_map["pdf_title"]
@@ -1268,13 +1289,19 @@ async def upload_drive_internal(jid: str, inv_id: int):
 
         uploaded = []
         targets = [
-            ("pdf",          f"{inv_num}{cust}{main_label}.pdf",   "application/pdf", files["pdf"]),
-            ("excel",        f"{inv_num}{cust}{main_label}.xlsx",  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", files["excel"]),
-            ("detail_pdf",   f"{inv_num}{cust}{detail_label}.pdf", "application/pdf", files["detail_pdf"]),
-            ("detail_excel", f"{inv_num}{cust}{detail_label}.xlsx","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", files["detail_excel"]),
+            ("pdf",          f"{inv_num}_{cust}_{main_label}.pdf",   "application/pdf", files["pdf"]),
+            ("excel",        f"{inv_num}_{cust}_{main_label}.xlsx",  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", files["excel"]),
+            ("detail_pdf",   f"{inv_num}_{cust}_{detail_label}.pdf", "application/pdf", files["detail_pdf"]),
+            ("detail_excel", f"{inv_num}_{cust}_{detail_label}.xlsx","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", files["detail_excel"]),
         ]
         for typ, fn, mime, data in targets:
-            resp = requests.post(GDRIVE_WEBHOOK_URL, json={"folderId": GDRIVE_FOLDER_ID, "filename": fn, "mime": mime, "base64": base64.b64encode(data).decode()}, timeout=30)
+            resp = requests.post(GDRIVE_WEBHOOK_URL, json={
+                "rootFolderId": GDRIVE_FOLDER_ID, 
+                "folderPath": folder_path,
+                "filename": fn, 
+                "mime": mime, 
+                "base64": base64.b64encode(data).decode()
+            }, timeout=60)
             if resp.status_code != 200: raise Exception(f"GAS Error {resp.status_code}")
             uploaded.append({"type": typ, "name": fn, "url": resp.json().get("url")})
         db_update_job(jid, 'done', result={"uploaded": uploaded})
