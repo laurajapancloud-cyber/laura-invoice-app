@@ -1099,31 +1099,32 @@ def lock_invoice_internal(jid: str, inv_id: int):
             if inv["status"] == "locked": 
                 db_update_job(jid, 'done', result={"status": "already_locked"})
                 return
-            cur.execute("SELECT code,color,size,unit_price,quantity FROM invoice_items WHERE invoice_id=%s", (inv_id,))
-            items = [dict(r) for r in cur.fetchall()]
-        
-        inv_data = assemble_invoice_data(dict(inv), items, inv["discount_rate"], inv.get("doc_type", "delivery"))
-        files = build_all_files(inv_data)
-        
-        base = f"locked/{inv['invoice_number']}"
-        p = {
-            "pdf": storage_upload(f"{base}/invoice.pdf", files["pdf"], "application/pdf"),
-            "excel": storage_upload(f"{base}/invoice.xlsx", files["excel"], "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
-            "detail_pdf": storage_upload(f"{base}/detail.pdf", files["detail_pdf"], "application/pdf"),
-            "detail_excel": storage_upload(f"{base}/detail.xlsx", files["detail_excel"], "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
-        }
-        
-        with conn.cursor() as cur:
+            
+            # --- Storageへのアップロード処理を全削除 ---
+            
+            # DBのステータスだけを更新する
             cur.execute("""
-                UPDATE invoices SET status='locked', locked_at=NOW(),
-                pdf_storage_path=%s, excel_storage_path=%s, detail_pdf_storage_path=%s, detail_excel_storage_path=%s
+                UPDATE invoices SET status='locked', locked_at=NOW()
                 WHERE id=%s
-            """, (p["pdf"], p["excel"], p["detail_pdf"], p["detail_excel"], inv_id))
+            """, (inv_id,))
             conn.commit()
         conn.close()
+        
         db_update_job(jid, 'done', result={"status": "locked"})
+
+        # 【自動Drive同期】確定が済んだらバックグラウンドでDrive同期をキック
+        drive_jid = db_create_job('drive_upload', {"invoice_id": inv_id})
+        import asyncio
+        asyncio.create_task(upload_drive_internal_async(drive_jid, inv_id))
+
     except Exception as e:
         db_update_job(jid, 'failed', error=str(e))
+
+# (非同期でDrive同期を回すためのラッパー関数)
+async def upload_drive_internal_async(jid: str, inv_id: int):
+    import asyncio
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, upload_drive_internal, jid, inv_id)
 
 @app.post("/api/history/{inv_id}/lock")
 async def lock_invoice(inv_id: int, username: Annotated[str, Depends(authenticate)]):
@@ -1203,22 +1204,16 @@ def serve_file(inv_id: int, kind: str):
 
     fname = f'{inv["invoice_number"]}_{kind}.{cfg["ext"]}'
 
-    # Locked + Storage 存在 → そのまま配信
-    if inv["status"] == "locked" and inv.get(cfg["path_field"]):
-        try:
-            data = storage_download(inv[cfg["path_field"]])
-            return Response(content=data, media_type=cfg["mime"],
-                            headers={"Content-Disposition": f'attachment; filename="{fname}"'})
-        except Exception as e:
-            print(f"Storage download failed, regenerating: {e}")
-
-    # Draft or Storage欠落 → 再生成
+    # 常にデータベースの情報からオンデマンドで再生成して返す
     dr = inv.get("discount_rate") or 100
     inv_data = assemble_invoice_data(dict(inv), items, dr, inv.get("doc_type", "delivery"))
     files = build_all_files(inv_data)
-    return Response(content=files[cfg["files_key"]], media_type=cfg["mime"],
-                    headers={"Content-Disposition": f'attachment; filename="{fname}"'})
-
+    
+    return Response(
+        content=files[cfg["files_key"]], 
+        media_type=cfg["mime"],
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'}
+    )
 
 
 @app.get("/api/history/{inv_id}/pdf")
@@ -1252,7 +1247,7 @@ def safe_filename(name: str) -> str:
     return re.sub(r'[\\/:*?"<>|]+', "_", name).strip()
 
 def get_invoice_generated_files(inv_id: int):
-    """伝票の生成ファイル（4種類）を取得する。必要なら再生成する。"""
+    """伝票の生成ファイル（4種類）を取得する。常に再生成する（オンデマンド）"""
     conn = require_db()
     with conn.cursor() as cur:
         cur.execute("SELECT * FROM invoices WHERE id=%s", (inv_id,))
@@ -1264,25 +1259,9 @@ def get_invoice_generated_files(inv_id: int):
         items = [dict(r) for r in cur.fetchall()]
     conn.close()
 
-    files = None
-    # 確定済みでパスがあるならストレージから取得
-    if inv["status"] == "locked" and inv.get("pdf_storage_path"):
-        try:
-            files = {
-                "pdf": storage_download(inv["pdf_storage_path"]),
-                "excel": storage_download(inv["excel_storage_path"]),
-                "detail_pdf": storage_download(inv["detail_pdf_storage_path"]),
-                "detail_excel": storage_download(inv["detail_excel_storage_path"]),
-            }
-        except Exception as e:
-            print(f"Storage download failed, regenerating: {e}")
-            files = None
-
-    if not files:
-        # 下書き状態、またはストレージ取得失敗時はその場で生成
-        dr = inv.get("discount_rate") or 100
-        inv_data = assemble_invoice_data(dict(inv), items, dr, inv.get("doc_type", "delivery"))
-        files = build_all_files(inv_data)
+    dr = inv.get("discount_rate") or 100
+    inv_data = assemble_invoice_data(dict(inv), items, dr, inv.get("doc_type", "delivery"))
+    files = build_all_files(inv_data)
     
     return dict(inv), files
 
@@ -1347,31 +1326,9 @@ def upload_drive_internal(jid: str, inv_id: int):
     try:
         db_update_job(jid, 'processing')
         if not GDRIVE_WEBHOOK_URL: raise Exception("GDRIVE_WEBHOOK_URLが未設定です")
-        conn = require_db()
-        with conn.cursor() as cur:
-            cur.execute("SELECT * FROM invoices WHERE id=%s", (inv_id,))
-            inv = cur.fetchone()
-            cur.execute("SELECT code,color,size,unit_price,quantity FROM invoice_items WHERE invoice_id=%s", (inv_id,))
-            items = [dict(r) for r in cur.fetchall()]
-        conn.close()
-        if not inv: raise Exception("Invoice not found")
-
-        files = None
-        if inv["status"] == "locked" and inv.get("pdf_storage_path"):
-            try:
-                files = {
-                    "pdf": storage_download(inv["pdf_storage_path"]),
-                    "excel": storage_download(inv["excel_storage_path"]),
-                    "detail_pdf": storage_download(inv["detail_pdf_storage_path"]),
-                    "detail_excel": storage_download(inv["detail_excel_storage_path"]),
-                }
-            except Exception as e:
-                print(f"Drive upload: Storage download failed, regenerating: {e}")
-                files = None
-        if not files:
-            dr = inv.get("discount_rate") or 100
-            inv_data = assemble_invoice_data(dict(inv), items, dr, inv.get("doc_type", "delivery"))
-            files = build_all_files(inv_data)
+        
+        # 常に最新を生成してドライブにアップロード
+        inv, files = get_invoice_generated_files(inv_id)
 
         doc_type = inv.get("doc_type", "delivery")
         dt = inv.get("locked_at") or inv.get("created_at") or get_jst_now()
