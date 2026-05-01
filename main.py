@@ -18,7 +18,7 @@ from fastapi import FastAPI, UploadFile, File, Depends, HTTPException, status, R
 from fastapi.staticfiles import StaticFiles
 from fastapi.security import APIKeyCookie
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, RedirectResponse, StreamingResponse, Response
 import zipfile
 import urllib.parse
 import hashlib
@@ -1206,6 +1206,7 @@ def get_invoice_generated_files(inv_id: int):
 
 @app.get("/api/history/{inv_id}/zip")
 async def dl_zip(inv_id: int, username: Annotated[str, Depends(authenticate)]):
+    """伝票に関連する4ファイルをZIPにまとめてダウンロードする"""
     try:
         inv, files = get_invoice_generated_files(inv_id)
         titles = DOC_TYPE_TITLES.get(inv.get("doc_type", "delivery"), DOC_TYPE_TITLES["delivery"])
@@ -1222,11 +1223,11 @@ async def dl_zip(inv_id: int, username: Annotated[str, Depends(authenticate)]):
         
         zip_buffer.seek(0)
         zip_name = f"{inv_num}_{customer}_documents.zip"
-        # 日本語ファイル名を安全にヘッダーに含めるためのエンコード
+        # 日本語ファイル名を安全にヘッダーに含めるためのエンコード (RFC 6266)
         encoded_filename = urllib.parse.quote(zip_name)
         
-        return StreamingResponse(
-            zip_buffer,
+        return Response(
+            content=zip_buffer.getvalue(),
             media_type="application/zip",
             headers={
                 "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"
@@ -1234,7 +1235,7 @@ async def dl_zip(inv_id: int, username: Annotated[str, Depends(authenticate)]):
         )
     except Exception as e:
         print(f"ZIP download failed for inv_id {inv_id}: {e}")
-        raise HTTPException(500, detail=f"ZIP生成に失敗しました: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"ZIP生成に失敗しました: {str(e)}")
 
 @app.get("/api/history/{inv_id}/items")
 async def get_history_items(inv_id: int, username: Annotated[str, Depends(authenticate)]):
@@ -1282,7 +1283,9 @@ async def upload_drive_internal(jid: str, inv_id: int):
                     "detail_pdf": storage_download(inv["detail_pdf_storage_path"]),
                     "detail_excel": storage_download(inv["detail_excel_storage_path"]),
                 }
-            except: files = None
+            except Exception as e:
+                print(f"Drive upload: Storage download failed, regenerating: {e}")
+                files = None
         if not files:
             dr = inv.get("discount_rate") or 100
             inv_data = assemble_invoice_data(dict(inv), items, dr, inv.get("doc_type", "delivery"))
@@ -1300,8 +1303,8 @@ async def upload_drive_internal(jid: str, inv_id: int):
             get_doc_type_folder_label(doc_type)
         ]
 
-        inv_num = inv["invoice_number"]
-        cust = safe_filename(inv["customer_name"] or "無名")
+        inv_num = safe_filename(inv.get("invoice_number") or "Unknown")
+        cust = safe_filename(inv.get("customer_name") or "無名")
         
         title_map = DOC_TYPE_TITLES.get(inv.get("doc_type", "delivery"), DOC_TYPE_TITLES["delivery"])
         main_label   = title_map["pdf_title"]
