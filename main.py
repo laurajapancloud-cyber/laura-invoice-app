@@ -1100,8 +1100,6 @@ def lock_invoice_internal(jid: str, inv_id: int):
                 db_update_job(jid, 'done', result={"status": "already_locked"})
                 return
             
-            # --- Storageへのアップロード処理を全削除 ---
-            
             # DBのステータスだけを更新する
             cur.execute("""
                 UPDATE invoices SET status='locked', locked_at=NOW()
@@ -1112,19 +1110,15 @@ def lock_invoice_internal(jid: str, inv_id: int):
         
         db_update_job(jid, 'done', result={"status": "locked"})
 
-        # 【自動Drive同期】確定が済んだらバックグラウンドでDrive同期をキック
+        # 【自動Drive同期】確定が済んだら別スレッドでDrive同期をキック
         drive_jid = db_create_job('drive_upload', {"invoice_id": inv_id})
-        import asyncio
-        asyncio.create_task(upload_drive_internal_async(drive_jid, inv_id))
+        
+        # 👇 asyncio ではなく標準の threading を使う形に修正！
+        import threading
+        threading.Thread(target=upload_drive_internal, args=(drive_jid, inv_id)).start()
 
     except Exception as e:
         db_update_job(jid, 'failed', error=str(e))
-
-# (非同期でDrive同期を回すためのラッパー関数)
-async def upload_drive_internal_async(jid: str, inv_id: int):
-    import asyncio
-    loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, upload_drive_internal, jid, inv_id)
 
 @app.post("/api/history/{inv_id}/lock")
 async def lock_invoice(inv_id: int, username: Annotated[str, Depends(authenticate)]):
