@@ -1379,7 +1379,7 @@
     flex-direction: column;
   }
   #hist-detail-pane:empty::before {
-    content: '"Scegli un documento per visualizzarlo"';
+    content: '"伝票を選択してプレビューを表示"';
     display: block; margin: auto;
     font-family: 'Cormorant Garamond', serif;
     font-style: italic; font-size: 18px;
@@ -2721,6 +2721,7 @@
             data.forEach(inv => {
                 const d = document.createElement('div');
                 d.className = 'hist-item' + (inv.status === 'locked' ? ' locked' : '');
+                d.onclick = () => selectHistItem(inv);
                 
                 const statusBadge = `<span class="status-badge status-${inv.status || 'draft'}">${inv.status === 'locked' ? '確定済' : '下書き'}</span>`;
                 const typeBadge = `<span class="badge" style="background:${TYPE_COLORS[inv.doc_type]||'#666'}1a; color:${TYPE_COLORS[inv.doc_type]||'#aaa'}; border:1px solid ${TYPE_COLORS[inv.doc_type]||'#666'}">${TYPE_TITLES[inv.doc_type]?.label || '納品'}</span>`;
@@ -2905,7 +2906,13 @@
             syncInputs();
             if (!extractedItems.length) return toast('商品がありません', 'err');
             const cn = getCustomerName();
-            const payload = { customer_name: cn, discount_rate: parseInt($('inp-rate').value) || 0, items: extractedItems };
+            const payload = { 
+                customer_name: cn, 
+                discount_rate: parseInt($('inp-rate').value) || 0, 
+                items: extractedItems,
+                doc_type: currentDocType,
+                user_id: currentUser?.id
+            };
             try {
                 showGenProgress(5);
                 const r = await fetch('/api/preview', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
@@ -3128,7 +3135,14 @@
             syncInputs(); if (!extractedItems.length) return toast('商品がありません', 'err');
             $('btn-generate').disabled = true; $('sp2').style.display = 'block';
             const cn = getCustomerName();
-            const payload = { invoice_id: currentEditingInvId, customer_name: cn, discount_rate: getRate(), items: extractedItems };
+            const payload = { 
+                invoice_id: currentEditingInvId, 
+                customer_name: cn, 
+                discount_rate: getRate(), 
+                items: extractedItems,
+                doc_type: currentDocType,
+                user_id: currentUser?.id
+            };
             try {
                 showGenProgress(6);
                 const r = await fetch('/generate-documents', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
