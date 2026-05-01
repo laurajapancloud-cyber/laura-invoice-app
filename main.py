@@ -592,7 +592,7 @@ async def delete_customer(cid: int, username: Annotated[str, Depends(authenticat
 
 
 # ==================== AI Analysis API ====================
-async def analyze_images_internal(jid: str, image_parts: list, ai_model: str):
+def analyze_images_internal(jid: str, image_parts: list, ai_model: str):
     try:
         db_update_job(jid, 'processing')
         prompt = """
@@ -683,7 +683,7 @@ async def analyze_images(request: Request, username: Annotated[str, Depends(auth
         image_parts.append({"mime_type": file.content_type or "image/jpeg", "data": data, "base64": base64.b64encode(data).decode()})
     # For compatibility, we run it sync here but return the result directly as before
     # (The mission says "existing APIs should NOT be broken")
-    await analyze_images_internal(jid, image_parts, ai_model)
+    analyze_images_internal(jid, image_parts, ai_model)
     job = db_get_job(jid)
     if job['status'] == 'failed': raise HTTPException(500, job['error'])
     return JSONResponse(job['result'])
@@ -980,7 +980,7 @@ async def preview_documents(username: Annotated[str, Depends(authenticate)], pay
     }
 
 
-async def generate_documents_internal(jid: str, payload_dict: dict):
+def generate_documents_internal(jid: str, payload_dict: dict):
     try:
         conn = require_db()
         payload = DocumentRequest(**payload_dict)
@@ -1033,7 +1033,7 @@ async def generate_documents_internal(jid: str, payload_dict: dict):
 async def generate_documents(request: Request, username: Annotated[str, Depends(authenticate)], payload: DocumentRequest):
     # Keep compatibility but use internal logic
     jid = db_create_job('generate', payload.dict())
-    await generate_documents_internal(jid, payload.dict())
+    generate_documents_internal(jid, payload.dict())
     job = db_get_job(jid)
     if job['status'] == 'failed': raise HTTPException(500, job['error'])
     return JSONResponse(job['result'])
@@ -1045,7 +1045,8 @@ async def enqueue_generate(bt: BackgroundTasks, username: Annotated[str, Depends
     return {"job_id": jid, "status": "pending"}
 
 
-async def lock_invoice_internal(jid: str, inv_id: int):
+
+def lock_invoice_internal(jid: str, inv_id: int):
     try:
         conn = require_db()
         with conn.cursor() as cur:
@@ -1084,7 +1085,7 @@ async def lock_invoice_internal(jid: str, inv_id: int):
 @app.post("/api/history/{inv_id}/lock")
 async def lock_invoice(inv_id: int, username: Annotated[str, Depends(authenticate)]):
     jid = db_create_job('lock', {"inv_id": inv_id})
-    await lock_invoice_internal(jid, inv_id)
+    lock_invoice_internal(jid, inv_id)
     job = db_get_job(jid)
     if job['status'] == 'failed': raise HTTPException(500, job['error'])
     return job['result']
@@ -1299,7 +1300,7 @@ async def delete_history(inv_id: int, username: Annotated[str, Depends(authentic
     conn.close()
     return {"status": "ok"}
 
-async def upload_drive_internal(jid: str, inv_id: int):
+def upload_drive_internal(jid: str, inv_id: int):
     try:
         db_update_job(jid, 'processing')
         if not GDRIVE_WEBHOOK_URL: raise Exception("GDRIVE_WEBHOOK_URLが未設定です")
@@ -1372,7 +1373,7 @@ async def upload_drive_internal(jid: str, inv_id: int):
 @app.post("/api/history/{inv_id}/upload-drive")
 async def upload_to_drive(inv_id: int, username: Annotated[str, Depends(authenticate)]):
     jid = db_create_job('drive_upload', {"invoice_id": inv_id})
-    await upload_drive_internal(jid, inv_id)
+    upload_drive_internal(jid, inv_id)
     job = db_get_job(jid)
     if job['status'] == 'failed': return JSONResponse(status_code=500, content={"detail": job['error']})
     return job['result']

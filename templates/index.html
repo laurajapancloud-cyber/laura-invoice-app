@@ -3566,10 +3566,20 @@
             toast(`${this.getJobLabel(job.type)}が完了しました`, 'ok');
             if (job.callbacks.onSuccess) job.callbacks.onSuccess(job.result);
             this.saveToStorage();
+            setTimeout(() => {
+              const el = $(`job-item-${job.id}`);
+              if (el) el.remove();
+              this.jobs.delete(job.id);
+            }, 3000);
           } else if (job.status === 'failed') {
             toast(`${this.getJobLabel(job.type)}が失敗しました: ${job.error}`, 'err');
             if (job.callbacks.onError) job.callbacks.onError(job.error);
             this.saveToStorage();
+            setTimeout(() => {
+              const el = $(`job-item-${job.id}`);
+              if (el) el.remove();
+              this.jobs.delete(job.id);
+            }, 5000);
           } else {
             setTimeout(() => this.poll(jid), this.pollingInterval);
           }
