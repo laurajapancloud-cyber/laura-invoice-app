@@ -541,6 +541,51 @@
             margin-top: 6px;
         }
 
+        .source-thumbs {
+            display: flex;
+            gap: 6px;
+            margin: 8px 0 12px;
+            overflow-x: auto;
+            padding-bottom: 4px;
+        }
+
+        .source-thumb {
+            width: 44px;
+            height: 56px;
+            object-fit: cover;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            cursor: pointer;
+            transition: all .2s;
+            flex-shrink: 0;
+        }
+
+        .source-thumb:hover {
+            border-color: var(--gold);
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .image-preview-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,.88);
+            z-index: 300000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            backdrop-filter: blur(8px);
+        }
+
+        .image-preview-overlay img {
+            max-width: 90vw;
+            max-height: 85vh;
+            border-radius: 14px;
+            border: 1px solid var(--border-strong);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+        }
+
         @keyframes cardIn {
             from {
                 opacity: 0;
@@ -2294,7 +2339,7 @@
     </div>
 
     <script>
-        let selectedFiles = [], extractedItems = [], pdfData = null, excelData = null;
+        let selectedFiles = [], selectedFileThumbs = [], extractedItems = [], pdfData = null, excelData = null;
         let detailPdfData = null, detailExcelData = null;
         let currentEditingInvId = null, allHistory = [], currentInvNum = '', lastInvoiceId = null;
         const $ = id => document.getElementById(id);
@@ -3038,9 +3083,28 @@
             const c = $('thumbs'); c.innerHTML = '';
             $('btn-analyze').disabled = !selectedFiles.length;
             $('btn-analyze-text').textContent = selectedFiles.length ? `${selectedFiles.length}枚を抽出する` : 'AIでデータを抽出する';
-            selectedFiles.forEach((f, i) => { const r = new FileReader(); r.onload = e => { const d = document.createElement('div'); d.className = 'thumb-item'; d.innerHTML = `<img class="thumb-img" src="${e.target.result}"><button class="thumb-x" onclick="rmFile(${i})">✕</button>`; c.appendChild(d); }; r.readAsDataURL(f); });
+            selectedFiles.forEach((f, i) => { 
+                const r = new FileReader(); 
+                r.onload = e => { 
+                    selectedFileThumbs[i] = e.target.result;
+                    const d = document.createElement('div'); 
+                    d.className = 'thumb-item'; 
+                    d.innerHTML = `<img class="thumb-img" src="${e.target.result}"><button class="thumb-x" onclick="rmFile(${i})">✕</button>`; 
+                    c.appendChild(d); 
+                }; 
+                r.readAsDataURL(f); 
+            });
         }
-        function rmFile(i) { selectedFiles.splice(i, 1); renderThumbs(); }
+        function rmFile(i) { selectedFiles.splice(i, 1); selectedFileThumbs.splice(i, 1); renderThumbs(); }
+        
+        function openSourceImage(src) {
+            $('image-preview-img').src = src;
+            $('image-preview-overlay').style.display = 'flex';
+        }
+        function closeSourceImage() {
+            $('image-preview-overlay').style.display = 'none';
+            $('image-preview-img').src = '';
+        }
 
         const compress = (file, mw = 1200) => new Promise((res, rej) => { const r = new FileReader(); r.readAsDataURL(file); r.onload = e => { const img = new Image(); img.src = e.target.result; img.onload = () => { let w = img.width, h = img.height; if (w > mw) { h = Math.round(h * mw / w); w = mw; } const cv = document.createElement('canvas'); cv.width = w; cv.height = h; cv.getContext('2d').drawImage(img, 0, 0, w, h); cv.toBlob(b => b ? res(b) : rej('blob err'), 'image/jpeg', .8); }; img.onerror = rej; }; r.onerror = rej; });
         const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -3057,75 +3121,75 @@
           updProg('画像を圧縮して送信準備中...', 0, 100);
 
             try {
-            const blobs = [];
-            for (let i = 0; i < total; i++) { 
-              updProg(`画像を圧縮中 (${i + 1}/${total})`, Math.round((i/total)*20), 100); 
-              blobs.push(await compress(selectedFiles[i])); 
-            }
+                const blobs = [];
+                for (let i = 0; i < total; i++) { 
+                  updProg(`画像を圧縮中 (${i + 1}/${total})`, Math.round((i/total)*20), 100); 
+                  blobs.push(await compress(selectedFiles[i])); 
+                }
 
-            updProg('サーバーへアップロード中...', 20, 100);
+                async function analyzeOneImage(blob, imageIndex, ai) {
+                    const fd = new FormData();
+                    fd.append('ai_model', ai);
+                    fd.append('files', blob, `img_${imageIndex}.jpg`);
+                    const r = await fetch('/analyze-images', { method: 'POST', body: fd });
+                    if (!r.ok) { const err = await r.text(); throw new Error(err); }
+                    const data = await r.json();
+                    return (data.items || []).map(item => ({
+                        ...item,
+                        source_image_index: imageIndex,
+                        source_image_thumb: selectedFileThumbs[imageIndex]
+                    }));
+                }
 
-            const fd = new FormData();
-            fd.append('ai_model', ai);
-            blobs.forEach((b, i) => fd.append('files', b, `img_${i}.jpg`));
+                let allItems = [];
+                for (let i = 0; i < blobs.length; i++) {
+                    updProg(`AI解析中 (${i + 1}/${blobs.length})`, 20 + Math.round((i / blobs.length) * 70), 100);
+                    const items = await analyzeOneImage(blobs[i], i, ai);
+                    allItems.push(...items);
+                }
 
-            const jid = await jobManager.enqueue('analyze', '/api/jobs/analyze', fd, {
-              onSuccess: (res) => {
-                $('prog-fill').style.transition = 'width 0.2s';
                 const merged = {};
-                res.items.forEach(it => {
-                  const code = (it.code || '-').trim().toUpperCase();
-                  const color = (it.color || '-').trim();
-                  const size = (it.size || '-').trim();
-                  let up = it.unit_price;
-                  if (typeof up === 'string') up = parseInt(up.replace(/[¥,]/g, '').trim()) || 0;
-                  else up = parseInt(up) || 0;
-                  const qty = parseInt(it.quantity) || 1;
+                allItems.forEach(it => {
+                    const code = (it.code || '-').trim().toUpperCase();
+                    const color = (it.color || '-').trim();
+                    const size = (it.size || '-').trim();
+                    let up = it.unit_price;
+                    if (typeof up === 'string') up = parseInt(up.replace(/[¥,]/g, '').trim()) || 0;
+                    else up = parseInt(up) || 0;
+                    const qty = parseInt(it.quantity) || 1;
+                    const key = `${code}|${color}|${size}|${up}`;
+                    
+                    const sourceImage = { index: it.source_image_index, thumb: it.source_image_thumb };
 
-                  const key = `${code}|${color}|${size}|${up}`;
-                  if (merged[key]) {
-                    merged[key].quantity += qty;
-                    merged[key].source_count += 1;
-                  } else {
-                    merged[key] = { code, color, size, unit_price: up, quantity: qty, source_count: 1 };
-                  }
+                    if (merged[key]) {
+                        merged[key].quantity += qty;
+                        merged[key].source_count += 1;
+                        if (!merged[key].source_images.some(x => x.index === sourceImage.index)) {
+                            merged[key].source_images.push(sourceImage);
+                        }
+                    } else {
+                        merged[key] = { 
+                            code, color, size, unit_price: up, quantity: qty, 
+                            source_count: 1, source_images: [sourceImage] 
+                        };
+                    }
                 });
                 extractedItems = Object.values(merged);
-                
+
                 renderPreview();
                 $('prog-wrap').style.display = 'none';
                 $('btn-analyze').disabled = false;
                 $('sp1').style.display = 'none';
                 $('btn-analyze-text').textContent = '解析完了';
                 window.scrollTo({ top: $('preview-card').offsetTop - 20, behavior: 'smooth' });
-              },
-              onError: (err) => {
-                $('prog-fill').style.transition = 'width 0.2s';
+            } catch (e) {
+                console.error(e);
+                toast('解析に失敗しました: ' + e.message, 'err');
                 $('prog-wrap').style.display = 'none';
                 $('btn-analyze').disabled = false;
                 $('sp1').style.display = 'none';
                 $('btn-analyze-text').textContent = '解析失敗';
-              }
-            });
-
-            if (jid) {
-                $('prog-label').textContent = 'AI解析中... (数秒〜数十秒かかります)';
-                $('prog-pct').textContent = '';
-                $('prog-fill').style.transition = 'width 15s cubic-bezier(0.1, 0.7, 0.1, 1)';
-                $('prog-fill').style.width = '95%';
-                $('btn-analyze-text').textContent = 'AIが解析中...';
-            } else {
-                $('prog-wrap').style.display = 'none';
-                $('btn-analyze').disabled = false;
-                $('sp1').style.display = 'none';
-                $('btn-analyze-text').textContent = 'エラーが発生しました';
             }
-
-          } catch (e) { 
-            toast(e.message, 'err'); 
-            $('btn-analyze').disabled = false;
-            $('sp1').style.display = 'none';
-          }
         });
         function updProg(label, cur, tot) { $('prog-label').textContent = label; const p = Math.round(cur / tot * 100); $('prog-pct').textContent = p + '%'; $('prog-fill').style.width = p + '%'; }
 
@@ -3226,12 +3290,18 @@
                         ? `<div class="merge-note">${it.source_count}件の読取結果をまとめました</div>`
                         : '';
 
+                    const sourceThumbs = (it.source_images || []).map(src => `
+                        <img class="source-thumb" src="${src.thumb}" onclick="openSourceImage('${src.thumb}')">
+                    `).join('');
+                    const sourceBlock = sourceThumbs ? `<div class="source-thumbs">${sourceThumbs}</div>` : '';
+
                     card.innerHTML = `
                         <div class="item-card-header">
                             <span class="item-card-num">N° ${String(i + 1).padStart(2, '0')}</span>
                             <button class="item-card-del" onclick="delRow(${i})">✕</button>
                         </div>
                         <div class="ai-badges">${badges.join('')}</div>
+                        ${sourceBlock}
                         ${mergeNote}
                         <div class="item-card-body">
                             <div class="item-field full"><label>品番</label><input value="${it.code || ''}" data-i="${i}" data-k="code"></div>
@@ -3690,6 +3760,10 @@
 
         <button class="btn btn-gold" style="width:100%; margin-top:20px;" onclick="closePWAModal()">了解しました</button>
       </div>
+    </div>
+
+    <div id="image-preview-overlay" class="image-preview-overlay" onclick="closeSourceImage()">
+        <img id="image-preview-img" src="">
     </div>
 
     <!-- Job Queue Panel -->
