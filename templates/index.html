@@ -2672,7 +2672,7 @@
             const r = await fetch(`/api/history?doc_type=${t}`);
             allHistory = await r.json();
             updateMonthFilter(allHistory);
-            renderHistory(allHistory);
+            applyHistoryFilters();
         }
         $('hist-type-filter')?.addEventListener('change', loadHistory);
         function updateMonthFilter(data) {
@@ -2687,20 +2687,21 @@
                 filter.appendChild(opt);
             });
             filter.value = current;
-            filter.onchange = () => {
-                const q = $('hist-search').value.toLowerCase().trim();
-                const m = filter.value;
-                const u = $('hist-user-filter')?.value;
-                const filtered = allHistory.filter(inv => {
-                    const matchQ = !q || (inv.invoice_number||'').toLowerCase().includes(q) || (inv.customer_name||'').toLowerCase().includes(q);
-                    const matchM = !m || inv.created_at?.startsWith(m);
-                    const matchU = !u || String(inv.user_id) === String(u);
-                    return matchQ && matchM && matchU;
-                });
-                renderHistory(filtered);
-            };
+            filter.onchange = applyHistoryFilters;
         }
-        $('hist-user-filter')?.addEventListener('change', () => $('hist-month-filter')?.onchange());
+        function applyHistoryFilters() {
+            const q = $('hist-search')?.value.toLowerCase().trim() || '';
+            const m = $('hist-month-filter')?.value || '';
+            const u = $('hist-user-filter')?.value || '';
+            const filtered = allHistory.filter(inv => {
+                const matchQ = !q || (inv.invoice_number||'').toLowerCase().includes(q) || (inv.customer_name||'').toLowerCase().includes(q);
+                const matchM = !m || inv.created_at?.startsWith(m);
+                const matchU = !u || String(inv.user_id) === String(u);
+                return matchQ && matchM && matchU;
+            });
+            renderHistory(filtered);
+        }
+        $('hist-user-filter')?.addEventListener('change', applyHistoryFilters);
         async function delHist(id) {
             if (!confirm('この伝票を削除してもよろしいですか？')) return;
             try {
@@ -3506,7 +3507,7 @@
         // ===== History live search =============
         // =========================================
         $('hist-search')?.addEventListener('input', e => {
-          $('hist-month-filter')?.onchange();
+          applyHistoryFilters();
         });
 
         // 起動時にデスクトップ要素を表示
