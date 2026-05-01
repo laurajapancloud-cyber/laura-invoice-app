@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>LAURA INVOICE - ログイン</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-base: #0f0f11;
+            --bg-elevated: #16161a;
+            --bg-card: #1c1c21;
+            --bg-input: #0a0a0c;
+            --text-primary: #f0f0f0;
+            --text-secondary: #a0a0a0;
+            --text-muted: #666666;
+            --border: #2a2a30;
+            --border-subtle: #1e1e24;
+            --border-strong: #3a3a42;
+            --gold: #c9a961;
+            --gold-bright: #e5c378;
+            --gold-deep: #8a703a;
+            --gold-soft: rgba(201, 169, 97, 0.1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Noto Sans JP', sans-serif;
+            background: radial-gradient(circle at 50% 0%, rgba(201,169,97,0.1), var(--bg-base) 60%);
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+
+        .login-card {
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-strong);
+            border-radius: 16px;
+            padding: 40px;
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.5), 0 0 20px var(--gold-soft);
+            text-align: center;
+        }
+
+        .logo-mark {
+            font-family: 'Cormorant Garamond', serif;
+            font-size: 32px;
+            color: var(--gold);
+            margin-bottom: 8px;
+            letter-spacing: 0.1em;
+        }
+
+        .logo-sub {
+            font-size: 10px;
+            color: var(--text-muted);
+            letter-spacing: 0.3em;
+            margin-bottom: 40px;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+
+        .input-group label {
+            display: block;
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+            letter-spacing: 0.05em;
+        }
+
+        .input-group input {
+            width: 100%;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            padding: 14px 16px;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: all 0.2s;
+        }
+
+        .input-group input:focus {
+            outline: none;
+            border-color: var(--gold);
+            box-shadow: 0 0 0 2px var(--gold-soft);
+        }
+
+        .btn {
+            width: 100%;
+            background: linear-gradient(135deg, var(--gold-bright), var(--gold-deep));
+            color: #000;
+            border: none;
+            padding: 14px;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-top: 10px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(201,169,97,0.3);
+        }
+
+        .error-msg {
+            color: #ff5050;
+            font-size: 13px;
+            margin-bottom: 20px;
+            background: rgba(255,80,80,0.1);
+            padding: 10px;
+            border-radius: 6px;
+            display: {% if error %}block{% else %}none{% endif %};
+        }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <div class="logo-mark">LAURA JAPAN</div>
+        <div class="logo-sub">INVOICE SYSTEM</div>
+
+        <div class="error-msg">{{ error }}</div>
+
+        <form method="POST" action="/login">
+            <div class="input-group">
+                <label>ユーザーID</label>
+                <input type="text" name="username" required autocomplete="username">
+            </div>
+            <div class="input-group">
+                <label>パスワード</label>
+                <input type="password" name="password" required autocomplete="current-password">
+            </div>
+            <button type="submit" class="btn">ログイン</button>
+        </form>
+    </div>
+</body>
+</html>

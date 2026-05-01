@@ -16,9 +16,10 @@ from supabase import create_client, Client as SupabaseClient
 
 from fastapi import FastAPI, UploadFile, File, Depends, HTTPException, status, Response, Request, Form, BackgroundTasks
 from fastapi.staticfiles import StaticFiles
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from fastapi.security import APIKeyCookie
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, RedirectResponse
+import hashlib
 import google.generativeai as genai
 try:
     from weasyprint import HTML
@@ -323,23 +324,57 @@ except Exception as e:
 # ==================== FastAPI App ====================
 app = FastAPI()
 app.mount("/static", StaticFiles(directory="static"), name="static")
-security = HTTPBasic()
+cookie_sec = APIKeyCookie(name="laura_session", auto_error=False)
 templates = Jinja2Templates(directory="templates")
 
-def authenticate(credentials: Annotated[HTTPBasicCredentials, Depends(security)]):
+def get_session_token():
+    if not APP_USERNAME or not APP_PASSWORD: return "test_token"
+    return hashlib.sha256(f"{APP_USERNAME}:{APP_PASSWORD}:laurajapan".encode()).hexdigest()
+
+def authenticate(token: Annotated[str, Depends(cookie_sec)]):
+    valid_token = get_session_token()
     if not APP_USERNAME or not APP_PASSWORD:
-        if credentials.username == "test" and credentials.password == "test":
-            return "test"
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Server config error.")
-    is_correct_username = secrets.compare_digest(credentials.username.encode("utf8"), APP_USERNAME.encode("utf8"))
-    is_correct_password = secrets.compare_digest(credentials.password.encode("utf8"), APP_PASSWORD.encode("utf8"))
-    if not (is_correct_username and is_correct_password):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect credentials", headers={"WWW-Authenticate": "Basic"})
-    return credentials.username
+        if token == "test_token": return "test"
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+    if not token or not secrets.compare_digest(token, valid_token):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+    return APP_USERNAME
+
+@app.get("/login", response_class=HTMLResponse)
+async def login_page(request: Request):
+    return templates.TemplateResponse(request=request, name="login.html", context={"error": ""})
+
+@app.post("/login", response_class=HTMLResponse)
+async def login_post(request: Request, username: str = Form(...), password: str = Form(...)):
+    if not APP_USERNAME or not APP_PASSWORD:
+        if username == "test" and password == "test":
+            resp = RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
+            resp.set_cookie(key="laura_session", value="test_token", max_age=60*60*24*365)
+            return resp
+        return templates.TemplateResponse(request=request, name="login.html", context={"error": "サーバー設定エラー"})
+        
+    is_correct_username = secrets.compare_digest(username.encode("utf8"), APP_USERNAME.encode("utf8"))
+    is_correct_password = secrets.compare_digest(password.encode("utf8"), APP_PASSWORD.encode("utf8"))
+    
+    if is_correct_username and is_correct_password:
+        resp = RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
+        resp.set_cookie(key="laura_session", value=get_session_token(), max_age=60*60*24*365)
+        return resp
+    else:
+        return templates.TemplateResponse(request=request, name="login.html", context={"error": "IDまたはパスワードが間違っています"})
+
+@app.get("/logout")
+async def logout():
+    resp = RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+    resp.delete_cookie("laura_session")
+    return resp
 
 @app.get("/", response_class=HTMLResponse)
-async def index(request: Request, username: Annotated[str, Depends(authenticate)] = None):
-    # Auth is required for production, but we might bypass for local testing if needed
+async def index(request: Request, token: Annotated[str, Depends(cookie_sec)] = None):
+    try:
+        authenticate(token)
+    except HTTPException:
+        return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
     return templates.TemplateResponse(request=request, name="index.html")
 
 @app.get("/manifest.json")
