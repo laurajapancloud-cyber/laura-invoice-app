@@ -2874,6 +2874,7 @@
                         <button class="btn btn-gold btn-sm" data-tip="プレビュー表示" onclick="quickPreview(${inv.id})">👁</button>
                         ${lockBtn}
                         ${driveBtn}
+                        <button class="btn btn-outline btn-sm" data-tip="ZIP保存" onclick="downloadZip(${inv.id})">ZIP</button>
                         <button class="btn btn-outline btn-sm" data-tip="編集する" onclick="editHist(${inv.id})">✎</button>
                         <button class="btn btn-red btn-sm" data-tip="削除する" onclick="delHist(${inv.id})">✕</button>
                         </div>
@@ -2891,6 +2892,7 @@
                             <button class="btn btn-gold btn-sm" onclick="quickPreview(${inv.id})">👁 プレビュー</button>
                             ${lockBtn}
                             ${driveBtn}
+                            <button class="btn btn-outline btn-sm" onclick="downloadZip(${inv.id})">ZIP</button>
                             <button class="btn btn-outline btn-sm" onclick="editHist(${inv.id})">✎</button>
                             <button class="btn btn-red btn-sm" onclick="delHist(${inv.id})">✕</button>
                         </div>
@@ -2901,6 +2903,7 @@
             });
         }
 
+        function downloadZip(invId) { window.location.href = `/api/history/${invId}/zip`; }
         async function selectHistItem(inv) {
           currentEditingInvId = inv.id;
           document.querySelectorAll('.hist-item').forEach(el => el.classList.remove('active'));

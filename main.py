@@ -18,7 +18,8 @@ from fastapi import FastAPI, UploadFile, File, Depends, HTTPException, status, R
 from fastapi.staticfiles import StaticFiles
 from fastapi.security import APIKeyCookie
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, RedirectResponse, StreamingResponse
+import zipfile
 import hashlib
 import google.generativeai as genai
 try:
@@ -1140,6 +1141,71 @@ async def dl_detail_pdf(inv_id: int, username: Annotated[str, Depends(authentica
 @app.get("/api/history/{inv_id}/detail-excel")
 async def dl_detail_excel(inv_id: int, username: Annotated[str, Depends(authenticate)]):
     return serve_file(inv_id, "detail_excel")
+
+def safe_filename(name: str) -> str:
+    """ファイル名に使えない文字を置換する"""
+    name = name or "unknown"
+    return re.sub(r'[\\/:*?"<>|]+', "_", name).strip()
+
+def get_invoice_generated_files(inv_id: int):
+    """伝票の生成ファイル（4種類）を取得する。必要なら再生成する。"""
+    conn = require_db()
+    with conn.cursor() as cur:
+        cur.execute("SELECT * FROM invoices WHERE id=%s", (inv_id,))
+        inv = cur.fetchone()
+        if not inv:
+            conn.close()
+            raise HTTPException(404, "Invoice not found")
+        cur.execute("SELECT code, color, size, unit_price, quantity FROM invoice_items WHERE invoice_id=%s", (inv_id,))
+        items = [dict(r) for r in cur.fetchall()]
+    conn.close()
+
+    files = None
+    # 確定済みでパスがあるならストレージから取得
+    if inv["status"] == "locked" and inv.get("pdf_storage_path"):
+        try:
+            files = {
+                "pdf": storage_download(inv["pdf_storage_path"]),
+                "excel": storage_download(inv["excel_storage_path"]),
+                "detail_pdf": storage_download(inv["detail_pdf_storage_path"]),
+                "detail_excel": storage_download(inv["detail_excel_storage_path"]),
+            }
+        except Exception as e:
+            print(f"Storage download failed, regenerating: {e}")
+            files = None
+
+    if not files:
+        # 下書き状態、またはストレージ取得失敗時はその場で生成
+        dr = inv.get("discount_rate") or 100
+        inv_data = assemble_invoice_data(dict(inv), items, dr, inv.get("doc_type", "delivery"))
+        files = build_all_files(inv_data)
+    
+    return dict(inv), files
+
+@app.get("/api/history/{inv_id}/zip")
+async def dl_zip(inv_id: int, username: Annotated[str, Depends(authenticate)]):
+    """伝票に関連する4ファイルをZIPにまとめてダウンロードする"""
+    inv, files = get_invoice_generated_files(inv_id)
+    titles = DOC_TYPE_TITLES.get(inv.get("doc_type", "delivery"), DOC_TYPE_TITLES["delivery"])
+    
+    inv_num = safe_filename(inv["invoice_number"])
+    customer = safe_filename(inv["customer_name"])
+    
+    zip_buffer = BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr(f"{inv_num}_{customer}_{titles['pdf_title']}.pdf", files["pdf"])
+        z.writestr(f"{inv_num}_{customer}_{titles['pdf_title']}.xlsx", files["excel"])
+        z.writestr(f"{inv_num}_{customer}_{titles['detail_pdf_title']}.pdf", files["detail_pdf"])
+        z.writestr(f"{inv_num}_{customer}_{titles['detail_pdf_title']}.xlsx", files["detail_excel"])
+    
+    zip_buffer.seek(0)
+    zip_name = f"{inv_num}_{customer}_documents.zip"
+    
+    return StreamingResponse(
+        zip_buffer,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{zip_name}"'}
+    )
 
 @app.get("/api/history/{inv_id}/items")
 async def get_history_items(inv_id: int, username: Annotated[str, Depends(authenticate)]):
