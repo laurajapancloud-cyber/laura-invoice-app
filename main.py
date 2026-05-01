@@ -166,6 +166,20 @@ def get_drive_service():
         print(f"Drive init failed: {e}")
         return None
 
+def extract_json_array(text: str):
+    """AIのレスポンスからJSON配列を抽出する"""
+    text = text.strip()
+    # ```json ... ``` を除去
+    text = re.sub(r"^```json\s*", "", text, flags=re.MULTILINE)
+    text = re.sub(r"^```\s*", "", text, flags=re.MULTILINE)
+    text = re.sub(r"\s*```$", "", text, flags=re.MULTILINE)
+    # 最初の [ から最後の ] まで抽出
+    start = text.find("[")
+    end = text.rfind("]")
+    if start != -1 and end != -1 and end >= start:
+        text = text[start:end+1]
+    return json.loads(text)
+
 # ==================== PostgreSQL (Supabase) Database ====================
 DATABASE_URL = os.getenv("DATABASE_URL")
 
@@ -625,9 +639,12 @@ async def analyze_images_internal(jid: str, image_parts: list, ai_model: str):
             response = gemini_model.generate_content(contents)
             raw_text = response.text.strip()
 
-        if raw_text.startswith("```json"): raw_text = raw_text.replace("```json", "", 1).replace("```", "", 1).strip()
-        elif raw_text.startswith("```"): raw_text = raw_text.replace("```", "", 2).strip()
-        chunk_data = json.loads(raw_text)
+        try:
+            chunk_data = extract_json_array(raw_text)
+        except Exception as e:
+            print(f"JSON Parsing failed: {e}\nRaw text: {raw_text}")
+            raise Exception("AIの解析結果をJSONとして読み取れませんでした。もう一度お試しください。")
+        
         if not isinstance(chunk_data, list): chunk_data = [chunk_data]
         
         # Record usage
