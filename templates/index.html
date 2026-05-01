@@ -3520,9 +3520,14 @@
         localStorage.setItem('laura-active-jobs', JSON.stringify(ids));
       }
 
-      async enqueue(type, endpoint, formData, callbacks = {}) {
+      async enqueue(type, endpoint, body, callbacks = {}) {
         try {
-          const r = await fetch(endpoint, { method: 'POST', body: formData });
+          const options = { method: 'POST', body };
+          if (!(body instanceof FormData)) {
+            options.headers = { 'Content-Type': 'application/json' };
+            options.body = JSON.stringify(body);
+          }
+          const r = await fetch(endpoint, options);
           const data = await r.json();
           if (data.job_id) {
             this.trackJob(data.job_id, type, callbacks);
@@ -3574,7 +3579,7 @@
       }
 
       getJobLabel(type) {
-        const labels = { 'analyze': '画像解析', 'drive_upload': 'Drive保存' };
+        const labels = { 'analyze': '画像解析', 'drive_upload': 'Drive保存', 'generate': '保存・生成', 'lock': '伝票確定' };
         return labels[type] || type;
       }
     }
@@ -3923,16 +3928,12 @@
 
     async function lockHist(id) {
       if (!confirm('この伝票を確定しますか？確定後は内容を編集できません。')) return;
-      try {
-        const r = await fetch(`/api/history/${id}/lock`, { method: 'POST' });
-        if (!r.ok) {
-          const err = await r.json().catch(() => ({}));
-          throw new Error(err.detail || '確定に失敗しました');
+      jobManager.enqueue('lock', `/api/jobs/lock/${id}`, {}, {
+        onSuccess: () => {
+          loadHistory();
+          if (selectedHistId === id) selectHistItem({ id });
         }
-        toast('✦ 伝票を確定しました', 'ok');
-        await loadHistory();
-        if (selectedHistId === id) selectHistItem({ id });
-      } catch (e) { toast(e.message, 'err'); }
+      });
     }
 
     async function unlockHist(id) {
@@ -4204,74 +4205,74 @@
       updProg('画像を圧縮して送信準備中...', 0, 100);
 
       try {
-        const blobs = [];
+        const fd = new FormData();
+        fd.append('ai_model', ai);
         for (let i = 0; i < total; i++) {
-          updProg(`画像を圧縮中 (${i + 1}/${total})`, Math.round((i / total) * 20), 100);
-          blobs.push(await compress(selectedFiles[i]));
+          updProg(`画像を圧縮中 (${i + 1}/${total})`, Math.round((i / total) * 100), 100);
+          const blob = await compress(selectedFiles[i]);
+          fd.append('files', blob, `img_${i}.jpg`);
         }
+        
+        updProg('サーバーへ送信中...', 100, 100);
 
-        async function analyzeOneImage(blob, imageIndex, ai) {
-          const fd = new FormData();
-          fd.append('ai_model', ai);
-          fd.append('files', blob, `img_${imageIndex}.jpg`);
-          const r = await fetch('/analyze-images', { method: 'POST', body: fd });
-          if (!r.ok) { const err = await r.text(); throw new Error(err); }
-          const data = await r.json();
-          return (data.items || []).map(item => ({
-            ...item,
-            source_image_index: imageIndex,
-            source_image_thumb: selectedFileThumbs[imageIndex]
-          }));
-        }
+        jobManager.enqueue('analyze', '/api/jobs/analyze', fd, {
+          onSuccess: (data) => {
+            const allItems = (data.items || []).map(item => ({
+              ...item,
+              source_image_index: item.source_image_no ?? 0,
+              source_image_thumb: selectedFileThumbs[item.source_image_no ?? 0]
+            }));
 
-        let allItems = [];
-        for (let i = 0; i < blobs.length; i++) {
-          updProg(`AI解析中 (${i + 1}/${blobs.length})`, 20 + Math.round((i / blobs.length) * 70), 100);
-          const items = await analyzeOneImage(blobs[i], i, ai);
-          allItems.push(...items);
-        }
+            const merged = {};
+            allItems.forEach(it => {
+              const code = (it.code || '-').trim().toUpperCase();
+              const color = (it.color || '-').trim();
+              const size = (it.size || '-').trim();
+              let up = it.unit_price;
+              if (typeof up === 'string') up = parseInt(up.replace(/[¥,]/g, '').trim()) || 0;
+              else up = parseInt(up) || 0;
+              const qty = parseInt(it.quantity) || 1;
+              const key = `${code}|${color}|${size}|${up}`;
 
-        const merged = {};
-        allItems.forEach(it => {
-          const code = (it.code || '-').trim().toUpperCase();
-          const color = (it.color || '-').trim();
-          const size = (it.size || '-').trim();
-          let up = it.unit_price;
-          if (typeof up === 'string') up = parseInt(up.replace(/[¥,]/g, '').trim()) || 0;
-          else up = parseInt(up) || 0;
-          const qty = parseInt(it.quantity) || 1;
-          const key = `${code}|${color}|${size}|${up}`;
+              const sourceImage = { index: it.source_image_index, thumb: it.source_image_thumb };
 
-          const sourceImage = { index: it.source_image_index, thumb: it.source_image_thumb };
+              if (merged[key]) {
+                merged[key].quantity += qty;
+                merged[key].source_count += 1;
+                if (!merged[key].source_images.some(x => x.index === sourceImage.index)) {
+                  merged[key].source_images.push(sourceImage);
+                }
+              } else {
+                merged[key] = {
+                  code, color, size, unit_price: up, quantity: qty,
+                  source_count: 1, source_images: [sourceImage]
+                };
+              }
+            });
+            extractedItems = Object.values(merged);
 
-          if (merged[key]) {
-            merged[key].quantity += qty;
-            merged[key].source_count += 1;
-            if (!merged[key].source_images.some(x => x.index === sourceImage.index)) {
-              merged[key].source_images.push(sourceImage);
-            }
-          } else {
-            merged[key] = {
-              code, color, size, unit_price: up, quantity: qty,
-              source_count: 1, source_images: [sourceImage]
-            };
+            renderPreview();
+            $('prog-wrap').style.display = 'none';
+            $('btn-analyze').disabled = false;
+            $('sp1').style.display = 'none';
+            $('btn-analyze-text').textContent = '解析完了';
+            window.scrollTo({ top: $('preview-card').offsetTop - 20, behavior: 'smooth' });
+          },
+          onError: (err) => {
+            toast('解析に失敗しました: ' + err, 'err');
+            $('prog-wrap').style.display = 'none';
+            $('btn-analyze').disabled = false;
+            $('sp1').style.display = 'none';
+            $('btn-analyze-text').textContent = '解析失敗';
           }
         });
-        extractedItems = Object.values(merged);
-
-        renderPreview();
-        $('prog-wrap').style.display = 'none';
-        $('btn-analyze').disabled = false;
-        $('sp1').style.display = 'none';
-        $('btn-analyze-text').textContent = '解析完了';
-        window.scrollTo({ top: $('preview-card').offsetTop - 20, behavior: 'smooth' });
       } catch (e) {
         console.error(e);
-        toast('解析に失敗しました: ' + e.message, 'err');
+        toast('準備エラー: ' + e.message, 'err');
         $('prog-wrap').style.display = 'none';
         $('btn-analyze').disabled = false;
         $('sp1').style.display = 'none';
-        $('btn-analyze-text').textContent = '解析失敗';
+        $('btn-analyze-text').textContent = '準備失敗';
       }
     });
     function updProg(label, cur, tot) {
@@ -4565,36 +4566,31 @@
         doc_type: currentDocType,
         user_id: currentUser?.id
       };
-      try {
-        showGenProgress(6);
-        const r = await fetch('/generate-documents', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-        if (!r.ok) { const e = await r.json(); throw new Error(e.detail); }
-        const d = await r.json();
-        pdfData = d.pdf_base64;
-        excelData = d.excel_base64;
-        detailPdfData = d.detail_pdf_base64;
-        detailExcelData = d.detail_excel_base64;
-        currentInvNum = d.invoice_number;
-        lastInvoiceId = d.invoice_id;
-        $('inv-num-display').textContent = `伝票番号: ${d.invoice_number}`;
-        $('preview-card').style.display = 'none';
-        $('dl-section').style.display = 'block';
-        setupPreviews(payload, d);
-        hideGenProgress();
-        localStorage.removeItem('laura-draft');
-        toast('✦ 保存完了（下書き）', 'ok');
-        updateMobileActionBar();
-      } catch (e) {
-        hideGenProgress();
-        toast(e.message, 'err');
-      } finally {
-        $('btn-generate').disabled = false;
-        $('sp2').style.display = 'none';
-      }
+      
+      jobManager.enqueue('generate', '/api/jobs/generate', payload, {
+        onSuccess: (d) => {
+          pdfData = d.pdf_base64;
+          excelData = d.excel_base64;
+          detailPdfData = d.detail_pdf_base64;
+          detailExcelData = d.detail_excel_base64;
+          currentInvNum = d.invoice_number;
+          lastInvoiceId = d.invoice_id;
+          $('inv-num-display').textContent = `伝票番号: ${d.invoice_number}`;
+          $('preview-card').style.display = 'none';
+          $('dl-section').style.display = 'block';
+          setupPreviews(payload, d);
+          localStorage.removeItem('laura-draft');
+          toast('✦ 保存完了（下書き）', 'ok');
+          updateMobileActionBar();
+          $('btn-generate').disabled = false;
+          $('sp2').style.display = 'none';
+        },
+        onError: (err) => {
+          toast('保存に失敗しました: ' + err, 'err');
+          $('btn-generate').disabled = false;
+          $('sp2').style.display = 'none';
+        }
+      });
     });
 
     $('btn-lock-final')?.addEventListener('click', async () => {

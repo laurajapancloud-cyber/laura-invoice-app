@@ -601,40 +601,41 @@ async def analyze_images_internal(jid: str, image_parts: list, ai_model: str):
 1. 複数の画像（または1枚の中に複数のタグ）がある場合、写っているすべてのタグを漏れなくカウントしてください。
 2. 同じ商品のタグが複数ある場合は、その枚数を `quantity` フィールドに反映させるか、同じ内容のオブジェクトを枚数分出力してください。
 3. 画像内のタグの総数と、出力データの合計数量が必ず一致するようにしてください。
+4. 提供された画像には順番（0, 1, 2...）があります。各オブジェクトに必ず `source_image_no` (0始まりの数値) を含めてください。
 
-スキーマ: [{"code": "品番", "color": "カラー", "size": "サイズ", "unit_price": 単価の数値, "quantity": 数量(デフォルト1)}]
+スキーマ: [{"code": "品番", "color": "カラー", "size": "サイズ", "unit_price": 単価の数値, "quantity": 数量(デフォルト1), "source_image_no": 画像番号}]
 """.strip()
 
         raw_text = ""
         if ai_model == "vision":
-            if not vision_client: throw_err = "Cloud VisionのJSONキーが未設定です。"
-            else:
-                items_data = []
-                for part in image_parts:
-                    image = vision.Image(content=part["data"])
-                    response = vision_client.text_detection(image=image)
-                    if response.error.message: raise Exception(f"Vision Error: {response.error.message}")
-                    raw_text = response.text_annotations[0].description if response.text_annotations else ""
-                    # ... (Vision extraction logic simplified for internal reuse, using original code for production)
-                    # I'll keep the full logic here for consistency
-                    code_match = re.search(r'[A-Za-z0-9]+-[A-Za-z0-9]+', raw_text)
-                    col_match = re.search(r'(?i)col(?:or)?[\s\.:]*(\d{1,3})', raw_text)
-                    sz_match = re.search(r'(?i)size[\s\\.:]*([\w]+)', raw_text)
-                    if not sz_match: sz_match = re.search(r'\b(3[68]|4[02468]|50)\b', raw_text)
-                    price_match = re.search(r'[¥￥]\s*([\d,]+)', raw_text)
-                    if not price_match: price_match = re.search(r'\b(\d{1,3}(?:,\d{3})+)\b', raw_text)
-                    unit_price = 0
-                    if price_match:
-                        try: unit_price = int(price_match.group(1).replace(',', ''))
-                        except: pass
-                    items_data.append({
-                        "code": code_match.group(0) if code_match else "-",
-                        "color": col_match.group(1) if col_match else "-",
-                        "size": sz_match.group(1) if sz_match else "-",
-                        "unit_price": unit_price
-                    })
-                db_update_job(jid, 'done', result={"items": items_data})
-                return
+            if not vision_client: raise Exception("Cloud VisionのJSONキーが未設定です。")
+            items_data = []
+            for i, part in enumerate(image_parts):
+                image = vision.Image(content=part["data"])
+                response = vision_client.text_detection(image=image)
+                if response.error.message: raise Exception(f"Vision Error: {response.error.message}")
+                raw_text = response.text_annotations[0].description if response.text_annotations else ""
+                
+                code_match = re.search(r'[A-Za-z0-9]+-[A-Za-z0-9]+', raw_text)
+                col_match = re.search(r'(?i)col(?:or)?[\s\.:]*(\d{1,3})', raw_text)
+                sz_match = re.search(r'(?i)size[\s\\.:]*([\w]+)', raw_text)
+                if not sz_match: sz_match = re.search(r'\b(3[68]|4[02468]|50)\b', raw_text)
+                price_match = re.search(r'[¥￥]\s*([\d,]+)', raw_text)
+                if not price_match: price_match = re.search(r'\b(\d{1,3}(?:,\d{3})+)\b', raw_text)
+                unit_price = 0
+                if price_match:
+                    try: unit_price = int(price_match.group(1).replace(',', ''))
+                    except: pass
+                items_data.append({
+                    "code": code_match.group(0) if code_match else "-",
+                    "color": col_match.group(1) if col_match else "-",
+                    "size": sz_match.group(1) if sz_match else "-",
+                    "unit_price": unit_price,
+                    "source_image_no": i
+                })
+            db_update_job(jid, 'done', result={"items": items_data})
+            return
+
 
         elif ai_model == "azure":
             if not azure_client: raise Exception("Azure OpenAIのキー/エンドポイントが未設定です。")
@@ -979,17 +980,17 @@ async def preview_documents(username: Annotated[str, Depends(authenticate)], pay
     }
 
 
-@app.post("/generate-documents")
-async def generate_documents(request: Request, username: Annotated[str, Depends(authenticate)], payload: DocumentRequest):
+async def generate_documents_internal(jid: str, payload_dict: dict):
     try:
         conn = require_db()
+        payload = DocumentRequest(**payload_dict)
         doc_type = payload.doc_type or "delivery"
         with conn.cursor() as cur:
             if payload.invoice_id:
                 cur.execute("SELECT invoice_number, status FROM invoices WHERE id = %s", (payload.invoice_id,))
                 row = cur.fetchone()
-                if not row: raise HTTPException(404, "Invoice not found")
-                if row["status"] == "locked": raise HTTPException(400, "確定済みの伝票は編集できません。")
+                if not row: raise Exception("Invoice not found")
+                if row["status"] == "locked": raise Exception("確定済みの伝票は編集できません。")
                 invoice_number = row["invoice_number"]
             else:
                 invoice_number = generate_invoice_number_safe(cur, doc_type)
@@ -1019,44 +1020,81 @@ async def generate_documents(request: Request, username: Annotated[str, Depends(
         conn.close()
 
         files = build_all_files(inv_data)
-        return JSONResponse({
+        result = {
             "invoice_id": inv_id, "invoice_number": invoice_number, "status": "draft", "doc_type": doc_type,
             "pdf_base64": base64.b64encode(files["pdf"]).decode(), "excel_base64": base64.b64encode(files["excel"]).decode(),
             "detail_pdf_base64": base64.b64encode(files["detail_pdf"]).decode(), "detail_excel_base64": base64.b64encode(files["detail_excel"]).decode(),
-        })
-    except HTTPException: raise
+        }
+        db_update_job(jid, 'done', result=result)
+    except Exception as e:
+        db_update_job(jid, 'failed', error=str(e))
+
+@app.post("/generate-documents")
+async def generate_documents(request: Request, username: Annotated[str, Depends(authenticate)], payload: DocumentRequest):
+    # Keep compatibility but use internal logic
+    jid = db_create_job('generate', payload.dict())
+    await generate_documents_internal(jid, payload.dict())
+    job = db_get_job(jid)
+    if job['status'] == 'failed': raise HTTPException(500, job['error'])
+    return JSONResponse(job['result'])
+
+@app.post("/api/jobs/generate")
+async def enqueue_generate(bt: BackgroundTasks, username: Annotated[str, Depends(authenticate)], payload: DocumentRequest):
+    jid = db_create_job('generate', payload.dict())
+    bt.add_task(generate_documents_internal, jid, payload.dict())
+    return {"job_id": jid, "status": "pending"}
+
+
+async def lock_invoice_internal(jid: str, inv_id: int):
+    try:
+        conn = require_db()
+        with conn.cursor() as cur:
+            cur.execute("SELECT * FROM invoices WHERE id=%s", (inv_id,))
+            inv = cur.fetchone()
+            if not inv: raise Exception("Invoice not found")
+            if inv["status"] == "locked": 
+                db_update_job(jid, 'done', result={"status": "already_locked"})
+                return
+            cur.execute("SELECT code,color,size,unit_price,quantity FROM invoice_items WHERE invoice_id=%s", (inv_id,))
+            items = [dict(r) for r in cur.fetchall()]
+        
+        inv_data = assemble_invoice_data(dict(inv), items, inv["discount_rate"], inv.get("doc_type", "delivery"))
+        files = build_all_files(inv_data)
+        
+        base = f"locked/{inv['invoice_number']}"
+        p = {
+            "pdf": storage_upload(f"{base}/invoice.pdf", files["pdf"], "application/pdf"),
+            "excel": storage_upload(f"{base}/invoice.xlsx", files["excel"], "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+            "detail_pdf": storage_upload(f"{base}/detail.pdf", files["detail_pdf"], "application/pdf"),
+            "detail_excel": storage_upload(f"{base}/detail.xlsx", files["detail_excel"], "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+        }
+        
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE invoices SET status='locked', locked_at=NOW(),
+                pdf_storage_path=%s, excel_storage_path=%s, detail_pdf_storage_path=%s, detail_excel_storage_path=%s
+                WHERE id=%s
+            """, (p["pdf"], p["excel"], p["detail_pdf"], p["detail_excel"], inv_id))
+            conn.commit()
+        conn.close()
+        db_update_job(jid, 'done', result={"status": "locked"})
+    except Exception as e:
+        db_update_job(jid, 'failed', error=str(e))
 
 @app.post("/api/history/{inv_id}/lock")
 async def lock_invoice(inv_id: int, username: Annotated[str, Depends(authenticate)]):
-    conn = require_db()
-    with conn.cursor() as cur:
-        cur.execute("SELECT * FROM invoices WHERE id=%s", (inv_id,))
-        inv = cur.fetchone()
-        if not inv: raise HTTPException(404, "Not found")
-        if inv["status"] == "locked": return {"status": "already_locked"}
-        cur.execute("SELECT code,color,size,unit_price,quantity FROM invoice_items WHERE invoice_id=%s", (inv_id,))
-        items = [dict(r) for r in cur.fetchall()]
-    
-    inv_data = assemble_invoice_data(dict(inv), items, inv["discount_rate"], inv.get("doc_type", "delivery"))
-    files = build_all_files(inv_data)
-    
-    base = f"locked/{inv['invoice_number']}"
-    p = {
-        "pdf": storage_upload(f"{base}/invoice.pdf", files["pdf"], "application/pdf"),
-        "excel": storage_upload(f"{base}/invoice.xlsx", files["excel"], "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
-        "detail_pdf": storage_upload(f"{base}/detail.pdf", files["detail_pdf"], "application/pdf"),
-        "detail_excel": storage_upload(f"{base}/detail.xlsx", files["detail_excel"], "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
-    }
-    
-    with conn.cursor() as cur:
-        cur.execute("""
-            UPDATE invoices SET status='locked', locked_at=NOW(),
-            pdf_storage_path=%s, excel_storage_path=%s, detail_pdf_storage_path=%s, detail_excel_storage_path=%s
-            WHERE id=%s
-        """, (p["pdf"], p["excel"], p["detail_pdf"], p["detail_excel"], inv_id))
-        conn.commit()
-    conn.close()
-    return {"status": "locked"}
+    jid = db_create_job('lock', {"inv_id": inv_id})
+    await lock_invoice_internal(jid, inv_id)
+    job = db_get_job(jid)
+    if job['status'] == 'failed': raise HTTPException(500, job['error'])
+    return job['result']
+
+@app.post("/api/jobs/lock/{inv_id}")
+async def enqueue_lock(bt: BackgroundTasks, inv_id: int, username: Annotated[str, Depends(authenticate)]):
+    jid = db_create_job('lock', {"inv_id": inv_id})
+    bt.add_task(lock_invoice_internal, jid, inv_id)
+    return {"job_id": jid, "status": "pending"}
+
 
 @app.post("/api/history/{inv_id}/unlock")
 async def unlock_invoice(inv_id: int, username: Annotated[str, Depends(authenticate)]):
