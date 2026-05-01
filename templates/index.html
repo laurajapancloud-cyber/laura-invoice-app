@@ -2985,19 +2985,22 @@
 
             jobManager.enqueue('analyze', '/api/jobs/analyze', fd, {
               onSuccess: (res) => {
-                extractedItems = [];
-                res.items.forEach(it => {
-                  const key = `${it.code}|${it.color}|${it.size}|${it.unit_price}`;
-                  const qty = parseInt(it.quantity) || 1;
-                  extractedItems.push({ ...it, quantity: qty });
-                });
-                
-                // Merge logic
                 const merged = {};
-                extractedItems.forEach(it => {
-                  const key = `${it.code}|${it.color}|${it.size}|${it.unit_price}`;
-                  if (merged[key]) merged[key].quantity += it.quantity;
-                  else merged[key] = { ...it };
+                res.items.forEach(it => {
+                  const code = (it.code || '-').trim().toUpperCase();
+                  const color = (it.color || '-').trim();
+                  const size = (it.size || '-').trim();
+                  let up = it.unit_price;
+                  if (typeof up === 'string') up = parseInt(up.replace(/[¥,]/g, '').trim()) || 0;
+                  else up = parseInt(up) || 0;
+                  const qty = parseInt(it.quantity) || 1;
+
+                  const key = `${code}|${color}|${size}|${up}`;
+                  if (merged[key]) {
+                    merged[key].quantity += qty;
+                  } else {
+                    merged[key] = { code, color, size, unit_price: up, quantity: qty };
+                  }
                 });
                 extractedItems = Object.values(merged);
                 
