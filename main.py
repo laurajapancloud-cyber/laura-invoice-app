@@ -970,22 +970,6 @@ async def generate_documents(request: Request, username: Annotated[str, Depends(
             "detail_pdf_base64": base64.b64encode(files["detail_pdf"]).decode(), "detail_excel_base64": base64.b64encode(files["detail_excel"]).decode(),
         })
     except HTTPException: raise
-@app.post("/api/preview")
-async def get_preview(request: Request, username: Annotated[str, Depends(authenticate)], payload: DocumentRequest):
-    try:
-        # DB保存せずに生成データだけ作成
-        inv_data = assemble_invoice_data({"invoice_number": "PREVIEW-0000", "customer_name": payload.customer_name}, payload.items, payload.discount_rate, payload.doc_type or "delivery")
-        files = build_all_files(inv_data)
-        return JSONResponse({
-            "invoice_number": inv_data["invoice_number"],
-            "pdf_base64": base64.b64encode(files["pdf"]).decode(),
-            "excel_base64": base64.b64encode(files["excel"]).decode(),
-            "detail_pdf_base64": base64.b64encode(files["detail_pdf"]).decode(),
-            "detail_excel_base64": base64.b64encode(files["detail_excel"]).decode(),
-        })
-    except Exception as e:
-        import traceback; traceback.print_exc()
-        raise HTTPException(500, str(e))
 
 @app.post("/api/history/{inv_id}/lock")
 async def lock_invoice(inv_id: int, username: Annotated[str, Depends(authenticate)]):
