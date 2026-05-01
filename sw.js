@@ -1,6 +1,5 @@
-const CACHE_NAME = 'laura-v3';
+const CACHE_NAME = 'laura-v4';
 const ASSETS_TO_CACHE = [
-  '/',
   '/static/icons/icon-192.png',
   '/static/icons/icon-512.png',
   '/static/icons/maskable-512.png',
@@ -36,22 +35,27 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // API calls: Network-first
-  if (url.pathname.startsWith('/api/') || url.pathname === '/analyze-images' || url.pathname === '/generate-documents') {
+  // API calls and HTML Navigation: Network-first
+  if (url.pathname.startsWith('/api/') || event.request.mode === 'navigate') {
     event.respondWith(
-      fetch(event.request)
-        .catch(() => caches.match(event.request))
+      fetch(event.request).then(response => {
+        // Only cache HTML responses if they are successful 200 OK (don't cache redirects)
+        if (event.request.mode === 'navigate' && response.status === 200) {
+          const resClone = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, resClone));
+        }
+        return response;
+      }).catch(() => caches.match(event.request))
     );
     return;
   }
 
-  // App shell / Static: Cache-first
+  // Static Assets: Cache-first
   event.respondWith(
     caches.match(event.request).then((response) => {
       return response || fetch(event.request).then((fetchResponse) => {
         return caches.open(CACHE_NAME).then((cache) => {
-          // Don't cache dynamic or non-GET requests
-          if (event.request.method === 'GET' && !url.pathname.startsWith('/api')) {
+          if (event.request.method === 'GET') {
             cache.put(event.request, fetchResponse.clone());
           }
           return fetchResponse;
