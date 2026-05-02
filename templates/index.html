@@ -2626,21 +2626,59 @@
         padding-bottom: 110px;
       }
 
-      /* ジョブパネルを上部に配置 */
+      /* ACTIVE JOBS パネルをスマートな通知バナーに変更 */
       .job-panel {
+        top: 16px;
         bottom: auto;
-        top: 70px;
-        right: 12px;
-        left: 12px;
+        left: 16px;
+        right: 16px;
         width: auto;
-        max-height: 35vh;
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
-      }
-      .job-list {
-        max-height: calc(35vh - 50px);
+        border-radius: 16px;
+        background: rgba(20, 20, 20, 0.85);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid rgba(201, 169, 97, 0.3);
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
       }
 
-      /* タップ領域の拡大 (44px) */
+      /* ヘッダーの余白と文字サイズを削る */
+      .job-header {
+        padding: 8px 16px;
+        background: transparent;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      }
+      .job-header-title {
+        font-size: 11px;
+        letter-spacing: 0.1em;
+      }
+      .job-close-btn {
+        font-size: 16px;
+        padding: 0;
+      }
+
+      /* リスト部分の圧迫感をなくす */
+      .job-list {
+        max-height: 120px;
+        padding: 8px;
+      }
+      .job-item {
+        padding: 8px 12px;
+        margin-bottom: 4px;
+        background: transparent;
+        border-radius: 8px;
+      }
+      .job-icon {
+        font-size: 16px;
+        margin-top: 0;
+      }
+      .job-name {
+        font-size: 12px;
+      }
+      .job-status-text {
+        font-size: 10px;
+      }
+
+      /* --- 以下のタップ領域拡大などはそのままキープ --- */
       .item-field input,
       .qty-stepper input {
         min-height: 44px;
