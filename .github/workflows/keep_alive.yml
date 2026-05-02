@@ -1,0 +1,20 @@
+name: Keep Render Alive
+
+on:
+  schedule:
+    - cron: '*/10 * * * *' # 10分おきに実行
+  workflow_dispatch: # 手動実行用ボタンをGitHub UIに表示
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send keep-alive request
+        run: |
+          URL="${{ secrets.RENDER_URL }}"
+          if [ -z "$URL" ]; then
+            echo "Error: RENDER_URL is not set in GitHub Secrets."
+            exit 1
+          fi
+          echo "Pinging $URL/health ..."
+          curl -f -s "$URL/health" || echo "Ping failed, but continuing..."
