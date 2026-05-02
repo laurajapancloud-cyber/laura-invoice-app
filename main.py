@@ -211,6 +211,17 @@ def require_db():
         raise HTTPException(status_code=500, detail="DATABASE_URL is not configured")
     return conn
 
+from contextlib import contextmanager
+
+@contextmanager
+def db_conn():
+    """データベース接続を安全に管理するコンテキストマネージャ"""
+    conn = require_db()
+    try:
+        yield conn
+    finally:
+        conn.close()
+
 def init_db():
     conn = get_db()
     if not conn: return
@@ -289,6 +300,7 @@ def init_db():
                 updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             );
             CREATE INDEX IF NOT EXISTS idx_jobs_status_created ON jobs(status, created_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_jobs_created_at ON jobs(created_at);
             CREATE TABLE IF NOT EXISTS invoice_sequences (
                 doc_type TEXT NOT NULL,
                 yyyymm TEXT NOT NULL,
@@ -343,7 +355,14 @@ def db_create_job(job_type: str, payload: dict):
     jid = str(uuid.uuid4())
     conn = get_db()
     if not conn: return jid
+    import random
     with conn.cursor() as cur:
+        # 50回に1回程度の確率で、7日以上前の古いジョブを掃除する
+        if random.random() < 0.02:
+            try:
+                cur.execute("DELETE FROM jobs WHERE created_at < NOW() - INTERVAL '7 days'")
+            except: pass
+        
         cur.execute(
             "INSERT INTO jobs (id, type, status, payload) VALUES (%s, %s, %s, %s)",
             (jid, job_type, 'pending', json.dumps(payload))
@@ -419,7 +438,14 @@ async def login_post(request: Request, username: str = Form(...), password: str 
     
     if is_correct_username and is_correct_password:
         resp = RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
-        resp.set_cookie(key="laura_session", value=get_session_token(), max_age=60*60*24*365)
+        resp.set_cookie(
+            key="laura_session", 
+            value=get_session_token(), 
+            max_age=60*60*24*365,
+            httponly=True,
+            secure=True,
+            samesite="lax"
+        )
         return resp
     else:
         return templates.TemplateResponse(request=request, name="login.html", context={"error": "IDまたはパスワードが間違っています"})
@@ -632,8 +658,10 @@ def analyze_images_internal(jid: str, image_parts: list, ai_model: str):
                     "unit_price": unit_price,
                     "source_image_no": i
                 })
-            db_update_job(jid, 'done', result={"items": items_data})
-            return
+            # Visionの場合もログを記録するために後続処理へ合流させる
+            # db_update_job は関数の最後で行う形に整理（省略）
+            # ここでは暫定的に items_data を chunk_data に代入
+            chunk_data = items_data
 
 
         elif ai_model in ["azure", "openai"]:
@@ -1044,8 +1072,8 @@ def generate_documents_internal(jid: str, payload_dict: dict):
                 cur.execute("""
                     UPDATE invoices SET customer_name=%s, discount_rate=%s, total_net_amount=%s, total_tax_amount=%s, total_grand_total=%s, 
                     item_count=%s, status='draft', locked_at=NULL, doc_type=%s, user_id=%s,
-                    pdf_storage_path=NULL, excel_storage_path=NULL, detail_pdf_storage_path=NULL, detail_excel_storage_path=NULL,
-                    created_at=CURRENT_TIMESTAMP WHERE id=%s
+                    pdf_storage_path=NULL, excel_storage_path=NULL, detail_pdf_storage_path=NULL, detail_excel_storage_path=NULL
+                    WHERE id=%s
                 """, (payload.customer_name, payload.discount_rate, inv_data["total_net_amount"], inv_data["total_tax_amount"], inv_data["total_grand_total"], len(inv_data["items"]), doc_type, payload.user_id, payload.invoice_id))
                 cur.execute("DELETE FROM invoice_items WHERE invoice_id=%s", (payload.invoice_id,))
                 inv_id = payload.invoice_id
@@ -1062,11 +1090,8 @@ def generate_documents_internal(jid: str, payload_dict: dict):
         conn.commit()
         conn.close()
 
-        files = build_all_files(inv_data)
         result = {
             "invoice_id": inv_id, "invoice_number": invoice_number, "status": "draft", "doc_type": doc_type,
-            "pdf_base64": base64.b64encode(files["pdf"]).decode(), "excel_base64": base64.b64encode(files["excel"]).decode(),
-            "detail_pdf_base64": base64.b64encode(files["detail_pdf"]).decode(), "detail_excel_base64": base64.b64encode(files["detail_excel"]).decode(),
         }
         db_update_job(jid, 'done', result=result)
     except Exception as e:
@@ -1079,7 +1104,17 @@ async def generate_documents(request: Request, username: Annotated[str, Depends(
     generate_documents_internal(jid, payload.dict())
     job = db_get_job(jid)
     if job['status'] == 'failed': raise HTTPException(500, job['error'])
-    return JSONResponse(job['result'])
+    
+    # 互換性維持のため、レスポンス時のみBase64を生成して返す（DBには保存しない）
+    inv_id = job['result']['invoice_id']
+    inv, files = get_invoice_generated_files(inv_id)
+    return JSONResponse({
+        **job['result'],
+        "pdf_base64": base64.b64encode(files["pdf"]).decode(),
+        "excel_base64": base64.b64encode(files["excel"]).decode(),
+        "detail_pdf_base64": base64.b64encode(files["detail_pdf"]).decode(),
+        "detail_excel_base64": base64.b64encode(files["detail_excel"]).decode(),
+    })
 
 @app.post("/api/jobs/generate")
 async def enqueue_generate(bt: BackgroundTasks, username: Annotated[str, Depends(authenticate)], payload: DocumentRequest):
@@ -1096,15 +1131,16 @@ def lock_invoice_internal(jid: str, inv_id: int):
             cur.execute("SELECT * FROM invoices WHERE id=%s", (inv_id,))
             inv = cur.fetchone()
             if not inv: raise Exception("Invoice not found")
-            if inv["status"] == "locked": 
-                db_update_job(jid, 'done', result={"status": "already_locked"})
-                return
-            
-            # DBのステータスだけを更新する
+            # status が 'locked' でない場合のみ更新を実行（レースコンディション対策）
             cur.execute("""
                 UPDATE invoices SET status='locked', locked_at=NOW()
-                WHERE id=%s
+                WHERE id=%s AND status != 'locked'
+                RETURNING id
             """, (inv_id,))
+            
+            if not cur.fetchone():
+                db_update_job(jid, 'done', result={"status": "already_locked"})
+                return
             conn.commit()
         conn.close()
         
@@ -1307,13 +1343,16 @@ async def get_history_items(inv_id: int, username: Annotated[str, Depends(authen
 
 @app.delete("/api/history/{inv_id}")
 async def delete_history(inv_id: int, username: Annotated[str, Depends(authenticate)]):
-    conn = require_db()
-    if not conn: return {"status": "no-db-mode"}
-    with conn.cursor() as cur:
+    with db_conn() as conn, conn.cursor() as cur:
+        cur.execute("SELECT status FROM invoices WHERE id = %s", (inv_id,))
+        row = cur.fetchone()
+        if not row: raise HTTPException(404, "Invoice not found")
+        if row['status'] == 'locked':
+            raise HTTPException(403, "確定済み伝票は削除できません。まず確定を解除してください。")
+            
         cur.execute("DELETE FROM invoice_items WHERE invoice_id = %s", (inv_id,))
         cur.execute("DELETE FROM invoices WHERE id = %s", (inv_id,))
-    conn.commit()
-    conn.close()
+        conn.commit()
     return {"status": "ok"}
 
 def upload_drive_internal(jid: str, inv_id: int):
@@ -1379,17 +1418,14 @@ async def enqueue_drive_upload(bt: BackgroundTasks, username: Annotated[str, Dep
     return {"job_id": jid, "status": "pending"}
 
 @app.get("/api/jobs")
-async def get_jobs(limit: int = 20, username: Annotated[str, Depends(authenticate)] = None):
-    conn = require_db()
-    if not conn: return []
-    with conn.cursor() as cur:
+async def get_jobs(username: Annotated[str, Depends(authenticate)], limit: int = 20):
+    with db_conn() as conn, conn.cursor() as cur:
         cur.execute("SELECT id, type, status, created_at, updated_at FROM jobs ORDER BY created_at DESC LIMIT %s", (limit,))
         rows = [dict(r) for r in cur.fetchall()]
-    conn.close()
     return rows
 
 @app.get("/api/jobs/{job_id}")
-async def get_job_status(job_id: str, username: Annotated[str, Depends(authenticate)] = None):
+async def get_job_status(job_id: str, username: Annotated[str, Depends(authenticate)]):
     job = db_get_job(job_id)
     if not job: raise HTTPException(404, "Job not found")
     return job

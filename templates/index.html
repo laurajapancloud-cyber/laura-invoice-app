@@ -4600,22 +4600,32 @@
       };
       
       jobManager.enqueue('generate', '/api/jobs/generate', payload, {
-        onSuccess: (d) => {
-          pdfData = d.pdf_base64;
-          excelData = d.excel_base64;
-          detailPdfData = d.detail_pdf_base64;
-          detailExcelData = d.detail_excel_base64;
-          currentInvNum = d.invoice_number;
-          lastInvoiceId = d.invoice_id;
-          $('inv-num-display').textContent = `伝票番号: ${d.invoice_number}`;
-          $('preview-card').style.display = 'none';
-          $('dl-section').style.display = 'block';
-          setupPreviews(payload, d);
-          localStorage.removeItem('laura-draft');
-          toast('✦ 保存完了（下書き）', 'ok');
-          updateMobileActionBar();
-          $('btn-generate').disabled = false;
-          $('sp2').style.display = 'none';
+        onSuccess: async (d) => {
+          // ジョブ完了後、Base64データを含む最新情報を取得する
+          try {
+            const res = await fetch(`/api/history/${d.invoice_id}/data`);
+            const fullData = await res.json();
+            
+            pdfData = fullData.pdf_base64;
+            excelData = fullData.excel_base64;
+            detailPdfData = fullData.detail_pdf_base64;
+            detailExcelData = fullData.detail_excel_base64;
+            currentInvNum = d.invoice_number;
+            lastInvoiceId = d.invoice_id;
+            
+            $('inv-num-display').textContent = `伝票番号: ${d.invoice_number}`;
+            $('preview-card').style.display = 'none';
+            $('dl-section').style.display = 'block';
+            setupPreviews(payload, fullData); // 修正後のデータを使用
+            localStorage.removeItem('laura-draft');
+            toast('✦ 保存完了（下書き）', 'ok');
+            updateMobileActionBar();
+          } catch (err) {
+            toast('データの取得に失敗しました', 'err');
+          } finally {
+            $('btn-generate').disabled = false;
+            $('sp2').style.display = 'none';
+          }
         },
         onError: (err) => {
           toast('保存に失敗しました: ' + err, 'err');
