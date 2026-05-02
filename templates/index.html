@@ -3032,7 +3032,7 @@
       <div class="cam-header">
         <div class="cam-counter" id="cam-counter">0 枚</div>
         <div style="display:flex; gap:12px; align-items:center; pointer-events:auto;">
-          <div class="cam-done" onclick="$('file-input').click()">📁 ライブラリ</div>
+          <div class="cam-done" onclick="stopCamera(); $('file-input').click()">📁 ライブラリ</div>
           <div class="cam-done" onclick="stopCamera()">キャンセル</div>
         </div>
       </div>
@@ -4390,7 +4390,11 @@
       // ユーザーへの選択肢または直接カメラ起動
       // iPhoneのPWA環境では getUserMedia が非常に便利なのでこちらを優先
       if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
         startCamera();
+      } else {
+        $('file-input').click();
+      }
       } else {
         $('file-input').click();
       }
