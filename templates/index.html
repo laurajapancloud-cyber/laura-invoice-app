@@ -3574,7 +3574,6 @@
 
       async trackJob(jid, type = 'unknown', callbacks = {}) {
         if (this.jobs.has(jid)) return;
-        // startTimeとretryCountを管理
         this.jobs.set(jid, { 
           id: jid, type, status: 'pending', callbacks, 
           startTime: Date.now(), retryCount: 0 
@@ -3587,10 +3586,10 @@
         const job = this.jobs.get(jid);
         if (!job || job.status === 'done' || job.status === 'failed') return;
 
-        // タイムアウトを30秒に短縮 (AI解析の待機限界)
-        const timeoutMs = 30000;
+        // タイムアウト監視: AI解析は時間がかかるため120秒、その他は30秒
+        const timeoutMs = job.type === 'analyze' ? 120000 : 30000;
         if (Date.now() - job.startTime > timeoutMs) {
-           this.failJob(job, 'タイムアウトしました。サーバーが混雑しているか、通信が切断されました。');
+           this.failJob(job, 'AIの応答がタイムアウトしました。画像が多い場合は少し時間がかかります。');
            return;
         }
 
