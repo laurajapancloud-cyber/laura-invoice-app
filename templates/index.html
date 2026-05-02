@@ -3502,16 +3502,24 @@
       } catch (e) { return ''; }
     }
 
+    // ★ iOSアプリ判定フラグ
+    const isNativeApp = !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.download);
+
     function dl64(b64, fn, ct) {
-      // ★ iOSアプリ環境（JS Bridgeが存在する場合）の処理
-      if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.download) {
-        window.webkit.messageHandlers.download.postMessage({
-          base64: b64,
-          filename: fn
-        });
+      // ★ iOSアプリ環境: fetchでサーバーから直接取得してSwiftの共有シートに送る
+      if (isNativeApp) {
+        try {
+          window.webkit.messageHandlers.download.postMessage({
+            base64: b64,
+            filename: fn
+          });
+        } catch (e) {
+          toast('保存エラー: ' + e.message, 'err');
+        }
         return;
       }
 
+      // ブラウザ環境: 通常のダウンロード処理
       try {
         const c = atob(b64.replace(/\s/g, ''));
         const a = [];
@@ -3528,6 +3536,33 @@
         l.click(); document.body.removeChild(l);
         setTimeout(() => URL.revokeObjectURL(u), 100);
       } catch (e) { toast('保存エラー: ' + e.message, 'err'); }
+    }
+
+    // ★ iOSアプリ用: サーバーURLからファイルをfetchしてSwiftの共有シートに送る
+    async function dlFromServer(url, fn) {
+      if (!isNativeApp) {
+        // ブラウザ環境: 直接ナビゲーション
+        window.location.href = url;
+        return;
+      }
+      
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`サーバーエラー (${res.status})`);
+        const blob = await res.blob();
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const b64 = reader.result.split(',')[1];
+          window.webkit.messageHandlers.download.postMessage({
+            base64: b64,
+            filename: fn
+          });
+        };
+        reader.onerror = () => toast('ファイル読込エラー', 'err');
+        reader.readAsDataURL(blob);
+      } catch (e) {
+        toast('ダウンロード失敗: ' + e.message, 'err');
+      }
     }
 
     // ===== Job Management =====
@@ -3796,10 +3831,18 @@
       renderExcelGrid(d.excel_base64);
       renderSummaryView(payload, d, 'modal-summary-content');
 
-      document.querySelector('.btn-dl-pdf').onclick = () => dl64(d.pdf_base64, `納品書_${d.invoice_number}.pdf`, 'application/pdf');
-      document.querySelector('.btn-dl-xl').onclick = () => dl64(d.excel_base64, `納品書_${d.invoice_number}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      document.querySelector('.btn-dl-dpdf').onclick = () => dl64(d.detail_pdf_base64, `明細表_${d.invoice_number}.pdf`, 'application/pdf');
-      document.querySelector('.btn-dl-dxl').onclick = () => dl64(d.detail_excel_base64, `明細表_${d.invoice_number}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      // ★ iOSアプリ環境ならサーバーURLから直接取得、ブラウザならBase64から
+      if (isNativeApp && d.id) {
+        document.querySelector('.btn-dl-pdf').onclick = () => dlFromServer(`/api/history/${d.id}/pdf`, `納品書_${d.invoice_number}.pdf`);
+        document.querySelector('.btn-dl-xl').onclick = () => dlFromServer(`/api/history/${d.id}/excel`, `納品書_${d.invoice_number}.xlsx`);
+        document.querySelector('.btn-dl-dpdf').onclick = () => dlFromServer(`/api/history/${d.id}/detail-pdf`, `明細表_${d.invoice_number}.pdf`);
+        document.querySelector('.btn-dl-dxl').onclick = () => dlFromServer(`/api/history/${d.id}/detail-excel`, `明細表_${d.invoice_number}.xlsx`);
+      } else {
+        document.querySelector('.btn-dl-pdf').onclick = () => dl64(d.pdf_base64, `納品書_${d.invoice_number}.pdf`, 'application/pdf');
+        document.querySelector('.btn-dl-xl').onclick = () => dl64(d.excel_base64, `納品書_${d.invoice_number}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        document.querySelector('.btn-dl-dpdf').onclick = () => dl64(d.detail_pdf_base64, `明細表_${d.invoice_number}.pdf`, 'application/pdf');
+        document.querySelector('.btn-dl-dxl').onclick = () => dl64(d.detail_excel_base64, `明細表_${d.invoice_number}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      }
 
       const driveBtn = $('modal-btn-drive');
       if (d.id) {
@@ -4020,19 +4063,10 @@
     }
 
     async function downloadZip(invId) {
-      // ★ アプリ環境でも動くように、fetch して Base64 で共有シートに投げる
-      showGenProgress(3, 'gen'); // 進捗表示
+      showGenProgress(3, 'gen');
       try {
-        const res = await fetch(`/api/history/${invId}/zip`);
-        if (!res.ok) throw new Error('ZIP生成に失敗しました');
-        const blob = await res.blob();
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          const b64 = reader.result.split(',')[1];
-          dl64(b64, `invoice_${invId}.zip`, 'application/zip');
-          hideGenProgress();
-        };
-        reader.readAsDataURL(blob);
+        await dlFromServer(`/api/history/${invId}/zip`, `invoice_${invId}.zip`);
+        hideGenProgress();
       } catch (e) {
         hideGenProgress();
         toast('ZIPダウンロード失敗: ' + e.message, 'err');
@@ -4126,15 +4160,15 @@
 						<div class="preview-pane active" id="dpane-pdf">
 							<iframe class="pdf-preview-frame" src="${b64ToBlobUrl(d.pdf_base64, 'application/pdf')}"></iframe>
 							<div class="preview-actions">
-								<button class="btn btn-red" onclick="dl64('${d.pdf_base64}','${titles.main}_${d.invoice_number}.pdf','application/pdf')">📄 PDF保存</button>
-								<button class="btn btn-green" onclick="dl64('${d.excel_base64}','${titles.main}_${d.invoice_number}.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')">📊 Excel保存</button>
+								<button class="btn btn-red" onclick="dlFromServer('/api/history/${d.invoice_id}/pdf','${titles.main}_${d.invoice_number}.pdf')">📄 PDF保存</button>
+								<button class="btn btn-green" onclick="dlFromServer('/api/history/${d.invoice_id}/excel','${titles.main}_${d.invoice_number}.xlsx')">📊 Excel保存</button>
 							</div>
 						</div>
 						<div class="preview-pane" id="dpane-detail">
 							<iframe class="pdf-preview-frame" src="${b64ToBlobUrl(d.detail_pdf_base64, 'application/pdf')}"></iframe>
 							<div class="preview-actions">
-								<button class="btn btn-red" onclick="dl64('${d.detail_pdf_base64}','${titles.detail.replace(' ', '')}_${d.invoice_number}.pdf','application/pdf')">📄 PDF保存</button>
-								<button class="btn btn-green" onclick="dl64('${d.detail_excel_base64}','${titles.detail.replace(' ', '')}_${d.invoice_number}.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')">📊 Excel保存</button>
+								<button class="btn btn-red" onclick="dlFromServer('/api/history/${d.invoice_id}/detail-pdf','${titles.detail.replace(' ', '')}_${d.invoice_number}.pdf')">📄 PDF保存</button>
+								<button class="btn btn-green" onclick="dlFromServer('/api/history/${d.invoice_id}/detail-excel','${titles.detail.replace(' ', '')}_${d.invoice_number}.xlsx')">📊 Excel保存</button>
 							</div>
 						</div>
 						<div class="preview-pane" id="dpane-summary">
