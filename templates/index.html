@@ -2623,7 +2623,31 @@
       }
 
       body.has-mobile-action-bar {
-        padding-bottom: 80px;
+        padding-bottom: 110px;
+      }
+
+      /* ジョブパネルを上部に配置 */
+      .job-panel {
+        bottom: auto;
+        top: 70px;
+        right: 12px;
+        left: 12px;
+        width: auto;
+        max-height: 35vh;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
+      }
+      .job-list {
+        max-height: calc(35vh - 50px);
+      }
+
+      /* タップ領域の拡大 (44px) */
+      .item-field input,
+      .qty-stepper input {
+        min-height: 44px;
+        font-size: 16px;
+      }
+      .qty-btn {
+        width: 44px;
       }
     }
 
