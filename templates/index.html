@@ -5378,44 +5378,14 @@
     let camStream = null;
     let audioCtx = null;
 
-    // シャッター音（Web Audio APIで合成）
-    // 本物のシャッター音 (Base64)
-    const shutterBase64 = "data:audio/mp3;base64,//uQxAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAAFAAAHwwAICAICAiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA="; // (実際には有効な短いMP3データを入れます)
+    // シャッター音 (外部ファイル)
+    const shutterSound = new Audio('/static/assets/shutter.mp3');
 
     function playShutterSound() {
       try {
-        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        const duration = 0.25; // 0.15から延長
-        const buffer = audioCtx.createBuffer(1, audioCtx.sampleRate * duration, audioCtx.sampleRate);
-        const data = buffer.getChannelData(0);
-
-        // アタックと響きのカーブを調整
-        for (let i = 0; i < data.length; i++) {
-          const t = i / data.length;
-          const noise = (Math.random() * 2 - 1);
-          const attack = Math.exp(-40 * t);      // 100->40: 立ち上がりを少しだけマイルドに
-          const tail = Math.exp(-5 * t) * 0.8;   // 後ろの響きを長く、大きく
-          data[i] = noise * (attack + tail);
-        }
-
-        const noiseSrc = audioCtx.createBufferSource();
-        noiseSrc.buffer = buffer;
-
-        // バンドパスフィルターで「パシャッ」というカメラらしい周波数帯に絞る
-        const filter = audioCtx.createBiquadFilter();
-        filter.type = 'bandpass';
-        filter.frequency.value = 1000;
-        filter.Q.value = 0.5;
-
-        // 音量を上げる
-        const gain = audioCtx.createGain();
-        gain.gain.setValueAtTime(1.5, audioCtx.currentTime); // 0.6->1.5 に増幅
-        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
-
-        noiseSrc.connect(filter);
-        filter.connect(gain);
-        gain.connect(audioCtx.destination);
-        noiseSrc.start();
+        shutterSound.currentTime = 0;
+        shutterSound.volume = 1.0;
+        shutterSound.play().catch(e => console.error("Sound play blocked:", e));
       } catch (e) { console.error("Sound error:", e); }
     }
 
