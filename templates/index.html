@@ -3544,6 +3544,7 @@
         localStorage.setItem('laura-active-jobs', JSON.stringify(ids));
       }
 
+      // ★ 修正1: ジョブ送信時にエラーが起きたら、確実に onError を呼び出して画面ロックを解除する
       async enqueue(type, endpoint, body, callbacks = {}) {
         try {
           const options = { method: 'POST', body };
@@ -3552,29 +3553,51 @@
             options.body = JSON.stringify(body);
           }
           const r = await fetch(endpoint, options);
+          
+          // サーバーエラー（413 Payload Too Large 等）をキャッチ
+          if (!r.ok) {
+            const errData = await r.json().catch(() => ({}));
+            throw new Error(errData.detail || `サーバーエラー (${r.status})`);
+          }
+          
           const data = await r.json();
           if (data.job_id) {
             this.trackJob(data.job_id, type, callbacks);
             JobUI.show();
             return data.job_id;
           }
-          throw new Error(data.detail || 'Job creation failed');
+          throw new Error(data.detail || 'ジョブの作成に失敗しました');
         } catch (e) {
           toast('ジョブ開始エラー: ' + e.message, 'err');
+          if (callbacks.onError) callbacks.onError(e.message); // ← ★ここを追加！
           return null;
         }
       }
 
       async trackJob(jid, type = 'unknown', callbacks = {}) {
         if (this.jobs.has(jid)) return;
-        this.jobs.set(jid, { id: jid, type, status: 'pending', callbacks });
+        // startTimeを追加してタイムアウトを計測できるようにする
+        this.jobs.set(jid, { id: jid, type, status: 'pending', callbacks, startTime: Date.now() });
         this.poll(jid);
         this.saveToStorage();
       }
 
+      // ★ 修正2: バックエンドがフリーズした場合に備え、60秒でタイムアウトさせる
       async poll(jid) {
         const job = this.jobs.get(jid);
         if (!job || job.status === 'done' || job.status === 'failed') return;
+
+        // 60秒以上経過したら強制的にタイムアウトエラーにする
+        if (Date.now() - job.startTime > 60000) {
+           job.status = 'failed';
+           job.error = 'AIの応答がタイムアウトしました';
+           JobUI.updateItem(job);
+           toast(`${this.getJobLabel(job.type)}がタイムアウトしました`, 'err');
+           if (job.callbacks.onError) job.callbacks.onError(job.error);
+           this.saveToStorage();
+           this.jobs.delete(job.id);
+           return;
+        }
 
         try {
           const r = await fetch(`/api/jobs/${jid}`);
