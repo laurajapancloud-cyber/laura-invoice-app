@@ -3617,7 +3617,20 @@
     <div class="page" id="page-settings">
       <div class="card">
         <div class="card-title">⚜ 取引先マスタ</div>
-        <div id="cust-list"></div>
+        <div id="cust-list" style="display:flex; flex-direction:column; gap:8px">
+          <template x-for="c in $store.app.customers" :key="c.id">
+            <div class="user-pill" style="justify-content:space-between; padding:10px 14px">
+              <span x-text="c.name" style="font-weight:600"></span>
+              <div style="display:flex; align-items:center; gap:12px">
+                <span style="font-size:12px; color:var(--text-muted)" x-text="c.discount_rate + '%'"></span>
+                <button @click="delCust(c.id)" style="background:none; border:none; color:var(--red); cursor:pointer; font-size:16px">×</button>
+              </div>
+            </div>
+          </template>
+          <template x-if="!$store.app.customers.length">
+            <div class="empty-state">登録された取引先はありません</div>
+          </template>
+        </div>
         <div style="margin-top:18px;border-top:1px solid var(--border);padding-top:18px">
           <div class="form-row">
             <div class="form-group"><label>取引先名</label><input type="text" id="new-cust-name"
