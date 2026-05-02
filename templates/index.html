@@ -5355,24 +5355,36 @@
     let audioCtx = null;
 
     // シャッター音（Web Audio APIで合成）
+    // 本物のシャッター音 (Base64)
+    const shutterBase64 = "data:audio/mp3;base64,//uQxAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAAFAAAHwwAICAICAiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA="; // (実際には有効な短いMP3データを入れます)
+    
     function playShutterSound() {
       try {
         if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        const bufferSize = audioCtx.sampleRate * 0.1;
-        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const duration = 0.15;
+        const buffer = audioCtx.createBuffer(1, audioCtx.sampleRate * duration, audioCtx.sampleRate);
         const data = buffer.getChannelData(0);
-        for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+        
+        // 2つのパルスを重ねて「カ・シャ」を表現
+        for (let i = 0; i < data.length; i++) {
+          const t = i / data.length;
+          // メインのノイズ
+          const noise = (Math.random() * 2 - 1);
+          // 最初の鋭いアタック（カ）
+          const attack = Math.exp(-100 * t);
+          // 後ろの響き（シャ）
+          const tail = Math.exp(-10 * t) * 0.5;
+          data[i] = noise * (attack + tail);
+        }
         
         const noise = audioCtx.createBufferSource();
         noise.buffer = buffer;
         const filter = audioCtx.createBiquadFilter();
-        filter.type = 'lowpass';
-        filter.frequency.setValueAtTime(1200, audioCtx.currentTime);
-        filter.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.1);
-        
+        filter.type = 'highpass';
+        filter.frequency.value = 1500; // 高音域を強調
         const gain = audioCtx.createGain();
-        gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.6, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
         
         noise.connect(filter);
         filter.connect(gain);
