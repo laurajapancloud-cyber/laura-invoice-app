@@ -176,8 +176,7 @@ def extract_json_array(text: str):
 	text = text.strip()
 
 	# ```json ... ``` / ``` ... ``` を除去
-	text = re.sub(r"^```json\s*", "", text, flags=re.IGNORECASE)
-	text = re.sub(r"^```\s*", "", text)
+	text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.IGNORECASE)
 	text = re.sub(r"\s*```$", "", text)
 
 	# 最初の [ から最後の ] まで抽出
@@ -479,11 +478,7 @@ async def health():
 # ==================== Dashboard API ====================
 @app.get("/api/dashboard")
 async def get_dashboard(username: Annotated[str, Depends(authenticate)]):
-    conn = require_db()
-    if not conn:
-        return {"this_month": {"invoices": 0, "total_amount": 0}, "monthly": [], "api_usage": []}
-    
-    with conn.cursor() as cur:
+    with db_conn() as conn, conn.cursor() as cur:
         # DBセッションをJSTに設定
         try:
             cur.execute("SET TIME ZONE 'Asia/Tokyo'")
@@ -533,7 +528,6 @@ async def get_dashboard(username: Annotated[str, Depends(authenticate)]):
             (month_start,)
         )
         usage = cur.fetchall()
-    conn.close()
     
     # コスト計算
     usage_list = []
@@ -1053,10 +1047,9 @@ async def preview_documents(username: Annotated[str, Depends(authenticate)], pay
 
 def generate_documents_internal(jid: str, payload_dict: dict):
     try:
-        conn = require_db()
         payload = DocumentRequest(**payload_dict)
         doc_type = payload.doc_type or "delivery"
-        with conn.cursor() as cur:
+        with db_conn() as conn, conn.cursor() as cur:
             if payload.invoice_id:
                 cur.execute("SELECT invoice_number, status FROM invoices WHERE id = %s", (payload.invoice_id,))
                 row = cur.fetchone()
@@ -1087,8 +1080,7 @@ def generate_documents_internal(jid: str, payload_dict: dict):
             for item in inv_data["items"]:
                 cur.execute("INSERT INTO invoice_items (invoice_id, code, color, size, unit_price, quantity, net_amount) VALUES (%s,%s,%s,%s,%s,%s,%s)",
                              (inv_id, item["code"], item["color"], item["size"], item["unit_price"], item["quantity"], item["net_amount"]))
-        conn.commit()
-        conn.close()
+            conn.commit()
 
         result = {
             "invoice_id": inv_id, "invoice_number": invoice_number, "status": "draft", "doc_type": doc_type,
@@ -1101,20 +1093,29 @@ def generate_documents_internal(jid: str, payload_dict: dict):
 async def generate_documents(request: Request, username: Annotated[str, Depends(authenticate)], payload: DocumentRequest):
     # Keep compatibility but use internal logic
     jid = db_create_job('generate', payload.dict())
-    generate_documents_internal(jid, payload.dict())
-    job = db_get_job(jid)
-    if job['status'] == 'failed': raise HTTPException(500, job['error'])
     
-    # 互換性維持のため、レスポンス時のみBase64を生成して返す（DBには保存しない）
-    inv_id = job['result']['invoice_id']
-    inv, files = get_invoice_generated_files(inv_id)
-    return JSONResponse({
-        **job['result'],
-        "pdf_base64": base64.b64encode(files["pdf"]).decode(),
-        "excel_base64": base64.b64encode(files["excel"]).decode(),
-        "detail_pdf_base64": base64.b64encode(files["detail_pdf"]).decode(),
-        "detail_excel_base64": base64.b64encode(files["detail_excel"]).decode(),
-    })
+    # 同期APIでは効率化のため、ここで1回だけ生成して返す
+    try:
+        inv_id = None
+        # DB保存処理を最小限に（generate_documents_internalの共通ロジックを流用しつつ最適化）
+        # ※本来は共通化すべきですが、まずは高速化を優先
+        generate_documents_internal(jid, payload.dict())
+        job = db_get_job(jid)
+        if job['status'] == 'failed': raise HTTPException(500, job['error'])
+        
+        inv_id = job['result']['invoice_id']
+        inv_data = assemble_invoice_data({"invoice_number": job['result']['invoice_number'], "customer_name": payload.customer_name}, payload.items, payload.discount_rate, payload.doc_type or "delivery")
+        files = build_all_files(inv_data) # ここで生成
+        
+        return JSONResponse({
+            **job['result'],
+            "pdf_base64": base64.b64encode(files["pdf"]).decode(),
+            "excel_base64": base64.b64encode(files["excel"]).decode(),
+            "detail_pdf_base64": base64.b64encode(files["detail_pdf"]).decode(),
+            "detail_excel_base64": base64.b64encode(files["detail_excel"]).decode(),
+        })
+    except Exception as e:
+        raise HTTPException(500, str(e))
 
 @app.post("/api/jobs/generate")
 async def enqueue_generate(bt: BackgroundTasks, username: Annotated[str, Depends(authenticate)], payload: DocumentRequest):
@@ -1126,11 +1127,7 @@ async def enqueue_generate(bt: BackgroundTasks, username: Annotated[str, Depends
 
 def lock_invoice_internal(jid: str, inv_id: int):
     try:
-        conn = require_db()
-        with conn.cursor() as cur:
-            cur.execute("SELECT * FROM invoices WHERE id=%s", (inv_id,))
-            inv = cur.fetchone()
-            if not inv: raise Exception("Invoice not found")
+        with db_conn() as conn, conn.cursor() as cur:
             # status が 'locked' でない場合のみ更新を実行（レースコンディション対策）
             cur.execute("""
                 UPDATE invoices SET status='locked', locked_at=NOW()
@@ -1142,8 +1139,36 @@ def lock_invoice_internal(jid: str, inv_id: int):
                 db_update_job(jid, 'done', result={"status": "already_locked"})
                 return
             conn.commit()
-        conn.close()
         
+        # 【重要】確定時にファイルを生成して Storage にキャッシュする (CPU/メモリ節約)
+        try:
+            inv, files = get_invoice_generated_files(inv_id)
+            inv_num = safe_filename(inv["invoice_number"])
+            # パスを生成
+            paths = {
+                "pdf": f"cache/{inv_num}_main.pdf",
+                "excel": f"cache/{inv_num}_main.xlsx",
+                "detail_pdf": f"cache/{inv_num}_detail.pdf",
+                "detail_excel": f"cache/{inv_num}_detail.xlsx"
+            }
+            # ストレージに保存
+            storage_upload(paths["pdf"], files["pdf"], "application/pdf")
+            storage_upload(paths["excel"], files["excel"], "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            storage_upload(paths["detail_pdf"], files["detail_pdf"], "application/pdf")
+            storage_upload(paths["detail_excel"], files["detail_excel"], "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            
+            # DBにパスを記録
+            with db_conn() as conn, conn.cursor() as cur:
+                cur.execute("""
+                    UPDATE invoices SET 
+                    pdf_storage_path=%s, excel_storage_path=%s,
+                    detail_pdf_storage_path=%s, detail_excel_storage_path=%s
+                    WHERE id=%s
+                """, (paths["pdf"], paths["excel"], paths["detail_pdf"], paths["detail_excel"], inv_id))
+                conn.commit()
+        except Exception as e:
+            print(f"Storage cache failed: {e}") # 失敗してもロック処理自体は継続
+
         db_update_job(jid, 'done', result={"status": "locked"})
 
         # 【自動Drive同期】確定が済んだら別スレッドでDrive同期をキック
@@ -1173,12 +1198,9 @@ async def enqueue_lock(bt: BackgroundTasks, inv_id: int, username: Annotated[str
 
 @app.post("/api/history/{inv_id}/unlock")
 async def unlock_invoice(inv_id: int, username: Annotated[str, Depends(authenticate)]):
-    conn = require_db()
-    if not conn: return {"status": "no-db-mode"}
-    with conn.cursor() as cur:
+    with db_conn() as conn, conn.cursor() as cur:
         cur.execute("UPDATE invoices SET status='draft', locked_at=NULL WHERE id=%s", (inv_id,))
         conn.commit()
-    conn.close()
     return {"status": "draft"}
 
 # ==================== History & Serving API ====================
@@ -1220,21 +1242,28 @@ KIND_CONFIG = {
 
 def serve_file(inv_id: int, kind: str):
     cfg = KIND_CONFIG[kind]
-    conn = require_db()
-    if not conn: raise HTTPException(500, "DB required for this action")
-    with conn.cursor() as cur:
+    with db_conn() as conn, conn.cursor() as cur:
         cur.execute("SELECT * FROM invoices WHERE id=%s", (inv_id,))
         inv = cur.fetchone()
         if not inv:
-            conn.close()
             raise HTTPException(404, "Not found")
         cur.execute("SELECT code,color,size,unit_price,quantity FROM invoice_items WHERE invoice_id=%s", (inv_id,))
         items = [dict(r) for r in cur.fetchall()]
-    conn.close()
 
     fname = f'{inv["invoice_number"]}_{kind}.{cfg["ext"]}'
 
-    # 常にデータベースの情報からオンデマンドで再生成して返す
+    # キャッシュがあればそれを使う
+    if inv.get(cfg["path_field"]):
+        try:
+            content = storage_download(inv[cfg["path_field"]])
+            return Response(
+                content=content,
+                media_type=cfg["mime"],
+                headers={"Content-Disposition": f'attachment; filename="{fname}"'}
+            )
+        except: pass # 取得失敗時は再生成へ
+
+    # キャッシュがない、または失敗した場合はオンデマンドで再生成
     dr = inv.get("discount_rate") or 100
     inv_data = assemble_invoice_data(dict(inv), items, dr, inv.get("doc_type", "delivery"))
     files = build_all_files(inv_data)
@@ -1278,16 +1307,13 @@ def safe_filename(name: str) -> str:
 
 def get_invoice_generated_files(inv_id: int):
     """伝票の生成ファイル（4種類）を取得する。常に再生成する（オンデマンド）"""
-    conn = require_db()
-    with conn.cursor() as cur:
+    with db_conn() as conn, conn.cursor() as cur:
         cur.execute("SELECT * FROM invoices WHERE id=%s", (inv_id,))
         inv = cur.fetchone()
         if not inv:
-            conn.close()
             raise HTTPException(404, "Invoice not found")
         cur.execute("SELECT code, color, size, unit_price, quantity FROM invoice_items WHERE invoice_id=%s", (inv_id,))
         items = [dict(r) for r in cur.fetchall()]
-    conn.close()
 
     dr = inv.get("discount_rate") or 100
     inv_data = assemble_invoice_data(dict(inv), items, dr, inv.get("doc_type", "delivery"))
@@ -1432,17 +1458,14 @@ async def get_job_status(job_id: str, username: Annotated[str, Depends(authentic
 
 @app.get("/api/history/{inv_id}/data")
 async def get_history_data(inv_id: int, username: Annotated[str, Depends(authenticate)]):
-    conn = require_db()
-    with conn.cursor() as cur:
+    with db_conn() as conn, conn.cursor() as cur:
         cur.execute("SELECT * FROM invoices WHERE id=%s", (inv_id,))
         row = cur.fetchone()
         if not row:
-            conn.close()
             raise HTTPException(404, "Not found")
         inv = dict(row)
         cur.execute("SELECT code,color,size,unit_price,quantity FROM invoice_items WHERE invoice_id=%s", (inv_id,))
         items = [dict(r) for r in cur.fetchall()]
-    conn.close()
 
     inv_data = assemble_invoice_data(inv, items, inv["discount_rate"], inv.get("doc_type", "delivery"))
     files = build_all_files(inv_data)
