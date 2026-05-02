@@ -3654,16 +3654,25 @@
 
     const jobManager = new JobManager();
 
-    // ===== Generation Progress =====
     let genTimer = null;
     function showGenProgress(estimatedSec = 6, mode = 'gen') {
       $('gen-overlay').classList.add('active');
       $('gen-fill').style.width = '0%';
       $('gen-pct').textContent = '0%';
 
-      const steps = mode === 'drive'
-        ? ['Drive接続', '認証チェック', 'データ転送', '完了']
-        : ['データ整形', 'PDF生成', 'Excel生成', '完了'];
+      // モードに応じてタイトルとステップを切り替え
+      let title = 'GENERATING DOCUMENTS';
+      let steps = ['データ整形', 'PDF生成', 'Excel生成', '完了'];
+
+      if (mode === 'analyze') {
+        title = 'AI ANALYSIS IN PROGRESS';
+        steps = ['画像最適化', 'サーバー送信', 'AIデータ抽出', '完了'];
+      } else if (mode === 'drive') {
+        title = 'UPLOADING TO DRIVE';
+        steps = ['Drive接続', '認証チェック', 'データ転送', '完了'];
+      }
+
+      $('gen-overlay').querySelector('.gen-sub').textContent = title;
 
       ['gen-step-1', 'gen-step-2', 'gen-step-3', 'gen-step-4'].forEach((id, i) => {
         const el = $(id);
@@ -3671,13 +3680,15 @@
         el.textContent = steps[i];
       });
 
-      $('gen-status').textContent = mode === 'drive' ? 'Google Driveに接続中...' : 'データを整形しています...';
+      $('gen-status').textContent = '準備中...';
       $('gen-step-1').classList.add('active');
 
       let progress = 0;
-      const target = 94;
+      const target = 94; // 完了するまでは94%で寸止めする
       const totalMs = estimatedSec * 1000;
       const startTime = Date.now();
+
+      if (genTimer) clearInterval(genTimer);
 
       genTimer = setInterval(() => {
         const elapsed = Date.now() - startTime;
@@ -3687,18 +3698,32 @@
         $('gen-fill').style.width = progress + '%';
         $('gen-pct').textContent = Math.floor(progress) + '%';
 
-        if (progress < 25) {
-          $('gen-status').textContent = mode === 'drive' ? 'Drive認証を検証中...' : 'データを整形しています...';
-        } else if (progress < 55) {
-          $('gen-step-1').classList.remove('active'); $('gen-step-1').classList.add('done');
-          $('gen-step-2').classList.add('active');
-          $('gen-status').textContent = mode === 'drive' ? 'ファイルをアップロード中...' : '納品書PDFをレンダリング中...';
-        } else if (progress < 85) {
-          $('gen-step-2').classList.remove('active'); $('gen-step-2').classList.add('done');
-          $('gen-step-3').classList.add('active');
-          $('gen-status').textContent = mode === 'drive' ? 'クラウドに同期中...' : 'Excel管理伝票を組み立て中...';
+        // 進行度に応じてテキストを更新
+        if (mode === 'analyze') {
+          if (progress < 25) {
+            $('gen-status').textContent = '画像を最適化して送信中...';
+          } else if (progress < 55) {
+            $('gen-step-1').className = 'gen-step done';
+            $('gen-step-2').className = 'gen-step active';
+            $('gen-status').textContent = 'AIエンジンを起動しています...';
+          } else {
+            $('gen-step-2').className = 'gen-step done';
+            $('gen-step-3').className = 'gen-step active';
+            $('gen-status').textContent = 'AIがデータを抽出中... (数秒〜十数秒かかります)';
+          }
         } else {
-          $('gen-status').textContent = '最終処理を実行中...';
+          // 保存・PDF生成時のテキスト
+          if (progress < 25) {
+            $('gen-status').textContent = 'データを整形しています...';
+          } else if (progress < 55) {
+            $('gen-step-1').className = 'gen-step done';
+            $('gen-step-2').className = 'gen-step active';
+            $('gen-status').textContent = '納品書PDFをレンダリング中...';
+          } else {
+            $('gen-step-2').className = 'gen-step done';
+            $('gen-step-3').className = 'gen-step active';
+            $('gen-status').textContent = '管理データを組み立て中...';
+          }
         }
       }, 100);
     }
@@ -4244,10 +4269,9 @@
       const total = selectedFiles.length;
 
       $('btn-analyze').disabled = true;
-      $('sp1').style.display = 'block';
-      $('btn-analyze-text').textContent = '準備中...';
-      $('prog-wrap').style.display = 'block';
-      updProg('画像を圧縮して送信準備中...', 0, 100);
+      
+      // ★ ここで中央のプログレスバーを呼び出す（目安8秒）
+      showGenProgress(8, 'analyze'); 
 
       try {
         const fd = new FormData();
@@ -4602,8 +4626,12 @@
     $('btn-generate').addEventListener('click', async () => {
       syncInputs();
       if (!extractedItems.length) return toast('商品がありません', 'err');
+      
       $('btn-generate').disabled = true;
-      $('sp2').style.display = 'block';
+      
+      // ★ 保存時も中央のプログレスバーを呼び出す
+      showGenProgress(5, 'gen'); 
+
       const cn = getCustomerName();
       const payload = {
         invoice_id: currentEditingInvId,
@@ -4616,7 +4644,6 @@
       
       jobManager.enqueue('generate', '/api/jobs/generate', payload, {
         onSuccess: async (d) => {
-          // ジョブ完了後、Base64データを含む最新情報を取得する
           try {
             const res = await fetch(`/api/history/${d.invoice_id}/data`);
             const fullData = await res.json();
@@ -4631,21 +4658,23 @@
             $('inv-num-display').textContent = `伝票番号: ${d.invoice_number}`;
             $('preview-card').style.display = 'none';
             $('dl-section').style.display = 'block';
-            setupPreviews(payload, fullData); // 修正後のデータを使用
+            
+            hideGenProgress(); // ★ データの準備ができたら閉じる
+            setupPreviews(payload, fullData);
+            
             localStorage.removeItem('laura-draft');
             toast('✦ 保存完了（下書き）', 'ok');
             updateMobileActionBar();
           } catch (err) {
+            hideGenProgress();
             toast('データの取得に失敗しました', 'err');
-          } finally {
             $('btn-generate').disabled = false;
-            $('sp2').style.display = 'none';
           }
         },
         onError: (err) => {
+          hideGenProgress();
           toast('保存に失敗しました: ' + err, 'err');
           $('btn-generate').disabled = false;
-          $('sp2').style.display = 'none';
         }
       });
     });
