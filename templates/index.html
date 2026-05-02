@@ -3544,7 +3544,6 @@
         localStorage.setItem('laura-active-jobs', JSON.stringify(ids));
       }
 
-      // ★ 修正1: ジョブ送信時にエラーが起きたら、確実に onError を呼び出して画面ロックを解除する
       async enqueue(type, endpoint, body, callbacks = {}) {
         try {
           const options = { method: 'POST', body };
@@ -3554,7 +3553,6 @@
           }
           const r = await fetch(endpoint, options);
           
-          // サーバーエラー（413 Payload Too Large 等）をキャッチ
           if (!r.ok) {
             const errData = await r.json().catch(() => ({}));
             throw new Error(errData.detail || `サーバーエラー (${r.status})`);
@@ -3569,38 +3567,37 @@
           throw new Error(data.detail || 'ジョブの作成に失敗しました');
         } catch (e) {
           toast('ジョブ開始エラー: ' + e.message, 'err');
-          if (callbacks.onError) callbacks.onError(e.message); // ← ★ここを追加！
+          if (callbacks.onError) callbacks.onError(e.message);
           return null;
         }
       }
 
       async trackJob(jid, type = 'unknown', callbacks = {}) {
         if (this.jobs.has(jid)) return;
-        // startTimeを追加してタイムアウトを計測できるようにする
-        this.jobs.set(jid, { id: jid, type, status: 'pending', callbacks, startTime: Date.now() });
+        // startTimeとretryCountを管理
+        this.jobs.set(jid, { 
+          id: jid, type, status: 'pending', callbacks, 
+          startTime: Date.now(), retryCount: 0 
+        });
         this.poll(jid);
         this.saveToStorage();
       }
 
-      // ★ 修正2: バックエンドがフリーズした場合に備え、60秒でタイムアウトさせる
       async poll(jid) {
         const job = this.jobs.get(jid);
         if (!job || job.status === 'done' || job.status === 'failed') return;
 
-        // 60秒以上経過したら強制的にタイムアウトエラーにする
-        if (Date.now() - job.startTime > 60000) {
-           job.status = 'failed';
-           job.error = 'AIの応答がタイムアウトしました';
-           JobUI.updateItem(job);
-           toast(`${this.getJobLabel(job.type)}がタイムアウトしました`, 'err');
-           if (job.callbacks.onError) job.callbacks.onError(job.error);
-           this.saveToStorage();
-           this.jobs.delete(job.id);
+        // タイムアウトを30秒に短縮 (AI解析の待機限界)
+        const timeoutMs = 30000;
+        if (Date.now() - job.startTime > timeoutMs) {
+           this.failJob(job, 'タイムアウトしました。サーバーが混雑しているか、通信が切断されました。');
            return;
         }
 
         try {
           const r = await fetch(`/api/jobs/${jid}`);
+          if (!r.ok) throw new Error('Poll failed');
+          
           const data = await r.json();
           job.status = data.status;
           job.type = data.type;
@@ -3619,20 +3616,33 @@
               this.jobs.delete(job.id);
             }, 3000);
           } else if (job.status === 'failed') {
-            toast(`${this.getJobLabel(job.type)}が失敗しました: ${job.error}`, 'err');
-            if (job.callbacks.onError) job.callbacks.onError(job.error);
-            this.saveToStorage();
-            setTimeout(() => {
-              const el = $(`job-item-${job.id}`);
-              if (el) el.remove();
-              this.jobs.delete(job.id);
-            }, 5000);
+            this.failJob(job, job.error);
           } else {
             setTimeout(() => this.poll(jid), this.pollingInterval);
           }
         } catch (e) {
-          setTimeout(() => this.poll(jid), this.pollingInterval * 2);
+          job.retryCount++;
+          // 通信エラーが3回続いたら失敗とみなす
+          if (job.retryCount > 3) {
+            this.failJob(job, 'サーバーとの通信が途絶えました。しばらく経ってからやり直してください。');
+          } else {
+            setTimeout(() => this.poll(jid), this.pollingInterval * 1.5);
+          }
         }
+      }
+
+      failJob(job, errorMsg) {
+        job.status = 'failed';
+        job.error = errorMsg || 'エラーが発生しました';
+        JobUI.updateItem(job);
+        toast(`${this.getJobLabel(job.type)}失敗: ${job.error}`, 'err');
+        if (job.callbacks.onError) job.callbacks.onError(job.error);
+        this.saveToStorage();
+        setTimeout(() => {
+          const el = $(`job-item-${job.id}`);
+          if (el) el.remove();
+          this.jobs.delete(job.id);
+        }, 5000);
       }
 
       getJobLabel(type) {
