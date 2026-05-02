@@ -4309,15 +4309,14 @@
         const fd = new FormData();
         fd.append('ai_model', ai);
         for (let i = 0; i < total; i++) {
-          updProg(`画像を圧縮中 (${i + 1}/${total})`, Math.round((i / total) * 100), 100);
           const blob = await compress(selectedFiles[i]);
           fd.append('files', blob, `img_${i}.jpg`);
         }
-        
-        updProg('サーバーへ送信中...', 100, 100);
 
         jobManager.enqueue('analyze', '/api/jobs/analyze', fd, {
           onSuccess: (data) => {
+            hideGenProgress(); // ★ 解析完了！100%にして閉じる
+            
             const allItems = (data.items || []).map(item => ({
               ...item,
               source_image_index: item.source_image_no ?? 0,
@@ -4353,27 +4352,24 @@
             extractedItems = Object.values(merged);
 
             renderPreview();
-            $('prog-wrap').style.display = 'none';
             $('btn-analyze').disabled = false;
-            $('sp1').style.display = 'none';
-            $('btn-analyze-text').textContent = '解析完了';
-            window.scrollTo({ top: $('preview-card').offsetTop - 20, behavior: 'smooth' });
+            
+            // オーバーレイが閉じるのを待ってからスクロール
+            setTimeout(() => {
+              window.scrollTo({ top: $('preview-card').offsetTop - 20, behavior: 'smooth' });
+            }, 800);
           },
           onError: (err) => {
+            hideGenProgress(); // ★ 失敗時も閉じる
             toast('解析に失敗しました: ' + err, 'err');
-            $('prog-wrap').style.display = 'none';
             $('btn-analyze').disabled = false;
-            $('sp1').style.display = 'none';
-            $('btn-analyze-text').textContent = '解析失敗';
           }
         });
       } catch (e) {
+        hideGenProgress(); // ★ 準備段階の例外でも閉じる
         console.error(e);
         toast('準備エラー: ' + e.message, 'err');
-        $('prog-wrap').style.display = 'none';
         $('btn-analyze').disabled = false;
-        $('sp1').style.display = 'none';
-        $('btn-analyze-text').textContent = '準備失敗';
       }
     });
     function updProg(label, cur, tot) {
