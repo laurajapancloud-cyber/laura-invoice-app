@@ -3523,7 +3523,7 @@
                   <div style="min-width:0">
                     <div style="color:var(--text-primary); font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">
                       <span x-text="inv.customer_name"></span>
-                      <span x-if="inv.user_name" :style="`font-size:10px; color:${inv.user_color}; margin-left:4px`" x-text="'● ' + inv.user_name"></span>
+                      <span x-show="inv.user_name" :style="`font-size:10px; color:${inv.user_color}; margin-left:4px`" x-text="'● ' + inv.user_name"></span>
                     </div>
                     <div class="hist-meta" x-text="inv.item_count + '点 • ' + (inv.created_at || '').split('T')[0]"></div>
                   </div>
@@ -3549,7 +3549,7 @@
                       <span class="badge" :style="`background:${TYPE_COLORS[inv.doc_type] || '#666'}1a; color:${TYPE_COLORS[inv.doc_type] || '#aaa'}; border:1px solid ${TYPE_COLORS[inv.doc_type] || '#666'}`"
                             x-text="TYPE_TITLES[inv.doc_type]?.label || '不明'"></span>
                       <span x-text="inv.customer_name"></span>
-                      <span x-if="inv.user_name" :style="`font-size:10px; color:${inv.user_color}; margin-left:4px`" x-text="'● ' + inv.user_name"></span>
+                      <span x-show="inv.user_name" :style="`font-size:10px; color:${inv.user_color}; margin-left:4px`" x-text="'● ' + inv.user_name"></span>
                       <span x-text="' • ' + inv.item_count + '点'"></span>
                     </div>
                     <div class="hist-actions-row">
@@ -3737,28 +3737,45 @@
           } catch (e) { console.error('fetchHistory failed', e); }
         }
       });
+
+      // 互換性のためのエイリアスを alpine:init 内で定義
+      Object.defineProperty(window, 'extractedItems', {
+        get: () => Alpine.store('app').items,
+        set: (val) => { Alpine.store('app').items = val; }
+      });
+      Object.defineProperty(window, 'currentDocType', {
+        get: () => Alpine.store('app').docType,
+        set: (val) => { Alpine.store('app').docType = val; }
+      });
+      Object.defineProperty(window, 'currentUser', {
+        get: () => Alpine.store('app').currentUser,
+        set: (val) => { Alpine.store('app').currentUser = val; }
+      });
+      Object.defineProperty(window, 'allHistory', {
+        get: () => Alpine.store('app').history,
+        set: (val) => { Alpine.store('app').history = val; }
+      });
+
+      // アプリ初期化
+      loadCustomers().then(() => {
+        restoreDraftIfExists();
+      });
+      initTabSwitchers();
+      
+      // ユーザー初期化
+      (async () => {
+        if (currentUser) {
+          $('user-modal').style.display = 'none';
+          updateUserChip();
+        } else {
+          showUserModal();
+        }
+      })();
     });
 
     let selectedFiles = [], selectedFileThumbs = [], pdfData = null, excelData = null;
     let detailPdfData = null, detailExcelData = null;
     let currentEditingInvId = null, allHistory = [], currentInvNum = '', lastInvoiceId = null;
-
-    // 互換性のためのエイリアス
-    Object.defineProperty(window, 'extractedItems', {
-      get: () => Alpine.store('app').items,
-      set: (val) => { Alpine.store('app').items = val; }
-    });
-    Object.defineProperty(window, 'currentDocType', {
-      get: () => Alpine.store('app').docType,
-      set: (val) => { Alpine.store('app').docType = val; }
-    });
-    Object.defineProperty(window, 'currentUser', {
-      get: () => Alpine.store('app').currentUser,
-      set: (val) => { Alpine.store('app').currentUser = val; }
-    });
-    Object.defineProperty(window, 'allHistory', {
-      get: () => Alpine.store('app').history,
-      set: (val) => { Alpine.store('app').history = val; }
     });
     let allUsers = [];
     const TYPE_TITLES = {
@@ -3831,15 +3848,7 @@
       if (r.ok) loadUsers();
     }
 
-    // Initialize Users
-    (async () => {
-      if (currentUser) {
-        $('user-modal').style.display = 'none';
-        updateUserChip();
-      } else {
-        showUserModal();
-      }
-    })();
+
 
     // --- DocType Tab Listeners ---
     document.querySelectorAll('.doctype-btn').forEach(b => {
@@ -5318,11 +5327,7 @@
     // Health ping
     setInterval(() => { fetch('/health').catch(() => { }); }, 5 * 60 * 1000);
 
-    // ===== App Init =====
-    loadCustomers().then(() => {
-      restoreDraftIfExists();
-    });
-    initTabSwitchers();
+
   </script>
 
   <!-- PWA Installation Modal -->
