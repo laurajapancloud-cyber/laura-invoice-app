@@ -4804,22 +4804,25 @@
     }
 
     async function uploadDrive(invId, btnEl) {
-      const sp = btnEl?.querySelector('.spinner');
-      if (sp) sp.style.display = 'block';
       if (btnEl) btnEl.disabled = true;
+
+      // ★ ここでDrive保存用のカッコいいプログレスバーを呼び出す（目安4秒）
+      showGenProgress(4, 'drive');
 
       const fd = new FormData();
       fd.append('inv_id', invId);
 
       jobManager.enqueue('drive_upload', '/api/jobs/drive-upload', fd, {
         onSuccess: (res) => {
+          hideGenProgress(); // ★ 処理が完了したらオーバーレイを閉じる
+          
           const links = res.uploaded.map(u => `<a href="${u.url}" target="_blank" style="color:var(--gold-bright);text-decoration:underline">${u.type.toUpperCase()}</a>`).join(' / ');
           toast(`✦ Driveに保存しました: ${links}`, 'ok', 0);
-          if (sp) sp.style.display = 'none';
           if (btnEl) btnEl.disabled = false;
         },
         onError: (err) => {
-          if (sp) sp.style.display = 'none';
+          hideGenProgress(); // ★ エラー時も確実に閉じる
+          toast('Drive保存に失敗しました: ' + err, 'err');
           if (btnEl) btnEl.disabled = false;
         }
       });
