@@ -3503,6 +3503,15 @@
     }
 
     function dl64(b64, fn, ct) {
+      // ★ iOSアプリ環境（JS Bridgeが存在する場合）の処理
+      if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.download) {
+        window.webkit.messageHandlers.download.postMessage({
+          base64: b64,
+          filename: fn
+        });
+        return;
+      }
+
       try {
         const c = atob(b64.replace(/\s/g, ''));
         const a = [];
@@ -3515,8 +3524,9 @@
         const b = new Blob(a, { type: ct });
         const u = URL.createObjectURL(b);
         const l = document.createElement('a');
-        l.href = u; l.download = fn; l.click();
-        URL.revokeObjectURL(u);
+        l.href = u; l.download = fn; document.body.appendChild(l);
+        l.click(); document.body.removeChild(l);
+        setTimeout(() => URL.revokeObjectURL(u), 100);
       } catch (e) { toast('保存エラー: ' + e.message, 'err'); }
     }
 
