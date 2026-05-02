@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>LAURA JAPAN | Invoice System</title>
   <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
   <link
     href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700;800&family=Noto+Sans+JP:wght@300;400;500;700&display=swap"
     rel="stylesheet">
@@ -3240,15 +3241,32 @@
           <button class="doctype-btn" data-type="prov_return">仮返品</button>
         </div>
         <div class="form-row">
-          <div class="form-group"><label>取引先</label><select id="sel-customer">
+          <div class="form-group"><label>取引先</label>
+            <select id="sel-customer" x-data @change="
+              const val = $el.value;
+              if (val === 'manual') {
+                $('manual-customer-group').style.display = 'block';
+                $store.app.rate = 0;
+              } else {
+                $('manual-customer-group').style.display = 'none';
+                try {
+                  const c = JSON.parse(val);
+                  $store.app.rate = c.discount_rate;
+                } catch(e) {}
+              }
+            ">
               <option value="manual" selected>-- 手動入力 --</option>
-            </select></div>
+              <template x-for="c in $store.app.customers" :key="c.id">
+                <option :value="JSON.stringify(c)" x-text="c.name + ' (' + c.discount_rate + '%)'"></option>
+              </template>
+            </select>
+          </div>
           <div class="form-group" id="manual-customer-group">
             <label>取引先名（手動入力）</label>
             <input type="text" id="inp-manual-customer" placeholder="例: 株式会社 〇〇 御中">
           </div>
-          <div class="form-group" style="max-width:90px"><label>掛率(%)</label><input type="number" id="inp-rate"
-              value="0" min="0" max="100"></div>
+          <div class="form-group" style="max-width:90px" x-data><label>掛率(%)</label><input type="number" id="inp-rate"
+              min="0" max="100" x-model.number="$store.app.rate"></div>
         </div>
         <div class="form-row">
           <div class="form-group"><label>AI モデル</label>
@@ -3282,11 +3300,124 @@
         <div class="toast" id="toast"></div>
       </div>
 
-      <div class="card" id="preview-card" style="display:none">
+      <div class="card" id="preview-card" style="display:none" x-data="{ isDesktop: window.innerWidth >= 1200 }" @resize.window.debounce.100ms="isDesktop = window.innerWidth >= 1200">
         <div class="card-title" id="preview-title">✎ 読み取り結果（タップで修正可能）</div>
-        <div class="item-cards" id="item-cards"></div>
-        <div id="preview-summary-wrap"></div>
-        <button class="btn btn-outline btn-sm" id="btn-add-row" style="margin-top:14px;width:100%">＋ 空白行を追加</button>
+        
+        <!-- デスクトップ表示 (Table) -->
+        <div class="item-table-container" x-show="isDesktop">
+          <table class="pc-item-table">
+            <thead>
+              <tr>
+                <th style="width:30px">No</th>
+                <th style="width:130px">品番</th>
+                <th style="width:60px">カラー</th>
+                <th style="width:60px">サイズ</th>
+                <th style="width:120px">数量</th>
+                <th style="width:90px">単価</th>
+                <th style="width:100px; text-align:right">金額</th>
+                <th style="width:36px; text-align:center"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="(item, index) in $store.app.items" :key="index">
+                <tr :style="validateItem(item).level !== 'ok' ? `box-shadow: inset 4px 0 0 ${validateItem(item).level === 'error' ? 'var(--red)' : 'var(--gold-bright)'}` : ''">
+                  <td x-text="index + 1" style="font-size:12px; color:var(--text-muted); text-align:center"></td>
+                  <td><input x-model="item.code" style="font-weight:600"></td>
+                  <td><input x-model="item.color"></td>
+                  <td><input x-model="item.size"></td>
+                  <td>
+                    <div class="qty-stepper">
+                      <button class="qty-btn minus" type="button" @click="item.quantity--" :disabled="item.quantity <= 1">-</button>
+                      <input type="number" x-model.number="item.quantity">
+                      <button class="qty-btn plus" type="button" @click="item.quantity++">+</button>
+                    </div>
+                  </td>
+                  <td><input type="number" x-model.number="item.unit_price" style="font-weight:700; color:var(--gold-bright)"></td>
+                  <td style="text-align:right; font-family:'Cormorant Garamond',serif; font-size:17px; font-weight:700; color:var(--gold-bright); white-space:nowrap;" x-text="'¥' + $store.app.calcItemAmount(item).toLocaleString()"></td>
+                  <td style="text-align:center">
+                    <button class="item-card-del" type="button" @click="$store.app.removeItem(index)" style="position:static; padding:4px 8px; background:rgba(224,97,87,0.12); border-radius:4px; font-size:12px">✕</button>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- モバイル表示 (Cards) -->
+        <div class="item-cards" x-show="!isDesktop">
+          <template x-for="(item, index) in $store.app.items" :key="index">
+            <div :class="'item-card ai-' + validateItem(item).level">
+              <div class="item-card-header">
+                <span class="item-card-num" x-text="'N° ' + String(index + 1).padStart(2, '0')"></span>
+                <button class="item-card-del" type="button" @click="$store.app.removeItem(index)">✕</button>
+              </div>
+              
+              <div class="ai-badges">
+                <template x-for="err in validateItem(item).errors">
+                  <span class="ai-badge ai-badge-error" x-text="'⚠ ' + err"></span>
+                </template>
+                <template x-for="warn in validateItem(item).warnings">
+                  <span class="ai-badge ai-badge-warning" x-text="'⚠ ' + warn"></span>
+                </template>
+                <template x-if="validateItem(item).level === 'ok'">
+                  <span class="ai-badge ai-badge-ok">✓ 読み取りOK</span>
+                </template>
+              </div>
+
+              <template x-if="item.source_images && item.source_images.length">
+                <div class="source-thumbs">
+                  <template x-for="src in item.source_images">
+                    <img class="source-thumb" :src="src.thumb" @click="openSourceImage(src.thumb)">
+                  </template>
+                </div>
+              </template>
+
+              <template x-if="item.source_count > 1">
+                <div class="merge-note" x-text="item.source_count + '行を自動で統合しました'"></div>
+              </template>
+
+              <div class="item-card-body">
+                <div class="item-field full"><label>品番</label><input x-model="item.code"></div>
+                <div class="item-field"><label>カラー</label><input x-model="item.color"></div>
+                <div class="item-field"><label>サイズ</label><input x-model="item.size"></div>
+                <div class="item-field"><label>数量</label>
+                  <div class="qty-stepper">
+                    <button type="button" class="qty-btn minus" @click="item.quantity--" :disabled="item.quantity <= 1">-</button>
+                    <input type="number" x-model.number="item.quantity">
+                    <button type="button" class="qty-btn plus" @click="item.quantity++">+</button>
+                  </div>
+                </div>
+                <div class="item-field"><label>単価</label><input type="number" x-model.number="item.unit_price"></div>
+              </div>
+              
+              <div class="item-card-footer">
+                <span class="item-card-price" x-text="$store.app.rate + '% x ' + (($store.app.docType === 'return' || $store.app.docType === 'prov_return') ? '-' : '') + Math.abs(item.quantity || 1) + '個'"></span>
+                <span class="item-card-total" x-text="'¥' + $store.app.calcItemAmount(item).toLocaleString()"></span>
+              </div>
+            </div>
+          </template>
+        </div>
+
+        <!-- 概要 (Summary) -->
+        <div id="preview-summary-wrap">
+          <div class="preview-summary">
+            <div class="preview-summary-row">
+               <span>小計 (税抜)</span>
+               <span x-text="'¥' + $store.app.subtotal.toLocaleString()"></span>
+            </div>
+            <div class="preview-summary-row">
+               <span>消費税 (10%)</span>
+               <span x-text="'¥' + $store.app.tax.toLocaleString()"></span>
+            </div>
+            <div class="preview-summary-row total">
+               <span>合計 (税込)</span>
+               <span x-text="'¥' + $store.app.grandTotal.toLocaleString()"></span>
+            </div>
+          </div>
+        </div>
+
+        <button class="btn btn-outline btn-sm" id="btn-add-row" @click="$store.app.addItem()" style="margin-top:14px;width:100%">＋ 空白行を追加</button>
+        
         <div style="margin-top:18px">
           <button class="btn btn-gold" id="btn-generate">
             <div class="spinner" id="sp2"></div>最終データを確定して保存
@@ -3372,8 +3503,69 @@
           <span data-sort="total_grand_total" style="text-align:right">金額</span>
           <span data-sort="status">状態</span>
         </div>
-        <div id="hist-list">
-          <div class="empty-state">読込中...</div>
+        <div id="hist-list" x-data="{ isDesktop: window.innerWidth >= 1024 }" @resize.window.debounce.100ms="isDesktop = window.innerWidth >= 1024">
+          <template x-if="!$store.app.history.length">
+            <div class="empty-state">履歴がありません</div>
+          </template>
+          
+          <template x-for="inv in $store.app.history" :key="inv.id">
+            <div :class="'hist-item' + (inv.status === 'locked' ? ' locked' : '') + (selectedHistId === inv.id ? ' selected' : '')"
+                 @click="selectHistItem(inv, $event)">
+              
+              <!-- デスクトップ表示 -->
+              <template x-if="isDesktop">
+                <div style="display: contents">
+                  <div class="hist-num" x-text="inv.invoice_number"></div>
+                  <div>
+                    <span class="badge" :style="`background:${TYPE_COLORS[inv.doc_type] || '#666'}1a; color:${TYPE_COLORS[inv.doc_type] || '#aaa'}; border:1px solid ${TYPE_COLORS[inv.doc_type] || '#666'}`"
+                          x-text="TYPE_TITLES[inv.doc_type]?.label || '不明'"></span>
+                  </div>
+                  <div style="min-width:0">
+                    <div style="color:var(--text-primary); font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">
+                      <span x-text="inv.customer_name"></span>
+                      <span x-if="inv.user_name" :style="`font-size:10px; color:${inv.user_color}; margin-left:4px`" x-text="'● ' + inv.user_name"></span>
+                    </div>
+                    <div class="hist-meta" x-text="inv.item_count + '点 • ' + (inv.created_at || '').split('T')[0]"></div>
+                  </div>
+                  <div class="hist-amt" x-text="'¥' + (inv.total_grand_total || 0).toLocaleString()"></div>
+                  <div>
+                    <span :class="'status-badge status-' + (inv.status || 'draft')" x-text="inv.status === 'locked' ? '確定済' : '下書き'"></span>
+                  </div>
+                </div>
+              </template>
+
+              <!-- モバイル表示 -->
+              <template x-if="!isDesktop">
+                <div style="width: 100%">
+                  <div class="hist-info">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px">
+                      <div class="hist-num">
+                        <span x-text="inv.invoice_number"></span>
+                        <span :class="'status-badge status-' + (inv.status || 'draft')" x-text="inv.status === 'locked' ? '確定済' : '下書き'"></span>
+                      </div>
+                      <div class="hist-amt" x-text="'¥' + (inv.total_grand_total || 0).toLocaleString()"></div>
+                    </div>
+                    <div class="hist-meta">
+                      <span class="badge" :style="`background:${TYPE_COLORS[inv.doc_type] || '#666'}1a; color:${TYPE_COLORS[inv.doc_type] || '#aaa'}; border:1px solid ${TYPE_COLORS[inv.doc_type] || '#666'}`"
+                            x-text="TYPE_TITLES[inv.doc_type]?.label || '不明'"></span>
+                      <span x-text="inv.customer_name"></span>
+                      <span x-if="inv.user_name" :style="`font-size:10px; color:${inv.user_color}; margin-left:4px`" x-text="'● ' + inv.user_name"></span>
+                      <span x-text="' • ' + inv.item_count + '点'"></span>
+                    </div>
+                    <div class="hist-actions-row">
+                      <button class="btn btn-gold btn-sm" @click.stop="quickPreview(inv.id)">高速プレビュー</button>
+                      <button x-if="inv.status !== 'locked'" class="btn btn-gold btn-sm" @click.stop="lockHist(inv.id)">確定</button>
+                      <button x-if="inv.status === 'locked'" class="btn btn-outline btn-sm" @click.stop="unlockHist(inv.id)">解除</button>
+                      <button x-if="inv.status === 'locked'" class="btn btn-blue btn-sm" @click.stop="uploadDrive(inv.id, $el)">保存 Drive</button>
+                      <button class="btn btn-outline btn-sm" @click.stop="downloadZip(inv.id)">ZIP</button>
+                      <button x-if="inv.status !== 'locked'" class="btn btn-outline btn-sm" @click.stop="editHist(inv.id)">編集</button>
+                      <button class="btn btn-red btn-sm" @click.stop="delHist(inv.id)">削除</button>
+                    </div>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </template>
         </div>
       </div>
       <!-- ↓ デスクトップ用、詳細ペイン -->
@@ -3473,14 +3665,101 @@
   </div>
 
   <script>
-    let selectedFiles = [], selectedFileThumbs = [], extractedItems = [], pdfData = null, excelData = null;
-    let detailPdfData = null, detailExcelData = null;
-    let currentEditingInvId = null, allHistory = [], currentInvNum = '', lastInvoiceId = null;
     const $ = id => document.getElementById(id);
 
-    // --- User & DocType State ---
-    let currentUser = JSON.parse(localStorage.getItem('laura-current-user') || 'null');
-    let currentDocType = 'delivery';
+    // --- Alpine.js Store ---
+    document.addEventListener('alpine:init', () => {
+      Alpine.store('app', {
+        items: [],
+        rate: 35,
+        docType: 'delivery',
+        currentUser: JSON.parse(localStorage.getItem('laura-current-user') || 'null'),
+        
+        init() {
+          // 初期化時に各種データを取得
+          this.rate = getRate();
+          this.fetchCustomers();
+          this.fetchHistory();
+
+          // 追加: 自動保存の監視
+          Alpine.effect(() => {
+            // 以下の値の変更を追跡
+            this.items.forEach(it => Object.values(it));
+            this.rate;
+            this.docType;
+            if (window.scheduleAutosave) scheduleAutosave();
+          });
+        },
+        
+        get itemsCount() { return this.items.length; },
+        
+        addItem() {
+          this.items.push({ code: '', color: '', size: '', quantity: 1, unit_price: 0 });
+        },
+        
+        removeItem(index) {
+          this.items.splice(index, 1);
+        },
+        
+        calcItemAmount(item) {
+          const q = parseInt(item.quantity) || 0;
+          const up = parseInt(item.unit_price) || 0;
+          const isReturn = this.docType === 'return' || this.docType === 'prov_return';
+          const sign = isReturn ? -1 : 1;
+          return Math.trunc(up * (this.rate / 100) * q * sign);
+        },
+        
+        get subtotal() {
+          return this.items.reduce((acc, it) => acc + this.calcItemAmount(it), 0);
+        },
+        get tax() {
+          return Math.trunc(this.subtotal * 0.1);
+        },
+        get grandTotal() {
+          return this.subtotal + this.tax;
+        },
+        
+        // --- マスターデータと履歴 ---
+        customers: [],
+        history: [],
+        
+        async fetchCustomers() {
+          try {
+            const r = await fetch('/api/customers');
+            this.customers = await r.json();
+          } catch (e) { console.error('fetchCustomers failed', e); }
+        },
+        
+        async fetchHistory(type = 'all') {
+          try {
+            const r = await fetch(`/api/history?doc_type=${type}`);
+            this.history = await r.json();
+          } catch (e) { console.error('fetchHistory failed', e); }
+        }
+      });
+    });
+
+    let selectedFiles = [], selectedFileThumbs = [], pdfData = null, excelData = null;
+    let detailPdfData = null, detailExcelData = null;
+    let currentEditingInvId = null, allHistory = [], currentInvNum = '', lastInvoiceId = null;
+
+    // 互換性のためのエイリアス
+    Object.defineProperty(window, 'extractedItems', {
+      get: () => Alpine.store('app').items,
+      set: (val) => { Alpine.store('app').items = val; }
+    });
+    Object.defineProperty(window, 'currentDocType', {
+      get: () => Alpine.store('app').docType,
+      set: (val) => { Alpine.store('app').docType = val; }
+    });
+    Object.defineProperty(window, 'currentUser', {
+      get: () => Alpine.store('app').currentUser,
+      set: (val) => { Alpine.store('app').currentUser = val; }
+    });
+    Object.defineProperty(window, 'allHistory', {
+      get: () => Alpine.store('app').history,
+      set: (val) => { Alpine.store('app').history = val; }
+    });
     let allUsers = [];
     const TYPE_TITLES = {
       delivery: { main: '納品書', detail: '商品明細表', label: '納品' },
@@ -4022,40 +4301,7 @@
 
     // ===== Customers =====
     async function loadCustomers() {
-      try {
-        const r = await fetch('/api/customers');
-        const data = await r.json();
-        const sel = $('sel-customer');
-        sel.innerHTML = '<option value="manual" selected>-- 手動入力 --</option>';
-        data.forEach(c => {
-          const opt = document.createElement('option');
-          opt.value = JSON.stringify(c);
-          opt.textContent = `${c.name} (${c.discount_rate}%)`;
-          sel.appendChild(opt);
-        });
-        sel.onchange = (e) => {
-          if (e.target.value === "manual") {
-            $('manual-customer-group').style.display = 'block';
-            $('inp-rate').value = 0;
-          } else {
-            $('manual-customer-group').style.display = 'none';
-            try {
-              const c = JSON.parse(e.target.value);
-              $('inp-rate').value = c.discount_rate;
-            } catch (e) { }
-          }
-        };
-        const cl = $('cust-list');
-        cl.innerHTML = '';
-        data.forEach(c => {
-          const d = document.createElement('div');
-          d.className = 'cust-item';
-          d.innerHTML = `<div><strong>${c.name}</strong> <span style="color:var(--text-muted);font-size:12px;margin-left:6px">掛率 ${c.discount_rate}%</span></div><button class="btn btn-red btn-sm" onclick="delCust(${c.id})">削除</button>`;
-          cl.appendChild(d);
-        });
-      } catch (e) {
-        console.error('loadCustomers failed', e);
-      }
+      await Alpine.store('app').fetchCustomers();
     }
     $('btn-add-cust').addEventListener('click', async () => {
       const n = $('new-cust-name').value.trim();
@@ -4081,12 +4327,11 @@
     async function loadHistory() {
       const t = $('hist-type-filter')?.value || 'all';
       try {
-        const r = await fetch(`/api/history?doc_type=${t}`);
-        allHistory = await r.json();
+        await Alpine.store('app').fetchHistory(t);
         updateMonthFilter(allHistory);
         applyHistoryFilters();
       } catch (e) {
-        $('hist-list').innerHTML = `<div class="empty-state" style="color:var(--red)">読込失敗: ${e.message}</div>`;
+        console.error("History load error:", e);
       }
     }
     $('hist-type-filter')?.addEventListener('change', loadHistory);
@@ -4123,65 +4368,10 @@
     $('hist-search')?.addEventListener('input', applyHistoryFilters);
 
     function renderHistory(data) {
-      const list = $('hist-list');
-      list.innerHTML = '';
+      Alpine.store('app').history = data;
       const isDesktop = window.matchMedia('(min-width: 1024px)').matches;
       const tableHeader = document.querySelector('.hist-table-header');
       if (tableHeader) tableHeader.style.display = isDesktop ? 'grid' : 'none';
-
-      if (!data.length) {
-        list.innerHTML = '<div class="empty-state">伝票が見つかりません</div>';
-        return;
-      }
-
-      data.forEach(inv => {
-        const d = document.createElement('div');
-        d.className = 'hist-item' + (inv.status === 'locked' ? ' locked' : '') + (selectedHistId === inv.id ? ' selected' : '');
-        d.onclick = (ev) => { selectHistItem(inv, ev); };
-
-        const statusBadge = `<span class="status-badge status-${inv.status || 'draft'}">${inv.status === 'locked' ? '確定済' : '下書き'}</span>`;
-        const typeBadge = `<span class="badge" style="background:${TYPE_COLORS[inv.doc_type] || '#666'}1a; color:${TYPE_COLORS[inv.doc_type] || '#aaa'}; border:1px solid ${TYPE_COLORS[inv.doc_type] || '#666'}">${TYPE_TITLES[inv.doc_type]?.label || '納品'}</span>`;
-        const userBadge = inv.user_name ? `<span style="font-size:10px; color:${inv.user_color}; margin-left:4px">● ${inv.user_name}</span>` : '';
-
-        if (isDesktop) {
-          // PCはアクションを詳細パネルに集約。一覧は情報のみ。
-          d.innerHTML = `
-						<div class="hist-num">${inv.invoice_number}</div>
-						<div>${typeBadge}</div>
-						<div style="min-width:0">
-							<div style="color:var(--text-primary); font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">${inv.customer_name} ${userBadge}</div>
-							<div class="hist-meta">${inv.item_count}点 · ${(inv.created_at || '').split('T')[0] || ''}</div>
-						</div>
-						<div class="hist-amt">¥${(inv.total_grand_total || 0).toLocaleString()}</div>
-						<div>${statusBadge}</div>
-					`;
-        } else {
-          const lockBtn = inv.status === 'locked'
-            ? `<button class="btn btn-outline btn-sm" onclick="event.stopPropagation(); unlockHist(${inv.id})">解除</button>`
-            : `<button class="btn btn-gold btn-sm" onclick="event.stopPropagation(); lockHist(${inv.id})">確定</button>`;
-          const driveBtn = inv.status === 'locked'
-            ? `<button class="btn btn-blue btn-sm" onclick="event.stopPropagation(); uploadDrive(${inv.id}, this)">☁️ Drive</button>`
-            : '';
-          d.innerHTML = `
-						<div class="hist-info">
-							<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px">
-								<div class="hist-num">${inv.invoice_number} ${statusBadge}</div>
-								<div class="hist-amt">¥${(inv.total_grand_total || 0).toLocaleString()}</div>
-							</div>
-							<div class="hist-meta">${typeBadge} ${inv.customer_name} ${userBadge} · ${inv.item_count}点</div>
-							<div class="hist-actions-row">
-								<button class="btn btn-gold btn-sm" onclick="event.stopPropagation(); quickPreview(${inv.id})">👁 プレビュー</button>
-								${lockBtn}
-								${driveBtn}
-								<button class="btn btn-outline btn-sm" onclick="event.stopPropagation(); downloadZip(${inv.id})">ZIP</button>
-								<button class="btn btn-outline btn-sm" onclick="event.stopPropagation(); editHist(${inv.id})">✎</button>
-								<button class="btn btn-red btn-sm" onclick="event.stopPropagation(); delHist(${inv.id})">✕</button>
-							</div>
-						</div>
-					`;
-        }
-        list.appendChild(d);
-      });
     }
 
     async function downloadZip(invId) {
@@ -4505,6 +4695,8 @@
         for (let i = 0; i < total; i++) {
           const blob = await compress(selectedFiles[i]);
           fd.append('files', blob, `img_${i}.jpg`);
+          // メインスレッドを解放してUIの更新（プログレスバーなど）を許可する
+          await new Promise(r => setTimeout(r, 0));
         }
 
         jobManager.enqueue('analyze', '/api/jobs/analyze', fd, {
@@ -4607,167 +4799,27 @@
       };
     }
 
-    // ===== Preview Render =====
+    // ===== Preview Render (Alpine.js化により大幅に簡略化) =====
     function renderPreview() {
-      const container = $('item-cards');
-      container.innerHTML = '';
-      const isDesktop = window.matchMedia('(min-width: 1200px)').matches;
-
-      if (isDesktop) {
-        container.className = 'item-cards';
-        const wrapper = document.createElement('div');
-        wrapper.className = 'item-table-container';
-        const table = document.createElement('table');
-        table.className = 'pc-item-table';
-        table.innerHTML = `
-					<thead>
-						<tr>
-							<th style="width:30px">No</th>
-							<th style="width:130px">品番</th>
-							<th style="width:60px">カラー</th>
-							<th style="width:60px">サイズ</th>
-							<th style="width:120px">数量</th>
-							<th style="width:90px">単価</th>
-							<th style="width:100px; text-align:right">金額</th>
-							<th style="width:36px; text-align:center"></th>
-						</tr>
-					</thead>
-					<tbody id="pc-item-body"></tbody>
-				`;
-        wrapper.appendChild(table);
-        container.appendChild(wrapper);
-        const tbody = $('pc-item-body');
-
-        extractedItems.forEach((it, i) => {
-          const amt = calcItemAmount(it);
-          const check = validateItem(it);
-          const tr = document.createElement('tr');
-          if (check.level !== 'ok') tr.style.boxShadow = `inset 4px 0 0 ${check.level === 'error' ? 'var(--red)' : 'var(--gold-bright)'}`;
-          tr.innerHTML = `
-						<td style="font-size:12px; color:var(--text-muted); text-align:center">${i + 1}</td>
-						<td><input value="${it.code || ''}" data-i="${i}" data-k="code" style="font-weight:600"></td>
-						<td><input value="${it.color || ''}" data-i="${i}" data-k="color"></td>
-						<td><input value="${it.size || ''}" data-i="${i}" data-k="size"></td>
-						<td>
-							<div class="qty-stepper">
-								<button class="qty-btn minus" type="button" onclick="adjustQty(${i},-1)">−</button>
-								<input type="number" value="${it.quantity || 1}" data-i="${i}" data-k="quantity">
-								<button class="qty-btn plus" type="button" onclick="adjustQty(${i},1)">＋</button>
-							</div>
-						</td>
-						<td><input type="number" value="${it.unit_price || 0}" data-i="${i}" data-k="unit_price" style="font-weight:700; color:var(--gold-bright)"></td>
-						<td style="text-align:right; font-family:'Cormorant Garamond',serif; font-size:17px; font-weight:700; color:var(--gold-bright); white-space:nowrap;">¥${amt.toLocaleString()}</td>
-						<td style="text-align:center"><button class="item-card-del" type="button" onclick="delRow(${i})" style="position:static; padding:4px 8px; background:rgba(224,97,87,0.12); border-radius:4px; font-size:12px">✕</button></td>
-					`;
-          tbody.appendChild(tr);
-        });
-      } else {
-        container.className = 'item-cards';
-        extractedItems.forEach((it, i) => {
-          const amt = calcItemAmount(it);
-          const check = validateItem(it);
-          const card = document.createElement('div');
-          card.className = `item-card ai-${check.level}`;
-
-          const badges = [
-            ...check.errors.map(x => `<span class="ai-badge ai-badge-error">⚠ ${x}</span>`),
-            ...check.warnings.map(x => `<span class="ai-badge ai-badge-warning">確認 ${x}</span>`)
-          ];
-          if (!badges.length) badges.push(`<span class="ai-badge ai-badge-ok">✓ 読取OK</span>`);
-
-          const mergeNote = it.source_count && it.source_count > 1
-            ? `<div class="merge-note">${it.source_count}件の読取結果をまとめました</div>`
-            : '';
-
-          const sourceThumbs = (it.source_images || []).map(src => `
-						<img class="source-thumb" src="${src.thumb}" onclick="openSourceImage('${src.thumb}')">
-					`).join('');
-          const sourceBlock = sourceThumbs ? `<div class="source-thumbs">${sourceThumbs}</div>` : '';
-
-          card.innerHTML = `
-						<div class="item-card-header">
-							<span class="item-card-num">N° ${String(i + 1).padStart(2, '0')}</span>
-							<button class="item-card-del" type="button" onclick="delRow(${i})">✕</button>
-						</div>
-						<div class="ai-badges">${badges.join('')}</div>
-						${sourceBlock}
-						${mergeNote}
-						<div class="item-card-body">
-							<div class="item-field full"><label>品番</label><input value="${it.code || ''}" data-i="${i}" data-k="code"></div>
-							<div class="item-field"><label>カラー</label><input value="${it.color || ''}" data-i="${i}" data-k="color"></div>
-							<div class="item-field"><label>サイズ</label><input value="${it.size || ''}" data-i="${i}" data-k="size"></div>
-							<div class="item-field"><label>数量</label>
-								<div class="qty-stepper">
-									<button type="button" class="qty-btn minus" onclick="adjustQty(${i},-1)">−</button>
-									<input type="number" value="${it.quantity || 1}" data-i="${i}" data-k="quantity">
-									<button type="button" class="qty-btn plus" onclick="adjustQty(${i},1)">＋</button>
-								</div>
-							</div>
-							<div class="item-field"><label>単価</label><input type="number" value="${it.unit_price || 0}" data-i="${i}" data-k="unit_price"></div>
-						</div>
-						<div class="item-card-footer">
-							<span class="item-card-price">${getRate()}% × ${(currentDocType === 'return' || currentDocType === 'prov_return') ? '-' : ''}${Math.abs(it.quantity || 1)}点</span>
-							<span class="item-card-total">¥${amt.toLocaleString()}</span>
-						</div>
-					`;
-          container.appendChild(card);
-        });
-      }
-
-      container.querySelectorAll('input').forEach(inp => inp.addEventListener('input', () => {
-        syncInputs();
-        if (!isDesktop) {
-          const i = parseInt(inp.dataset.i);
-          const card = container.children[i];
-          if (card && card.classList.contains('item-card')) {
-            const it = extractedItems[i];
-            const amt = calcItemAmount(it);
-            const priceEl = card.querySelector('.item-card-price');
-            const totalEl = card.querySelector('.item-card-total');
-            const sign = (currentDocType === 'return' || currentDocType === 'prov_return') ? -1 : 1;
-            if (priceEl) priceEl.textContent = `${getRate()}% × ${sign === -1 ? '-' : ''}${Math.abs(it.quantity || 1)}点`;
-            if (totalEl) totalEl.textContent = `¥${amt.toLocaleString()}`;
-          }
-        } else {
-          const i = parseInt(inp.dataset.i);
-          const rows = $('pc-item-body')?.children;
-          if (rows && rows[i]) {
-            const amt = calcItemAmount(extractedItems[i]);
-            rows[i].children[6].textContent = `¥${amt.toLocaleString()}`;
-          }
-        }
-        updateSummary();
-      }));
-      updateSummary();
+      // データの構築は完了している前提で、プレビューカードを表示するだけ。
+      // 表示された瞬間に Alpine.js が $store.app.items を元にレンダリングします。
       $('preview-card').style.display = 'block';
       updateMobileActionBar();
+      
+      // 必要に応じてスクロール
+      window.scrollTo({ top: $('preview-card').offsetTop - 20, behavior: 'smooth' });
     }
 
-    function updateSummary() {
-      let totalNet = 0;
-      extractedItems.forEach(it => { totalNet += calcItemAmount(it); });
-      const tax = Math.trunc(totalNet * 0.1), grand = totalNet + tax;
-      $('preview-summary-wrap').innerHTML = `<div class="preview-summary"><div class="preview-summary-row"><span>小計</span><span>¥${totalNet.toLocaleString()}</span></div><div class="preview-summary-row"><span>消費税</span><span>¥${tax.toLocaleString()}</span></div><div class="preview-summary-row total"><span>合計</span><span>¥${grand.toLocaleString()}</span></div></div>`;
-    }
-
+    // 以下の関数は Alpine.js 内で処理されるため不要になりましたが、
+    // 他の箇所からの呼び出しエラーを防ぐために空の関数として残すか、互換性を持たせます。
+    function updateSummary() {}
+    function syncInputs() {}
     function delRow(i) {
-      syncInputs();
-      extractedItems.splice(i, 1);
-      renderPreview();
+      Alpine.store('app').removeItem(i);
     }
     function adjustQty(i, delta) {
-      syncInputs();
-      extractedItems[i].quantity = Math.max(1, (parseInt(extractedItems[i].quantity) || 1) + delta);
-      renderPreview();
-    }
-    function syncInputs() {
-      $('item-cards').querySelectorAll('input').forEach(inp => {
-        const i = inp.dataset.i, k = inp.dataset.k;
-        if (i === undefined || !k) return;
-        let v = inp.value;
-        if (k === 'unit_price' || k === 'quantity') v = parseInt(v) || 0;
-        if (extractedItems[i]) extractedItems[i][k] = v;
-      });
+      const it = Alpine.store('app').items[i];
+      if (it) it.quantity = Math.max(1, (parseInt(it.quantity) || 1) + delta);
     }
 
     // ===== Mobile Action Bar =====
@@ -4822,21 +4874,18 @@
       document.querySelectorAll('.doctype-btn').forEach(b => b.classList.toggle('active', b.dataset.type === currentDocType));
       if ($('sel-customer')) $('sel-customer').value = draft.customer_select_value || 'manual';
       if ($('inp-manual-customer')) $('inp-manual-customer').value = draft.manual_customer || draft.customer_name || '';
-      if ($('inp-rate')) $('inp-rate').value = draft.rate || '';
-      $('manual-customer-group').style.display = $('sel-customer').value === 'manual' ? 'block' : 'none';
+
+      if ($('inp-rate')) {
+        const r = draft.rate || 35;
+        $('inp-rate').value = r;
+        Alpine.store('app').rate = r;
+      }
+      $('manual-customer-group').style.display = ($('sel-customer').value === 'manual' ? 'block' : 'none');
+
       renderPreview();
       toast('下書きを復元しました', 'ok');
     }
-    document.addEventListener('input', e => {
-      if (e.target.closest('#preview-card') || e.target.id === 'inp-rate' || e.target.id === 'inp-manual-customer') {
-        scheduleAutosave();
-      }
-    });
-    document.addEventListener('change', e => {
-      if (e.target.id === 'sel-customer' || e.target.closest('.doctype-btn')) {
-        scheduleAutosave();
-      }
-    });
+
 
     // ===== Generate / Save =====
     $('btn-add-row').addEventListener('click', () => {
@@ -5378,14 +5427,28 @@
     let camStream = null;
     let audioCtx = null;
 
-    // シャッター音 (外部ファイル)
-    const shutterSound = new Audio('/static/assets/shutter.mp3');
+    // シャッター音 (高速連写対応: AudioContext + Buffer)
+    let shutterBuffer = null;
+    async function loadShutterSound() {
+      try {
+        const res = await fetch('/static/assets/shutter.mp3');
+        const arrayBuffer = await res.arrayBuffer();
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        shutterBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+      } catch (e) { console.error("Shutter load error:", e); }
+    }
+    loadShutterSound();
 
     function playShutterSound() {
+      if (!shutterBuffer) return;
       try {
-        shutterSound.currentTime = 0;
-        shutterSound.volume = 1.0;
-        shutterSound.play().catch(e => console.error("Sound play blocked:", e));
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+
+        const source = audioCtx.createBufferSource();
+        source.buffer = shutterBuffer;
+        source.connect(audioCtx.destination);
+        source.start(0);
       } catch (e) { console.error("Sound error:", e); }
     }
 
@@ -5419,6 +5482,13 @@
       $('cam-video').srcObject = null;
       renderThumbs();
     }
+
+    // アプリがバックグラウンドに回った際に強制的にカメラを停止（メモリリーク・バッテリー消費対策）
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden' && camStream) {
+        stopCamera();
+      }
+    });
 
     function updateCamCounter() {
       $('cam-counter').textContent = `${selectedFiles.length} 枚`;
