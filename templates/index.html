@@ -2638,6 +2638,7 @@
         min-height: 44px;
         font-size: 16px;
       }
+
       .qty-btn {
         width: 44px;
       }
@@ -2922,6 +2923,7 @@
       content: '◐';
       animation: spin 1s linear infinite;
     }
+
     /* ===== Camera Modal (Continuous Capture) ===== */
     .cam-overlay {
       position: fixed;
@@ -2932,12 +2934,17 @@
       flex-direction: column;
       overflow: hidden;
     }
-    .cam-overlay.active { display: flex; }
+
+    .cam-overlay.active {
+      display: flex;
+    }
+
     #cam-video {
       width: 100%;
       height: 100%;
       object-fit: cover;
     }
+
     .cam-ui {
       position: absolute;
       inset: 0;
@@ -2945,38 +2952,49 @@
       flex-direction: column;
       pointer-events: none;
     }
+
     .cam-header {
       padding: 20px;
       display: flex;
       justify-content: space-between;
       pointer-events: auto;
     }
-    .cam-body { flex: 1; }
+
+    .cam-body {
+      flex: 1;
+    }
+
     .cam-footer {
       padding: 40px 20px 60px;
       display: flex;
       align-items: center;
       justify-content: space-around;
       pointer-events: auto;
-      background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
+      background: linear-gradient(to top, rgba(0, 0, 0, 0.8), transparent);
     }
+
     .cam-shutter {
       width: 76px;
       height: 76px;
       border-radius: 50%;
-      background: rgba(255,255,255,0.2);
+      background: rgba(255, 255, 255, 0.2);
       border: 4px solid #fff;
       padding: 6px;
       cursor: pointer;
       transition: transform 0.1s;
     }
-    .cam-shutter:active { transform: scale(0.9); }
+
+    .cam-shutter:active {
+      transform: scale(0.9);
+    }
+
     .cam-shutter-inner {
       width: 100%;
       height: 100%;
       border-radius: 50%;
       background: #fff;
     }
+
     .cam-done {
       color: #fff;
       font-size: 16px;
@@ -2984,6 +3002,7 @@
       cursor: pointer;
       padding: 10px 20px;
     }
+
     .cam-counter {
       background: var(--gold);
       color: #000;
@@ -2992,6 +3011,7 @@
       font-weight: 700;
       font-size: 14px;
     }
+
     .cam-flash {
       position: absolute;
       inset: 0;
@@ -3647,7 +3667,7 @@
         window.location.href = url;
         return;
       }
-      
+
       try {
         const res = await fetch(url);
         if (!res.ok) throw new Error(`サーバーエラー (${res.status})`);
@@ -3699,12 +3719,12 @@
             options.body = JSON.stringify(body);
           }
           const r = await fetch(endpoint, options);
-          
+
           if (!r.ok) {
             const errData = await r.json().catch(() => ({}));
             throw new Error(errData.detail || `サーバーエラー (${r.status})`);
           }
-          
+
           const data = await r.json();
           if (data.job_id) {
             this.trackJob(data.job_id, type, callbacks);
@@ -3721,9 +3741,9 @@
 
       async trackJob(jid, type = 'unknown', callbacks = {}) {
         if (this.jobs.has(jid)) return;
-        this.jobs.set(jid, { 
-          id: jid, type, status: 'pending', callbacks, 
-          startTime: Date.now(), retryCount: 0 
+        this.jobs.set(jid, {
+          id: jid, type, status: 'pending', callbacks,
+          startTime: Date.now(), retryCount: 0
         });
         this.poll(jid);
         this.saveToStorage();
@@ -3736,14 +3756,14 @@
         // タイムアウト監視: AI解析は時間がかかるため120秒、その他は30秒
         const timeoutMs = job.type === 'analyze' ? 120000 : 30000;
         if (Date.now() - job.startTime > timeoutMs) {
-           this.failJob(job, 'AIの応答がタイムアウトしました。画像が多い場合は少し時間がかかります。');
-           return;
+          this.failJob(job, 'AIの応答がタイムアウトしました。画像が多い場合は少し時間がかかります。');
+          return;
         }
 
         try {
           const r = await fetch(`/api/jobs/${jid}`);
           if (!r.ok) throw new Error('Poll failed');
-          
+
           const data = await r.json();
           job.status = data.status;
           job.type = data.type;
@@ -3974,7 +3994,7 @@
     function renderSummaryView(payload, d, targetId) {
       const items = payload.items, rate = payload.discount_rate;
       let totalNet = 0, totalQty = 0;
-      
+
       const isReturn = payload.doc_type === 'return' || payload.doc_type === 'prov_return';
       const sign = isReturn ? -1 : 1;
 
@@ -3983,9 +4003,9 @@
         totalNet += Math.trunc((parseInt(it.unit_price) || 0) * (rate / 100) * q);
         totalQty += q;
       });
-      
+
       const tax = Math.trunc(totalNet * 0.1), grand = totalNet + tax;
-      
+
       const rows = items.map((it, i) => {
         const q = Math.abs(parseInt(it.quantity) || 1) * sign;
         const amt = Math.trunc((it.unit_price || 0) * (rate / 100) * q);
@@ -4390,11 +4410,11 @@
       // ユーザーへの選択肢または直接カメラ起動
       // iPhoneのPWA環境では getUserMedia が非常に便利なのでこちらを優先
       if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-      if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
-        startCamera();
-      } else {
-        $('file-input').click();
-      }
+        if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+          startCamera();
+        } else {
+          $('file-input').click();
+        }
       } else {
         $('file-input').click();
       }
@@ -4475,9 +4495,9 @@
       const total = selectedFiles.length;
 
       $('btn-analyze').disabled = true;
-      
+
       // ★ ここで中央のプログレスバーを呼び出す（目安8秒）
-      showGenProgress(8, 'analyze'); 
+      showGenProgress(8, 'analyze');
 
       try {
         const fd = new FormData();
@@ -4490,7 +4510,7 @@
         jobManager.enqueue('analyze', '/api/jobs/analyze', fd, {
           onSuccess: (data) => {
             hideGenProgress(); // ★ 解析完了！100%にして閉じる
-            
+
             const allItems = (data.items || []).map(item => ({
               ...item,
               source_image_index: item.source_image_no ?? 0,
@@ -4527,7 +4547,7 @@
 
             renderPreview();
             $('btn-analyze').disabled = false;
-            
+
             // オーバーレイが閉じるのを待ってからスクロール
             setTimeout(() => {
               window.scrollTo({ top: $('preview-card').offsetTop - 20, behavior: 'smooth' });
@@ -4828,11 +4848,11 @@
     $('btn-generate').addEventListener('click', async () => {
       syncInputs();
       if (!extractedItems.length) return toast('商品がありません', 'err');
-      
+
       $('btn-generate').disabled = true;
-      
+
       // ★ 保存時も中央のプログレスバーを呼び出す
-      showGenProgress(5, 'gen'); 
+      showGenProgress(5, 'gen');
 
       const cn = getCustomerName();
       const payload = {
@@ -4843,27 +4863,27 @@
         doc_type: currentDocType,
         user_id: currentUser?.id
       };
-      
+
       jobManager.enqueue('generate', '/api/jobs/generate', payload, {
         onSuccess: async (d) => {
           try {
             const res = await fetch(`/api/history/${d.invoice_id}/data`);
             const fullData = await res.json();
-            
+
             pdfData = fullData.pdf_base64;
             excelData = fullData.excel_base64;
             detailPdfData = fullData.detail_pdf_base64;
             detailExcelData = fullData.detail_excel_base64;
             currentInvNum = d.invoice_number;
             lastInvoiceId = d.invoice_id;
-            
+
             $('inv-num-display').textContent = `伝票番号: ${d.invoice_number}`;
             $('preview-card').style.display = 'none';
             $('dl-section').style.display = 'block';
-            
+
             hideGenProgress(); // ★ データの準備ができたら閉じる
             setupPreviews(payload, fullData);
-            
+
             localStorage.removeItem('laura-draft');
             toast('✦ 保存完了（下書き）', 'ok');
             updateMobileActionBar();
@@ -5017,7 +5037,7 @@
       jobManager.enqueue('drive_upload', '/api/jobs/drive-upload', fd, {
         onSuccess: (res) => {
           hideGenProgress(); // ★ 処理が完了したらオーバーレイを閉じる
-          
+
           const links = res.uploaded.map(u => `<a href="${u.url}" target="_blank" style="color:var(--gold-bright);text-decoration:underline">${u.type.toUpperCase()}</a>`).join(' / ');
           toast(`✦ Driveに保存しました: ${links}`, 'ok', 0);
           if (btnEl) btnEl.disabled = false;
@@ -5361,39 +5381,41 @@
     // シャッター音（Web Audio APIで合成）
     // 本物のシャッター音 (Base64)
     const shutterBase64 = "data:audio/mp3;base64,//uQxAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAAFAAAHwwAICAICAiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA="; // (実際には有効な短いMP3データを入れます)
-    
+
     function playShutterSound() {
       try {
         if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        const duration = 0.15;
+        const duration = 0.25; // 0.15から延長
         const buffer = audioCtx.createBuffer(1, audioCtx.sampleRate * duration, audioCtx.sampleRate);
         const data = buffer.getChannelData(0);
-        
-        // 2つのパルスを重ねて「カ・シャ」を表現
+
+        // アタックと響きのカーブを調整
         for (let i = 0; i < data.length; i++) {
           const t = i / data.length;
-          // メインのノイズ
           const noise = (Math.random() * 2 - 1);
-          // 最初の鋭いアタック（カ）
-          const attack = Math.exp(-100 * t);
-          // 後ろの響き（シャ）
-          const tail = Math.exp(-10 * t) * 0.5;
+          const attack = Math.exp(-40 * t);      // 100->40: 立ち上がりを少しだけマイルドに
+          const tail = Math.exp(-5 * t) * 0.8;   // 後ろの響きを長く、大きく
           data[i] = noise * (attack + tail);
         }
-        
-        const noise = audioCtx.createBufferSource();
-        noise.buffer = buffer;
+
+        const noiseSrc = audioCtx.createBufferSource();
+        noiseSrc.buffer = buffer;
+
+        // バンドパスフィルターで「パシャッ」というカメラらしい周波数帯に絞る
         const filter = audioCtx.createBiquadFilter();
-        filter.type = 'highpass';
-        filter.frequency.value = 1500; // 高音域を強調
+        filter.type = 'bandpass';
+        filter.frequency.value = 1000;
+        filter.Q.value = 0.5;
+
+        // 音量を上げる
         const gain = audioCtx.createGain();
-        gain.gain.setValueAtTime(0.6, audioCtx.currentTime);
+        gain.gain.setValueAtTime(1.5, audioCtx.currentTime); // 0.6->1.5 に増幅
         gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
-        
-        noise.connect(filter);
+
+        noiseSrc.connect(filter);
         filter.connect(gain);
         gain.connect(audioCtx.destination);
-        noise.start();
+        noiseSrc.start();
       } catch (e) { console.error("Sound error:", e); }
     }
 
@@ -5445,7 +5467,7 @@
 
       // フラッシュエフェクト
       $('cam-flash').style.animation = 'none';
-      $('cam-flash').offsetHeight; 
+      $('cam-flash').offsetHeight;
       $('cam-flash').style.animation = 'flashAnim 0.15s ease-out';
 
       canvas.toBlob(blob => {
