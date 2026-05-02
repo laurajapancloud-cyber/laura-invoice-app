@@ -5348,6 +5348,34 @@
     }
     // ===== Continuous Camera Logic =====
     let camStream = null;
+    let audioCtx = null;
+
+    // シャッター音（Web Audio APIで合成）
+    function playShutterSound() {
+      try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const bufferSize = audioCtx.sampleRate * 0.1;
+        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+        
+        const noise = audioCtx.createBufferSource();
+        noise.buffer = buffer;
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(1200, audioCtx.currentTime);
+        filter.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.1);
+        
+        const gain = audioCtx.createGain();
+        gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+        
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(audioCtx.destination);
+        noise.start();
+      } catch (e) { console.error("Sound error:", e); }
+    }
 
     async function startCamera() {
       try {
@@ -5390,6 +5418,9 @@
       canvas.height = video.videoHeight;
       const ctx = canvas.getContext('2d');
       ctx.drawImage(video, 0, 0);
+
+      // 音を鳴らす
+      playShutterSound();
 
       // フラッシュエフェクト
       $('cam-flash').style.animation = 'none';
