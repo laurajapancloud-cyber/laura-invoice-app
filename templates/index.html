@@ -13,6 +13,7 @@
   <meta name="theme-color" content="#c9a961">
   <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="LAURA">
   <style>
@@ -3030,7 +3031,10 @@
     <div class="cam-ui">
       <div class="cam-header">
         <div class="cam-counter" id="cam-counter">0 枚</div>
-        <div class="cam-done" onclick="stopCamera()">キャンセル</div>
+        <div style="display:flex; gap:12px; align-items:center; pointer-events:auto;">
+          <div class="cam-done" onclick="$('file-input').click()">📁 ライブラリ</div>
+          <div class="cam-done" onclick="stopCamera()">キャンセル</div>
+        </div>
       </div>
       <div class="cam-body"></div>
       <div class="cam-footer">
@@ -5379,9 +5383,10 @@
 
     async function startCamera() {
       try {
+        // 柔軟なカメラ要求 (背面優先だが、なければ何でもOK)
         const constraints = {
           video: {
-            facingMode: 'environment',
+            facingMode: { ideal: 'environment' },
             width: { ideal: 1920 },
             height: { ideal: 1080 }
           }
@@ -5391,8 +5396,8 @@
         $('cam-overlay').style.display = 'flex';
         updateCamCounter();
       } catch (e) {
-        console.error("Camera error:", e);
-        showToast("カメラを起動できませんでした。通常のアップロードを使用します。", "err");
+        console.warn("Camera failed, falling back to file input:", e);
+        toast("カメラを起動できませんでした。ファイル選択を使用します。", "info");
         $('file-input').click();
       }
     }
