@@ -4019,8 +4019,24 @@
       });
     }
 
-    function downloadZip(invId) {
-      window.location.href = `/api/history/${invId}/zip`;
+    async function downloadZip(invId) {
+      // ★ アプリ環境でも動くように、fetch して Base64 で共有シートに投げる
+      showGenProgress(3, 'gen'); // 進捗表示
+      try {
+        const res = await fetch(`/api/history/${invId}/zip`);
+        if (!res.ok) throw new Error('ZIP生成に失敗しました');
+        const blob = await res.blob();
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const b64 = reader.result.split(',')[1];
+          dl64(b64, `invoice_${invId}.zip`, 'application/zip');
+          hideGenProgress();
+        };
+        reader.readAsDataURL(blob);
+      } catch (e) {
+        hideGenProgress();
+        toast('ZIPダウンロード失敗: ' + e.message, 'err');
+      }
     }
 
     async function delHist(id) {

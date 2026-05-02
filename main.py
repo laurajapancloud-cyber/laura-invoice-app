@@ -1370,12 +1370,22 @@ async def get_history_items(inv_id: int, username: Annotated[str, Depends(authen
 @app.delete("/api/history/{inv_id}")
 async def delete_history(inv_id: int, username: Annotated[str, Depends(authenticate)]):
     with db_conn() as conn, conn.cursor() as cur:
-        cur.execute("SELECT status FROM invoices WHERE id = %s", (inv_id,))
+        cur.execute("SELECT pdf_storage_path, excel_storage_path, detail_pdf_storage_path, detail_excel_storage_path FROM invoices WHERE id = %s", (inv_id,))
         row = cur.fetchone()
         if not row: raise HTTPException(404, "Invoice not found")
-        if row['status'] == 'locked':
-            raise HTTPException(403, "確定済み伝票は削除できません。まず確定を解除してください。")
-            
+        
+        # 確定済みであっても削除を許可する（403回避）
+        
+        if STORAGE_BUCKET:
+            try:
+                from supabase_config import supabase
+                for col in ['pdf_storage_path', 'excel_storage_path', 'detail_pdf_storage_path', 'detail_excel_storage_path']:
+                    path = row.get(col)
+                    if path:
+                        supabase.storage.from_(STORAGE_BUCKET).remove([path])
+            except Exception as e:
+                print(f"Failed cleanup for {inv_id}: {e}")
+
         cur.execute("DELETE FROM invoice_items WHERE invoice_id = %s", (inv_id,))
         cur.execute("DELETE FROM invoices WHERE id = %s", (inv_id,))
         conn.commit()
