@@ -222,34 +222,53 @@ def extract_json_array(text: str):
 
 	return data
 
+# ==================== PostgreSQL (Supabase) Database ====================
+DATABASE_URL = os.getenv("DATABASE_URL")
+
 # グローバルにプールを保持（最小1、最大20コネクション）
 db_pool = None
 if DATABASE_URL and psycopg2 and pool:
     try:
+        # SimpleConnectionPool ではなく ThreadedConnectionPool を使用（スレッドセーフ化）
         db_pool = pool.ThreadedConnectionPool(1, 20, DATABASE_URL, cursor_factory=RealDictCursor)
-        logger.info("Database threaded connection pool initialized.")
+        logger.info("Database connection pool initialized.")
     except Exception as e:
         logger.error("DB Pool creation failed: %s", e)
 
+def get_db():
+    if not DATABASE_URL:
+        logger.warning("DATABASE_URL not set. Running in NO-DB mode.")
+        return None
+    if not psycopg2:
+        logger.warning("psycopg2 がインストールされていません。NO-DB モードで動作します。")
+        return None
+    
+    # プールが初期化されていればプールから取得、なければフォールバック
+    if db_pool:
+        return db_pool.getconn()
+    else:
+        return psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+
+def require_db():
+    conn = get_db()
+    if not conn:
+        raise HTTPException(status_code=500, detail="DATABASE_URL is not configured")
+    return conn
+
+from contextlib import contextmanager
+
 @contextmanager
 def db_conn():
-    """プールからコネクションを取得し、使い終わったら返却する"""
-    if not db_pool:
-        # プールが無い場合はフォールバック（またはエラー）
-        if DATABASE_URL and psycopg2:
-            conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
-            try:
-                yield conn
-            finally:
-                conn.close()
-            return
-        raise HTTPException(status_code=500, detail="Database connection not available")
-    
-    conn = db_pool.getconn()
+    """データベース接続を安全に管理するコンテキストマネージャ"""
+    conn = require_db()
     try:
         yield conn
     finally:
-        db_pool.putconn(conn)
+        # コネクションがプール由来ならプールに返却、直接接続ならクローズ
+        if db_pool:
+            db_pool.putconn(conn)
+        else:
+            conn.close()
 
 def init_db():
     conn = get_db()
