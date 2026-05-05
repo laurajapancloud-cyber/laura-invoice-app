@@ -4994,8 +4994,8 @@
 
       // ファイル名を動的に生成
       const customer = (payload && payload.customer_name) ? payload.customer_name : (d.customer_name || "Unknown");
-      const dateISO = d.locked_at || d.created_at; 
-      
+      const dateISO = d.locked_at || d.created_at;
+
       const fPdf = getFileName(d.doc_type, customer, dateISO, 'pdf');
       const fXl = getFileName(d.doc_type, customer, dateISO, 'excel');
       const fDpdf = getFileName(d.doc_type, customer, dateISO, 'detail-pdf');
@@ -5436,20 +5436,30 @@
         const doc = frame.contentWindow.document;
         doc.open();
 
-        // スマホ画面幅に合わせてA4サイズ(約800px)を縮小表示させる処理
+        // スマホ画面幅に合わせてA4サイズ(約800px)を確実におさめる処理
         let htmlContent = d.html_preview;
         if (window.innerWidth <= 768) {
-          const zoomRatio = (window.innerWidth - 64) / 800;
+          // スマホの実際の表示領域を計算 (画面幅 - モーダルの左右余白)
+          const frameWidth = window.innerWidth - 64;
+          const targetWidth = 800; // 帳票の想定幅(A4相当)
+          const scale = frameWidth / targetWidth;
+
           htmlContent = htmlContent.replace('</head>', `
-              <style>
-                  html, body { 
-                      zoom: ${zoomRatio}; 
-                      overflow-x: hidden; 
-                      margin: 0; 
-                      padding: 10px;
-                  }
-              </style>
-          </head>`);
+            <style>
+                /* iOSのiframeで効かないzoomをやめ、transformで強制縮小する */
+                html, body {
+                    margin: 0;
+                    padding: 0;
+                    overflow-x: hidden;
+                    background: #fff;
+                }
+                body {
+                    width: ${targetWidth}px !important;
+                    transform: scale(${scale});
+                    transform-origin: top left;
+                }
+            </style>
+        </head>`);
         }
 
         doc.write(htmlContent);
