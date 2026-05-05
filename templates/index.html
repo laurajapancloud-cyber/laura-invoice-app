@@ -4483,11 +4483,29 @@
     let allUsers = [];
 
     const TYPE_TITLES = {
-      delivery: { main: '納品書', detail: '商品明細表', label: '納品' },
-      return: { main: '返品書', detail: '返品明細表', label: '返品' },
-      prov_delivery: { main: '仮納品書', detail: '仮納品明細表', label: '仮納品' },
-      prov_return: { main: '仮返品書', detail: '仮返品明細表', label: '仮返品' },
+      delivery: { main: '納品書', detail: '商品明細表', label: '納品', pdf_title: '納品書', detail_pdf_title: '商品明細表' },
+      return: { main: '返品書', detail: '返品明細表', label: '返品', pdf_title: '返品書', detail_pdf_title: '返品明細表' },
+      prov_delivery: { main: '仮納品書', detail: '仮納品明細表', label: '仮納品', pdf_title: '仮納品書', detail_pdf_title: '仮納品明細表' },
+      prov_return: { main: '仮返品書', detail: '仮返品明細表', label: '仮返品', pdf_title: '仮返品書', detail_pdf_title: '仮返品明細表' },
     };
+
+    // ★追加: 共通のファイル名生成関数（Python側と完全に同じ書式）
+    function getFileName(docType, customerName, dateISO, kind) {
+      const t = TYPE_TITLES[docType] || TYPE_TITLES.delivery;
+      const isMain = (kind === 'pdf' || kind === 'excel');
+      const isPdf = (kind === 'pdf' || kind === 'detail-pdf');
+
+      const label = isMain ? t.pdf_title : t.detail_pdf_title;
+      const ext = isPdf ? 'pdf' : 'xlsx';
+
+      const safeCustomer = (customerName || "Unknown").replace(/[\\/:*?"<>|]+/g, "_").trim();
+
+      let dt = new Date();
+      if (dateISO) dt = new Date(dateISO);
+      const dateStr = `${dt.getMonth() + 1}月${dt.getDate()}日`;
+
+      return `${safeCustomer}_${dateStr}_${label}.${ext}`;
+    }
     const TYPE_COLORS = {
       delivery: 'var(--gold)', return: 'var(--red)',
       prov_delivery: 'var(--blue)', prov_return: '#a87fb8'
@@ -4974,17 +4992,26 @@
 
       renderSummaryView(payload, d, 'modal-summary-content');
 
+      // ファイル名を動的に生成
+      const customer = (payload && payload.customer_name) ? payload.customer_name : (d.customer_name || "Unknown");
+      const dateISO = d.locked_at || d.created_at; 
+      
+      const fPdf = getFileName(d.doc_type, customer, dateISO, 'pdf');
+      const fXl = getFileName(d.doc_type, customer, dateISO, 'excel');
+      const fDpdf = getFileName(d.doc_type, customer, dateISO, 'detail-pdf');
+      const fDxl = getFileName(d.doc_type, customer, dateISO, 'detail-excel');
+
       // ★ iOSアプリ環境ならサーバーURLから直接取得、ブラウザならBase64から
       if (isNativeApp && d.id) {
-        document.querySelector('.btn-dl-pdf').onclick = () => dlFromServer(`/api/history/${d.id}/pdf`, `納品書_${d.invoice_number}.pdf`);
-        document.querySelector('.btn-dl-xl').onclick = () => dlFromServer(`/api/history/${d.id}/excel`, `納品書_${d.invoice_number}.xlsx`);
-        document.querySelector('.btn-dl-dpdf').onclick = () => dlFromServer(`/api/history/${d.id}/detail-pdf`, `明細表_${d.invoice_number}.pdf`);
-        document.querySelector('.btn-dl-dxl').onclick = () => dlFromServer(`/api/history/${d.id}/detail-excel`, `明細表_${d.invoice_number}.xlsx`);
+        document.querySelector('.btn-dl-pdf').onclick = () => dlFromServer(`/api/history/${d.id}/pdf`, fPdf);
+        document.querySelector('.btn-dl-xl').onclick = () => dlFromServer(`/api/history/${d.id}/excel`, fXl);
+        document.querySelector('.btn-dl-dpdf').onclick = () => dlFromServer(`/api/history/${d.id}/detail-pdf`, fDpdf);
+        document.querySelector('.btn-dl-dxl').onclick = () => dlFromServer(`/api/history/${d.id}/detail-excel`, fDxl);
       } else {
-        if (d.pdf_base64) document.querySelector('.btn-dl-pdf').onclick = () => dl64(d.pdf_base64, `納品書_${d.invoice_number}.pdf`, 'application/pdf');
-        if (d.excel_base64) document.querySelector('.btn-dl-xl').onclick = () => dl64(d.excel_base64, `納品書_${d.invoice_number}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        if (d.detail_pdf_base64) document.querySelector('.btn-dl-dpdf').onclick = () => dl64(d.detail_pdf_base64, `明細表_${d.invoice_number}.pdf`, 'application/pdf');
-        if (d.detail_excel_base64) document.querySelector('.btn-dl-dxl').onclick = () => dl64(d.detail_excel_base64, `明細表_${d.invoice_number}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        if (d.pdf_base64) document.querySelector('.btn-dl-pdf').onclick = () => dl64(d.pdf_base64, fPdf, 'application/pdf');
+        if (d.excel_base64) document.querySelector('.btn-dl-xl').onclick = () => dl64(d.excel_base64, fXl, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        if (d.detail_pdf_base64) document.querySelector('.btn-dl-dpdf').onclick = () => dl64(d.detail_pdf_base64, fDpdf, 'application/pdf');
+        if (d.detail_excel_base64) document.querySelector('.btn-dl-dxl').onclick = () => dl64(d.detail_excel_base64, fDxl, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       }
 
       const driveBtn = $('modal-btn-drive');
@@ -5239,6 +5266,12 @@
         const d = await r.json();
         const titles = TYPE_TITLES[d.doc_type] || TYPE_TITLES.delivery;
 
+        // ファイル名を生成
+        const fPdf = getFileName(d.doc_type, d.customer_name, d.locked_at || d.created_at, 'pdf');
+        const fXl = getFileName(d.doc_type, d.customer_name, d.locked_at || d.created_at, 'excel');
+        const fDpdf = getFileName(d.doc_type, d.customer_name, d.locked_at || d.created_at, 'detail-pdf');
+        const fDxl = getFileName(d.doc_type, d.customer_name, d.locked_at || d.created_at, 'detail-excel');
+
         if (pane && isDesktop) {
           const lockBtn = d.status === 'locked'
             ? `<button class="btn btn-outline btn-sm" onclick="unlockHist(${d.invoice_id})">🔓 解除</button>`
@@ -5272,15 +5305,15 @@
 						<div class="preview-pane active" id="dpane-pdf">
 							<iframe class="pdf-preview-frame" src="${b64ToBlobUrl(d.pdf_base64, 'application/pdf')}"></iframe>
 							<div class="preview-actions">
-								<button class="btn btn-red" onclick="dlFromServer('/api/history/${d.invoice_id}/pdf','${titles.main}_${d.invoice_number}.pdf')">📄 PDF保存</button>
-								<button class="btn btn-green" onclick="dlFromServer('/api/history/${d.invoice_id}/excel','${titles.main}_${d.invoice_number}.xlsx')">📊 Excel保存</button>
+								<button class="btn btn-red" onclick="dlFromServer('/api/history/${d.invoice_id}/pdf','${fPdf}')">📄 PDF保存</button>
+								<button class="btn btn-green" onclick="dlFromServer('/api/history/${d.invoice_id}/excel','${fXl}')">📊 Excel保存</button>
 							</div>
 						</div>
 						<div class="preview-pane" id="dpane-detail">
 							<iframe class="pdf-preview-frame" src="${b64ToBlobUrl(d.detail_pdf_base64, 'application/pdf')}"></iframe>
 							<div class="preview-actions">
-								<button class="btn btn-red" onclick="dlFromServer('/api/history/${d.invoice_id}/detail-pdf','${titles.detail.replace(' ', '')}_${d.invoice_number}.pdf')">📄 PDF保存</button>
-								<button class="btn btn-green" onclick="dlFromServer('/api/history/${d.invoice_id}/detail-excel','${titles.detail.replace(' ', '')}_${d.invoice_number}.xlsx')">📊 Excel保存</button>
+								<button class="btn btn-red" onclick="dlFromServer('/api/history/${d.invoice_id}/detail-pdf','${fDpdf}')">📄 PDF保存</button>
+								<button class="btn btn-green" onclick="dlFromServer('/api/history/${d.invoice_id}/detail-excel','${fDxl}')">📊 Excel保存</button>
 							</div>
 						</div>
 						<div class="preview-pane" id="dpane-summary">
@@ -5402,7 +5435,24 @@
         const frame = $('modal-pdf-frame');
         const doc = frame.contentWindow.document;
         doc.open();
-        doc.write(d.html_preview);
+
+        // スマホ画面幅に合わせてA4サイズ(約800px)を縮小表示させる処理
+        let htmlContent = d.html_preview;
+        if (window.innerWidth <= 768) {
+          const zoomRatio = (window.innerWidth - 64) / 800;
+          htmlContent = htmlContent.replace('</head>', `
+              <style>
+                  html, body { 
+                      zoom: ${zoomRatio}; 
+                      overflow-x: hidden; 
+                      margin: 0; 
+                      padding: 10px;
+                  }
+              </style>
+          </head>`);
+        }
+
+        doc.write(htmlContent);
         doc.close();
 
         // ダウンロードボタンの設定 (プレビュー時は保存前のため案内を出す)
@@ -5788,10 +5838,11 @@
     });
 
     function downloadBlob(type) {
-      if (type === 'pdf') dl64(pdfData, `納品書_${currentInvNum}.pdf`, 'application/pdf');
-      if (type === 'excel') dl64(excelData, `管理伝票_${currentInvNum}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      if (type === 'detail-pdf') dl64(detailPdfData, `商品明細表_${currentInvNum}.pdf`, 'application/pdf');
-      if (type === 'detail-excel') dl64(detailExcelData, `商品明細表_${currentInvNum}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      const fName = getFileName(currentDocType, getCustomerName(), null, type);
+      if (type === 'pdf') dl64(pdfData, fName, 'application/pdf');
+      if (type === 'excel') dl64(excelData, fName, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      if (type === 'detail-pdf') dl64(detailPdfData, fName, 'application/pdf');
+      if (type === 'detail-excel') dl64(detailExcelData, fName, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     }
 
     $('btn-new').addEventListener('click', () => {
