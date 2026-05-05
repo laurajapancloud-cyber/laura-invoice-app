@@ -1100,11 +1100,10 @@ def build_invoice_excel(invoice_data: dict) -> bytes:
     ws["A5"].font = Font(size=14, bold=True)
     ws["A5"].fill = fill_yellow
 
-    headers = ["品番", "カラー", "サイズ", "バーコード", "", "数量", "単価", "金額", "掛率"]
-    h_cols = ["A", "B", "C", "D", "E", "F", "G", "H", "I"]
+    headers = ["品番", "カラー", "サイズ", "バーコード", "数量", "単価", "金額", "掛率"]
+    h_cols = ["A", "B", "C", "D", "E", "F", "G", "H"]
     start_row = 8
     for col, txt in zip(h_cols, headers):
-        if not txt: continue
         cell = ws[f"{col}{start_row}"]
         cell.value = txt
         cell.fill = fill_blue
@@ -1115,7 +1114,8 @@ def build_invoice_excel(invoice_data: dict) -> bytes:
     ws.column_dimensions['B'].width = 10
     ws.column_dimensions['C'].width = 10
     ws.column_dimensions['D'].width = 30
-    ws.column_dimensions['F'].width = 10
+    ws.column_dimensions['E'].width = 10
+    ws.column_dimensions['F'].width = 15
     ws.column_dimensions['G'].width = 15
     ws.column_dimensions['H'].width = 15
 
@@ -1125,14 +1125,14 @@ def build_invoice_excel(invoice_data: dict) -> bytes:
         ws[f"A{r}"] = item["code"]
         ws[f"B{r}"] = item["color"]
         ws[f"C{r}"] = item["size"]
-        ws[f"F{r}"] = item["quantity"]
-        ws[f"G{r}"] = item["unit_price"]
+        ws[f"E{r}"] = item["quantity"]
+        ws[f"F{r}"] = item["unit_price"]
+        ws[f"F{r}"].number_format = '#,##0'
+        ws[f"G{r}"] = item["net_amount"]
         ws[f"G{r}"].number_format = '#,##0'
-        ws[f"H{r}"] = item["net_amount"]
-        ws[f"H{r}"].number_format = '#,##0'
-        ws[f"I{r}"] = f"{invoice_data['discount_rate']}%"
+        ws[f"H{r}"] = f"{invoice_data['discount_rate']}%"
         
-        for col in ["A","B","C","D","F","G","H","I"]:
+        for col in ["A","B","C","D","E","F","G","H"]:
             ws[f"{col}{r}"].border = border_thin
         
         # ハイフンを除去して連結し、バーコード化
@@ -1419,7 +1419,7 @@ async def unlock_invoice(inv_id: int, username: Annotated[str, Depends(authentic
 async def get_history(username: Annotated[str, Depends(authenticate)], doc_type: Optional[str] = None, user_id: Optional[int] = None):
     with db_conn() as conn, conn.cursor() as cur:
         query = """
-            SELECT i.id, i.invoice_number, i.customer_name, i.total_grand_total, i.item_count, i.status, i.doc_type,
+            SELECT i.id, i.invoice_number, i.customer_name, i.total_grand_total, i.item_count, i.status, i.doc_type, i.user_id,
             u.name as user_name, u.color as user_color,
             to_char(i.locked_at, 'YYYY-MM-DD"T"HH24:MI:SS') as locked_at,
             to_char(i.created_at, 'YYYY-MM-DD\"T\"HH24:MI:SS') as created_at
