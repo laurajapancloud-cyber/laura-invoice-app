@@ -4241,6 +4241,7 @@
       
       // ユーザー初期化
       (async () => {
+        loadUsers(); // 常にユーザー一覧をロードしてプルダウン等を更新
         if (currentUser) {
           $('user-modal').style.display = 'none';
           updateUserChip();
