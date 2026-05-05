@@ -1018,12 +1018,12 @@ def build_detail_excel(invoice_number: str, customer_name: str, items: list, doc
             r = current_r
             ws.row_dimensions[r].height = 22
             
+            item_idx = b * ROWS_PER_BLOCK + i
             # No. は通し番号（1, 2, 3...）
             ws[f"A{r}"] = item_idx + 1
             ws[f"A{r}"].alignment = Alignment(horizontal="center", vertical="center")
             ws[f"A{r}"].font = Font(size=9, color="888888")
 
-            item_idx = b * ROWS_PER_BLOCK + i
             if item_idx < len(items):
                 item = items[item_idx]
                 ws[f"B{r}"] = item.get("code", "")
