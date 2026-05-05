@@ -2603,14 +2603,16 @@
         position: fixed;
         left: 0;
         right: 0;
-        bottom: 0;
+        bottom: calc(64px + env(safe-area-inset-bottom));
         z-index: 9000;
         display: none;
         gap: 8px;
-        padding: 10px;
-        background: rgba(17, 17, 17, 0.96);
+        padding: 10px 14px;
+        background: rgba(17, 17, 17, 0.94);
         border-top: 1px solid var(--border);
-        backdrop-filter: blur(10px);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        box-shadow: 0 -4px 20px rgba(0,0,0,0.4);
       }
 
       .mobile-action-bar.visible {
@@ -2625,7 +2627,7 @@
       }
 
       body.has-mobile-action-bar {
-        padding-bottom: 110px;
+        padding-bottom: 160px;
       }
 
       /* スマホでは ACTIVE JOBS パネルを完全に封印 */
@@ -5332,10 +5334,11 @@
     function updateMobileActionBar() {
       const bar = $('mobile-action-bar');
       if (!bar) return;
-      const visible = $('preview-card').style.display !== 'none';
+      const createPageActive = $('page-create').classList.contains('active');
+      const visible = createPageActive && ($('preview-card').style.display !== 'none');
       bar.classList.toggle('visible', visible);
       document.body.classList.toggle('has-mobile-action-bar', visible);
-      bar.style.display = visible && window.innerWidth <= 768 ? 'flex' : 'none';
+      bar.style.display = (visible && window.innerWidth <= 768) ? 'flex' : 'none';
     }
 
     // ===== Autosave =====
