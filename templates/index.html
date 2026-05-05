@@ -3587,8 +3587,8 @@
           <div class="preview-tab" data-ptab="summary">⚜ 概要</div>
         </div>
 
-        <div class="preview-pane active" id="m-ppane-pdf">
-          <iframe id="modal-pdf-frame" class="pdf-preview-frame" scrolling="no"></iframe>
+        <div class="preview-pane active" id="m-ppane-pdf" style="overflow: hidden;">
+          <iframe id="modal-pdf-frame" class="pdf-preview-frame"></iframe>
           <div class="preview-actions">
             <button class="btn btn-red btn-dl-pdf">📄 PDF保存</button>
           </div>
@@ -3601,8 +3601,8 @@
           </div>
         </div>
 
-        <div class="preview-pane" id="m-ppane-detail">
-          <iframe id="modal-detail-frame" class="pdf-preview-frame" scrolling="no"></iframe>
+        <div class="preview-pane" id="m-ppane-detail" style="overflow: hidden;">
+          <iframe id="modal-detail-frame" class="pdf-preview-frame"></iframe>
           <div class="preview-actions">
             <button class="btn btn-red btn-dl-dpdf">📄 PDF保存</button>
             <button class="btn btn-green btn-dl-dxl">📊 Excel保存</button>
@@ -4614,6 +4614,26 @@
       if (duration > 0) setTimeout(() => t.style.display = 'none', duration);
     };
 
+    // ★追加: iframeをスマホ画面幅に強制フィットさせる共通関数
+    function adjustIframeScale(frameId) {
+      const frame = $(frameId);
+      if (!frame) return;
+      if (window.innerWidth <= 768) {
+        const containerWidth = frame.parentElement.clientWidth;
+        const targetWidth = 800;
+        const scale = containerWidth / targetWidth;
+        frame.style.width = targetWidth + 'px';
+        frame.style.height = (window.innerHeight * 0.7 / scale) + 'px';
+        frame.style.transform = `scale(${scale})`;
+        frame.style.transformOrigin = '0 0';
+        frame.style.border = 'none';
+      } else {
+        frame.style.width = '100%';
+        frame.style.height = '';
+        frame.style.transform = '';
+      }
+    }
+
     function initTabSwitchers() {
       document.querySelectorAll('.preview-tabs').forEach(container => {
         const prefix = container.dataset.targetPrefix;
@@ -4992,6 +5012,10 @@
       }
 
       renderSummaryView(payload, d, 'modal-summary-content');
+
+      // iPhone向けスケーリング適用
+      adjustIframeScale('modal-pdf-frame');
+      adjustIframeScale('modal-detail-frame');
 
       // ファイル名を動的に生成
       const customer = (payload && payload.customer_name) ? payload.customer_name : (d.customer_name || "Unknown");
@@ -5434,40 +5458,12 @@
 
         // iframeにHTMLを直接流し込む
         const frame = $('modal-pdf-frame');
+        adjustIframeScale('modal-pdf-frame');
+        adjustIframeScale('modal-detail-frame');
+
         const doc = frame.contentWindow.document;
         doc.open();
-
-        // スマホ画面幅に合わせてA4サイズ(約800px)を確実におさめる処理
-        let htmlContent = d.html_preview;
-        if (window.innerWidth <= 768) {
-          const frameWidth = window.innerWidth - 64;
-          const targetWidth = 800;
-          const scale = frameWidth / targetWidth;
-
-          htmlContent = htmlContent.replace('</head>', `
-              <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-              <style>
-                  /* iOS/Android共通の強制フィット設定 */
-                  html {
-                      overflow: hidden;
-                      -webkit-text-size-adjust: none !important;
-                      text-size-adjust: none !important;
-                  }
-                  body {
-                      margin: 0;
-                      padding: 0;
-                      width: ${targetWidth}px !important;
-                      height: 1130px !important; /* A4比率を維持 */
-                      transform: scale(${scale});
-                      transform-origin: top left;
-                      background: #fff;
-                      overflow: hidden;
-                  }
-              </style>
-          </head>`);
-        }
-
-        doc.write(htmlContent);
+        doc.write(d.html_preview);
         doc.close();
 
         // ダウンロードボタンの設定 (プレビュー時は保存前のため案内を出す)
