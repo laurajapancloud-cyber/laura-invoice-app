@@ -3827,7 +3827,10 @@
           <span data-sort="status">状態</span>
         </div>
         <div id="hist-list" x-data="{ isDesktop: window.innerWidth >= 1024 }" @resize.window.debounce.100ms="isDesktop = window.innerWidth >= 1024">
-          <template x-if="!$store.app.history.length">
+          <template x-if="$store.app.isLoadingHistory">
+            <div id="skel-wrap" x-html="skeletonRows(4)"></div>
+          </template>
+          <template x-if="!$store.app.isLoadingHistory && !$store.app.history.length">
             <div class="empty-state">
               <div class="empty-state-icon">📒</div>
               <div class="empty-state-title">履歴がまだありません</div>
@@ -4198,6 +4201,7 @@
         customers: [],
         history: [],
         rawHistory: [],
+        isLoadingHistory: false,
         
         async fetchCustomers() {
           try {
@@ -4819,21 +4823,20 @@
     let sortKey = 'created_at', sortDir = 'desc';
 
     async function loadHistory() {
-      const t = $('hist-type-filter')?.value || 'all';
-      // スケルトン表示（既に履歴がある場合は出さない: ちらつき防止）
       const histList = $('hist-list');
+      if (!histList) return;
+      const t = $('hist-type-filter')?.value || 'all';
+      
       const hadData = (Alpine.store('app').history || []).length > 0;
-      if (histList && !hadData) {
-        histList.dataset.loadingSkeleton = '1';
-        histList.insertAdjacentHTML('beforeend', `<div id="skel-wrap">${skeletonRows(4)}</div>`);
-      }
+      if (!hadData) Alpine.store('app').isLoadingHistory = true;
+
       try {
         await Alpine.store('app').fetchHistory(t);
         updateMonthFilter(allHistory);
       } catch (e) {
         console.error("History load error:", e);
       } finally {
-        $('skel-wrap')?.remove();
+        Alpine.store('app').isLoadingHistory = false;
         if (histList) delete histList.dataset.loadingSkeleton;
       }
     }
