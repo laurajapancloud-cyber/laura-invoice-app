@@ -4616,31 +4616,42 @@
 
     // ★追加: iframeをスマホ画面幅に強制フィットさせる共通関数
     function adjustIframeScale(frameId) {
-      const frame = $(frameId);
+      // ID文字列でもDOM要素でも対応
+      const frame = (typeof frameId === 'string') ? $(frameId) : frameId;
       if (!frame) return;
       const container = frame.parentElement;
+
       if (window.innerWidth <= 768) {
         const containerWidth = container.clientWidth;
-        const targetWidth = 720; // 基準幅を少し絞って表示を大きくする
+        const targetWidth = 720; // 基準幅
+        const docHeight = 1020; 
         const scale = containerWidth / targetWidth;
         
-        // A4の比率を考慮した高さ
-        const docHeight = 1020; 
+        // iOS Safari対策: 強制的にサイズを固定
         frame.style.width = targetWidth + 'px';
         frame.style.height = docHeight + 'px';
+        frame.style.maxWidth = 'none';
+        frame.style.maxHeight = 'none';
+        frame.style.minWidth = targetWidth + 'px';
+
         frame.style.transform = `scale(${scale})`;
-        frame.style.transformOrigin = '0 0';
+        frame.style.transformOrigin = 'top left';
         frame.style.border = 'none';
         frame.style.display = 'block';
 
         // コンテナ側の高さを「縮小後の高さ + ボタン等の余白」に設定
         container.style.height = (docHeight * scale + 100) + 'px';
-        container.style.overflow = 'visible';
+        container.style.overflow = 'hidden';
       } else {
+        // PCリセット処理
         frame.style.width = '100%';
-        frame.style.height = '';
-        frame.style.transform = '';
-        container.style.height = '';
+        frame.style.height = '60vh'; // 元のCSS値
+        frame.style.maxWidth = '';
+        frame.style.maxHeight = '';
+        frame.style.minWidth = '';
+        frame.style.transform = 'none';
+        container.style.height = 'auto';
+        container.style.overflow = 'visible';
       }
     }
 
