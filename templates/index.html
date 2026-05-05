@@ -4618,19 +4618,29 @@
     function adjustIframeScale(frameId) {
       const frame = $(frameId);
       if (!frame) return;
+      const container = frame.parentElement;
       if (window.innerWidth <= 768) {
-        const containerWidth = frame.parentElement.clientWidth;
-        const targetWidth = 800;
+        const containerWidth = container.clientWidth;
+        const targetWidth = 800; // 帳票の基準幅
         const scale = containerWidth / targetWidth;
+        
+        // A4の比率(1:1.414)を考慮した高さ
+        const docHeight = 1130; 
         frame.style.width = targetWidth + 'px';
-        frame.style.height = (window.innerHeight * 0.7 / scale) + 'px';
+        frame.style.height = docHeight + 'px';
         frame.style.transform = `scale(${scale})`;
         frame.style.transformOrigin = '0 0';
         frame.style.border = 'none';
+        frame.style.display = 'block';
+
+        // コンテナ側の高さを「縮小後の高さ」に固定して下の余白を消す
+        container.style.height = (docHeight * scale) + 'px';
+        container.style.overflow = 'hidden';
       } else {
         frame.style.width = '100%';
         frame.style.height = '';
         frame.style.transform = '';
+        container.style.height = '';
       }
     }
 
@@ -4645,7 +4655,12 @@
             tab.classList.add('active');
             const targetId = prefix + tab.dataset.ptab;
             parent.querySelectorAll('.preview-pane').forEach(pane => {
-              pane.classList.toggle('active', pane.id === targetId);
+              const isActive = (pane.id === targetId);
+              pane.classList.toggle('active', isActive);
+              if (isActive) {
+                const frame = pane.querySelector('iframe');
+                if (frame) adjustIframeScale(frame.id);
+              }
             });
           };
         });
