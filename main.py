@@ -954,7 +954,7 @@ def build_detail_excel(invoice_number: str, customer_name: str, items: list, doc
     wb = openpyxl.Workbook()
     ws = wb.active
     titles = DOC_TYPE_TITLES.get(doc_type, DOC_TYPE_TITLES["delivery"])
-    ws.title = titles["detail_pdf_title"]
+    ws.title = titles["detail_pdf_title"] + "(新)"
 
     fill_header = PatternFill(start_color="F4ECD8", end_color="F4ECD8", fill_type="solid")
     fill_meta = PatternFill(start_color="FFF8E7", end_color="FFF8E7", fill_type="solid")
