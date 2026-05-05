@@ -48,7 +48,8 @@ except ImportError:
     genai = None
 try:
     from weasyprint import HTML
-except (ImportError, OSError):
+except Exception as e:
+    logger.error("WeasyPrint import failed (PDF generation will be disabled): %s", e)
     HTML = None
 
 from dotenv import load_dotenv
@@ -1058,6 +1059,9 @@ def build_detail_pdf(invoice_number: str, customer_name: str, items: list, doc_t
     <div class="meta"><span>伝票番号: {invoice_number}</span><br><span>取引先: {customer_name}</span></div>
     <table><thead><tr><th>No.</th><th>品番</th><th>カラー</th><th>サイズ</th><th>枚数</th><th>上代</th></tr></thead>
     <tbody>{rows_html}</tbody></table></body></html>"""
+    if HTML is None:
+        logger.error("WeasyPrint is not available. Cannot build detail PDF.")
+        return b""
     return HTML(string=html_str).write_pdf()
 
 def build_invoice_pdf(invoice_data: dict) -> bytes:
@@ -1067,6 +1071,9 @@ def build_invoice_pdf(invoice_data: dict) -> bytes:
     template = env.get_template("invoice_template.html")
     render_data = {**invoice_data, "font_face_css": get_pdf_font_css()}
     html_str = template.render(**render_data)
+    if HTML is None:
+        logger.error("WeasyPrint is not available. Cannot build invoice PDF.")
+        return b""
     return HTML(string=html_str).write_pdf()
 
 def build_invoice_excel(invoice_data: dict) -> bytes:
