@@ -988,54 +988,47 @@ def build_detail_excel(invoice_number: str, customer_name: str, items: list, doc
     ws["A2"].font = Font(size=11)
     ws.merge_cells("A2:E2")
 
-    ROWS_PER_SECTION = 5
-    sections = max(1, (len(items) + ROWS_PER_SECTION - 1) // ROWS_PER_SECTION)
+    # 日付ヘッダー
+    ws["I4"] = f"{reiwa}年"
+    ws["J4"] = f"{now.month}月"
+    ws["K4"] = f"{now.day}日"
+    for c in ['I','J','K']:
+        ws[f"{c}4"].alignment = Alignment(horizontal="center")
+        ws[f"{c}4"].font = Font(size=9, color="555555")
 
-    section_start = 4
-    for s in range(sections):
-        date_row = section_start
-        ws[f"I{date_row}"] = f"{reiwa}年"
-        ws[f"J{date_row}"] = f"{now.month}月"
-        ws[f"K{date_row}"] = f"{now.day}日"
-        for c in ['I','J','K']:
-            ws[f"{c}{date_row}"].alignment = Alignment(horizontal="center")
-            ws[f"{c}{date_row}"].font = Font(size=9, color="555555")
+    # テーブルヘッダー
+    header_row = 5
+    ws.row_dimensions[header_row].height = 22
+    headers_d = {'A':'No.', 'B':'品番', 'C':'枚数', 'D':'上代', 'E':'カラー', 'F':'44', 'G':'46', 'H':'48', 'I':'50', 'J':'52', 'K':'備考'}
+    for col, label in headers_d.items():
+        cell = ws[f"{col}{header_row}"]
+        cell.value = label
+        cell.fill = fill_header
+        cell.font = Font(bold=True, size=10)
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.border = border_thin
 
-        header_row = section_start + 1
-        ws.row_dimensions[header_row].height = 22
-        headers_d = {'A':'No.', 'B':'品番', 'C':'枚数', 'D':'上代', 'E':'カラー', 'F':'44', 'G':'46', 'H':'48', 'I':'50', 'J':'52', 'K':'備考'}
-        for col, label in headers_d.items():
-            cell = ws[f"{col}{header_row}"]
-            cell.value = label
-            cell.fill = fill_header
-            cell.font = Font(bold=True, size=10)
-            cell.alignment = Alignment(horizontal="center", vertical="center")
-            cell.border = border_thin
+    # 商品データ
+    for i, item in enumerate(items):
+        r = header_row + 1 + i
+        ws.row_dimensions[r].height = 22
+        ws[f"A{r}"] = i + 1
+        ws[f"A{r}"].alignment = Alignment(horizontal="center", vertical="center")
+        ws[f"A{r}"].font = Font(size=9, color="888888")
 
-        for i in range(ROWS_PER_SECTION):
-            r = header_row + 1 + i
-            ws.row_dimensions[r].height = 22
-            item_idx = s * ROWS_PER_SECTION + i
-            item = items[item_idx] if item_idx < len(items) else None
-            ws[f"A{r}"] = i + 1
-            ws[f"A{r}"].alignment = Alignment(horizontal="center", vertical="center")
-            ws[f"A{r}"].font = Font(size=9, color="888888")
+        ws[f"B{r}"] = item.get("code", "")
+        ws[f"C{r}"] = item.get("quantity", 0)
+        ws[f"D{r}"] = item.get("unit_price", 0)
+        ws[f"D{r}"].number_format = '#,##0'
+        ws[f"E{r}"] = item.get("color", "")
+        
+        size_val = str(item.get("size", ""))
+        for si, sc in enumerate(SIZE_COLUMNS):
+            if size_val == sc:
+                ws[f"{chr(70+si)}{r}"] = item.get("quantity", 1)
 
-            if item:
-                ws[f"B{r}"] = item.get("code", "")
-                ws[f"C{r}"] = item.get("quantity", 0)
-                ws[f"D{r}"] = item.get("unit_price", 0)
-                ws[f"D{r}"].number_format = '#,##0'
-                ws[f"E{r}"] = item.get("color", "")
-                size_val = str(item.get("size", ""))
-                for si, sc in enumerate(SIZE_COLUMNS):
-                    if size_val == sc:
-                        ws[f"{chr(70+si)}{r}"] = item.get("quantity", 1)
-
-            for col in list('ABCDEFGHIJK'):
-                ws[f"{col}{r}"].border = border_thin
-
-        section_start = header_row + 1 + ROWS_PER_SECTION + 2
+        for col in list('ABCDEFGHIJK'):
+            ws[f"{col}{r}"].border = border_thin
 
     out = BytesIO()
     wb.save(out)
@@ -1049,8 +1042,9 @@ def build_detail_pdf(invoice_number: str, customer_name: str, items: list, doc_t
     for i, item in enumerate(items):
         rows_html += f"<tr><td>{i+1}</td><td>{item.get('code','')}</td><td>{item.get('color','')}</td><td>{item.get('size','')}</td><td>{item.get('quantity',0)}</td><td>¥{item.get('unit_price',0):,}</td></tr>"
     html_str = f"""<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
     <style>{font_css}
-    body{{font-family:'Noto Sans JP',sans-serif;font-size:12px;}}
+    body{{font-family:'Noto Sans JP', -apple-system, BlinkMacSystemFont, sans-serif; font-size:12px;}}
     .title{{font-size:20px;font-weight:bold;text-align:center;margin-bottom:10px;}}
     .meta{{margin-bottom:15px;}}
     table{{width:100%;border-collapse:collapse;}} th,td{{border:1px solid #ccc;padding:6px;text-align:center;}}
