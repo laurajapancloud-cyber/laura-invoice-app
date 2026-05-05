@@ -996,7 +996,7 @@ def build_detail_excel(invoice_number: str, customer_name: str, items: list, doc
         ws[f"{c}4"].alignment = Alignment(horizontal="center")
         ws[f"{c}4"].font = Font(size=9, color="555555")
 
-    # テーブルヘッダー
+    # テーブルヘッダー (1回のみ)
     header_row = 5
     ws.row_dimensions[header_row].height = 22
     headers_d = {'A':'No.', 'B':'品番', 'C':'枚数', 'D':'上代', 'E':'カラー', 'F':'44', 'G':'46', 'H':'48', 'I':'50', 'J':'52', 'K':'備考'}
@@ -1008,27 +1008,39 @@ def build_detail_excel(invoice_number: str, customer_name: str, items: list, doc
         cell.alignment = Alignment(horizontal="center", vertical="center")
         cell.border = border_thin
 
-    # 商品データ
-    for i, item in enumerate(items):
-        r = header_row + 1 + i
-        ws.row_dimensions[r].height = 22
-        ws[f"A{r}"] = i + 1
-        ws[f"A{r}"].alignment = Alignment(horizontal="center", vertical="center")
-        ws[f"A{r}"].font = Font(size=9, color="888888")
+    # 商品データ (5行ずつのブロック、間隔なし)
+    ROWS_PER_BLOCK = 5
+    total_blocks = max(1, (len(items) + ROWS_PER_BLOCK - 1) // ROWS_PER_BLOCK)
+    
+    current_r = header_row + 1
+    for b in range(total_blocks):
+        for i in range(ROWS_PER_BLOCK):
+            r = current_r
+            ws.row_dimensions[r].height = 22
+            
+            # No. は 1-5 の繰り返し
+            ws[f"A{r}"] = i + 1
+            ws[f"A{r}"].alignment = Alignment(horizontal="center", vertical="center")
+            ws[f"A{r}"].font = Font(size=9, color="888888")
 
-        ws[f"B{r}"] = item.get("code", "")
-        ws[f"C{r}"] = item.get("quantity", 0)
-        ws[f"D{r}"] = item.get("unit_price", 0)
-        ws[f"D{r}"].number_format = '#,##0'
-        ws[f"E{r}"] = item.get("color", "")
-        
-        size_val = str(item.get("size", ""))
-        for si, sc in enumerate(SIZE_COLUMNS):
-            if size_val == sc:
-                ws[f"{chr(70+si)}{r}"] = item.get("quantity", 1)
+            item_idx = b * ROWS_PER_BLOCK + i
+            if item_idx < len(items):
+                item = items[item_idx]
+                ws[f"B{r}"] = item.get("code", "")
+                ws[f"C{r}"] = item.get("quantity", 0)
+                ws[f"D{r}"] = item.get("unit_price", 0)
+                ws[f"D{r}"].number_format = '#,##0'
+                ws[f"E{r}"] = item.get("color", "")
+                
+                size_val = str(item.get("size", ""))
+                for si, sc in enumerate(SIZE_COLUMNS):
+                    if size_val == sc:
+                        ws[f"{chr(70+si)}{r}"] = item.get("quantity", 1)
 
-        for col in list('ABCDEFGHIJK'):
-            ws[f"{col}{r}"].border = border_thin
+            for col in list('ABCDEFGHIJK'):
+                ws[f"{col}{r}"].border = border_thin
+            
+            current_r += 1
 
     out = BytesIO()
     wb.save(out)
