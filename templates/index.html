@@ -3021,6 +3021,304 @@
       pointer-events: none;
       z-index: 100001;
     }
+
+    /* =========================================================
+       ===== UX Enhancements (2026 update) =====================
+       ========================================================= */
+
+    /* ---- Skeleton shimmer (体感速度向上) ---- */
+    @keyframes skel-shimmer {
+      0% { background-position: -200% 0; }
+      100% { background-position: 200% 0; }
+    }
+    .skel {
+      background: linear-gradient(90deg,
+        rgba(255,255,255,0.04) 0%,
+        rgba(255,255,255,0.10) 50%,
+        rgba(255,255,255,0.04) 100%);
+      background-size: 200% 100%;
+      animation: skel-shimmer 1.4s ease-in-out infinite;
+      border-radius: 8px;
+      display: inline-block;
+    }
+    .skel-row {
+      height: 64px;
+      width: 100%;
+      margin: 8px 0;
+      border-radius: 12px;
+    }
+    .skel-line {
+      height: 12px;
+      border-radius: 6px;
+    }
+
+    /* ---- Empty state ---- */
+    .empty-state {
+      text-align: center;
+      padding: 48px 20px;
+      color: var(--text-muted);
+    }
+    .empty-state-icon {
+      font-size: 48px;
+      opacity: 0.6;
+      margin-bottom: 12px;
+      filter: sepia(0.4) hue-rotate(-15deg) saturate(1.3);
+    }
+    .empty-state-title {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 20px;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+      letter-spacing: 0.04em;
+    }
+    .empty-state-desc {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 18px;
+      line-height: 1.6;
+    }
+    .empty-state .btn {
+      display: inline-flex;
+      max-width: 220px;
+      margin: 0 auto;
+    }
+
+    /* ---- Sticky table header (デスクトップ履歴) ---- */
+    .hist-table-header.sticky-on {
+      position: sticky;
+      top: 0;
+      background: var(--bg-elevated);
+      z-index: 5;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+    }
+
+    /* ---- Micro-animations for buttons ---- */
+    .btn, .doctype-btn, .sidebar-tab, .tab {
+      transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1),
+                  box-shadow 0.2s ease,
+                  background-color 0.2s ease,
+                  color 0.2s ease,
+                  border-color 0.2s ease;
+    }
+    .btn:active:not(:disabled),
+    .doctype-btn:active {
+      transform: scale(0.96);
+    }
+
+    /* ---- Long-press confirm progress ring ---- */
+    .btn-longpress {
+      position: relative;
+      overflow: hidden;
+    }
+    .btn-longpress::after {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 0;
+      background: rgba(255, 255, 255, 0.25);
+      transition: width 0.05s linear;
+      pointer-events: none;
+    }
+    .btn-longpress.pressing::after {
+      width: var(--lp-progress, 0%);
+    }
+
+    /* ---- Mobile bottom navigation ---- */
+    .bottom-nav {
+      display: none;
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 90;
+      background: linear-gradient(180deg, rgba(20,20,20,0.92), rgba(10,10,10,0.98));
+      border-top: 1px solid var(--border);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
+    }
+    .bottom-nav-inner {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 2px;
+    }
+    .bn-tab {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      padding: 8px 4px;
+      border-radius: 10px;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      user-select: none;
+      transition: color 0.2s, background 0.2s, transform 0.15s;
+    }
+    .bn-tab .bn-icon {
+      font-size: 20px;
+      line-height: 1;
+    }
+    .bn-tab.active {
+      color: var(--gold-bright);
+      background: var(--gold-soft);
+    }
+    .bn-tab:active {
+      transform: scale(0.94);
+    }
+
+    /* ---- Floating Action Button (mobile) ---- */
+    .fab {
+      display: none;
+      position: fixed;
+      right: 18px;
+      bottom: calc(78px + env(safe-area-inset-bottom));
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      border: none;
+      background: linear-gradient(135deg, var(--gold-bright) 0%, var(--gold) 50%, var(--gold-deep) 100%);
+      color: #1a1a1a;
+      font-size: 26px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 8px 24px rgba(201, 169, 97, 0.45),
+                  0 4px 12px rgba(0, 0, 0, 0.4);
+      z-index: 95;
+      transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s;
+    }
+    .fab:active { transform: scale(0.92); }
+    .fab:hover { box-shadow: 0 10px 28px rgba(201, 169, 97, 0.55); }
+
+    /* ---- Mobile only: show bottom-nav, hide top tabs row, add bottom padding ---- */
+    @media (max-width: 1023px) {
+      .bottom-nav { display: block; }
+      .fab { display: flex; align-items: center; justify-content: center; }
+      body { padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
+      .app-header .tabs { display: none; }
+    }
+
+    /* ---- Bottom sheet (mobile modal) ---- */
+    @media (max-width: 768px) {
+      .modal-overlay.modal-as-sheet { align-items: flex-end !important; }
+      .modal-overlay.modal-as-sheet .modal-content {
+        width: 100% !important;
+        max-width: 100% !important;
+        max-height: 92vh !important;
+        border-radius: 18px 18px 0 0 !important;
+        animation: sheet-slide-up 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      @keyframes sheet-slide-up {
+        from { transform: translateY(100%); }
+        to   { transform: translateY(0); }
+      }
+      .modal-as-sheet .modal-content::before {
+        content: '';
+        display: block;
+        width: 36px;
+        height: 4px;
+        background: var(--border-strong);
+        border-radius: 2px;
+        margin: 8px auto 0;
+      }
+    }
+
+    /* ---- Swipe actions (history rows) ---- */
+    .swipe-row {
+      position: relative;
+      overflow: hidden;
+      touch-action: pan-y;
+    }
+    .swipe-row-content {
+      position: relative;
+      transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      will-change: transform;
+      background: var(--bg-card);
+    }
+    .swipe-row-actions {
+      position: absolute;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      display: flex;
+      align-items: stretch;
+      gap: 1px;
+    }
+    .swipe-action {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 84px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      color: #fff;
+      cursor: pointer;
+      border: none;
+      user-select: none;
+    }
+    .swipe-action.danger { background: linear-gradient(180deg, #b03a3a, #841f1f); }
+    .swipe-action.info   { background: linear-gradient(180deg, #345aa1, #21407c); }
+    .swipe-action.copy   { background: linear-gradient(180deg, #4a4a4a, #2c2c2c); }
+
+    /* ---- Light mode (auto via prefers-color-scheme + manual override) ---- */
+    [data-theme="light"] {
+      --bg-base: #faf7f0;
+      --bg-elevated: #ffffff;
+      --bg-card: #ffffff;
+      --bg-card-hover: #f5efe2;
+      --bg-input: #f9f6ee;
+      --gold: #a8893f;
+      --gold-bright: #c9a961;
+      --gold-deep: #6b5828;
+      --gold-soft: rgba(168, 137, 63, 0.12);
+      --text-primary: #1d1a13;
+      --text-secondary: #4a4434;
+      --text-muted: #807558;
+      --border: rgba(168, 137, 63, 0.22);
+      --border-strong: rgba(168, 137, 63, 0.45);
+      --border-subtle: rgba(0, 0, 0, 0.08);
+    }
+    [data-theme="light"] body {
+      background:
+        radial-gradient(ellipse 80% 50% at 50% -10%, rgba(168, 137, 63, .08), transparent 60%),
+        var(--bg-base);
+    }
+    [data-theme="light"] .form-group input,
+    [data-theme="light"] .form-group select {
+      background: #ffffff;
+      color: var(--text-primary);
+      border-color: rgba(0,0,0,0.12);
+    }
+    [data-theme="light"] .form-group input:focus,
+    [data-theme="light"] .form-group select:focus {
+      background: #fffdf6;
+    }
+
+    .theme-toggle {
+      background: transparent;
+      border: 1px solid var(--border-strong);
+      color: var(--text-secondary);
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      transition: all 0.2s;
+    }
+    .theme-toggle:hover {
+      color: var(--gold-bright);
+      border-color: var(--gold);
+    }
   </style>
 </head>
 
@@ -3069,7 +3367,7 @@
   </div>
 
   <!-- プレビューモーダル -->
-  <div id="modal-preview" class="modal-overlay">
+  <div id="modal-preview" class="modal-overlay modal-as-sheet">
     <div class="modal-content">
       <div class="modal-header">
         <div style="font-weight:700; color:var(--gold-bright)" id="modal-title">📄 ドキュメントプレビュー</div>
@@ -3186,6 +3484,27 @@
     </div>
   </aside>
 
+  <!-- ===== Mobile Bottom Navigation ===== -->
+  <nav class="bottom-nav" id="bottom-nav" aria-label="主要ナビゲーション">
+    <div class="bottom-nav-inner">
+      <div class="bn-tab active" data-tab="create" data-bn="create">
+        <span class="bn-icon">✂</span><span>作成</span>
+      </div>
+      <div class="bn-tab" data-tab="history" data-bn="history">
+        <span class="bn-icon">📒</span><span>履歴</span>
+      </div>
+      <div class="bn-tab" data-tab="dashboard" data-bn="dashboard">
+        <span class="bn-icon">📊</span><span>分析</span>
+      </div>
+      <div class="bn-tab" data-tab="settings" data-bn="settings">
+        <span class="bn-icon">⚙</span><span>設定</span>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ===== Floating Action Button (mobile only) ===== -->
+  <button id="fab-new" class="fab" type="button" aria-label="新規作成">＋</button>
+
   <!-- ===== Command Palette (⌘K) ===== -->
   <div id="cmdk-overlay" class="cmdk-overlay">
     <div class="cmdk-panel">
@@ -3225,6 +3544,7 @@
         <span>🔍</span><span>検索...</span>
         <span class="cmdk-shortcut">⌘K</span>
       </button>
+      <button id="theme-toggle" class="theme-toggle" type="button" title="テーマ切替" aria-label="テーマ切替" style="margin-left:8px">☀</button>
     </div>
   </div>
 
@@ -3266,7 +3586,7 @@
             <input type="text" id="inp-manual-customer" placeholder="例: 株式会社 〇〇 御中">
           </div>
           <div class="form-group" style="max-width:90px" x-data><label>掛率(%)</label><input type="number" id="inp-rate"
-              min="0" max="100" x-model.number="$store.app.rate"></div>
+              inputmode="numeric" min="0" max="100" x-model.number="$store.app.rate"></div>
         </div>
         <div class="form-row">
           <div class="form-group"><label>AI モデル</label>
@@ -3327,12 +3647,12 @@
                   <td><input x-model="item.size"></td>
                   <td>
                     <div class="qty-stepper">
-                      <button class="qty-btn minus" type="button" @click="item.quantity--" :disabled="item.quantity <= 1">-</button>
-                      <input type="number" x-model.number="item.quantity">
-                      <button class="qty-btn plus" type="button" @click="item.quantity++">+</button>
+                      <button class="qty-btn minus" type="button" @click="item.quantity--; haptic('light')" :disabled="item.quantity <= 1">-</button>
+                      <input type="number" inputmode="numeric" pattern="[0-9]*" x-model.number="item.quantity">
+                      <button class="qty-btn plus" type="button" @click="item.quantity++; haptic('light')">+</button>
                     </div>
                   </td>
-                  <td><input type="number" x-model.number="item.unit_price" style="font-weight:700; color:var(--gold-bright)"></td>
+                  <td><input type="number" inputmode="numeric" pattern="[0-9]*" x-model.number="item.unit_price" style="font-weight:700; color:var(--gold-bright)"></td>
                   <td style="text-align:right; font-family:'Cormorant Garamond',serif; font-size:17px; font-weight:700; color:var(--gold-bright); white-space:nowrap;" x-text="'¥' + $store.app.calcItemAmount(item).toLocaleString()"></td>
                   <td style="text-align:center">
                     <button class="item-card-del" type="button" @click="$store.app.removeItem(index)" style="position:static; padding:4px 8px; background:rgba(224,97,87,0.12); border-radius:4px; font-size:12px">✕</button>
@@ -3382,12 +3702,12 @@
                 <div class="item-field"><label>サイズ</label><input x-model="item.size"></div>
                 <div class="item-field"><label>数量</label>
                   <div class="qty-stepper">
-                    <button type="button" class="qty-btn minus" @click="item.quantity--" :disabled="item.quantity <= 1">-</button>
-                    <input type="number" x-model.number="item.quantity">
-                    <button type="button" class="qty-btn plus" @click="item.quantity++">+</button>
+                    <button type="button" class="qty-btn minus" @click="item.quantity--; haptic('light')" :disabled="item.quantity <= 1">-</button>
+                    <input type="number" inputmode="numeric" pattern="[0-9]*" x-model.number="item.quantity">
+                    <button type="button" class="qty-btn plus" @click="item.quantity++; haptic('light')">+</button>
                   </div>
                 </div>
-                <div class="item-field"><label>単価</label><input type="number" x-model.number="item.unit_price"></div>
+                <div class="item-field"><label>単価</label><input type="number" inputmode="numeric" pattern="[0-9]*" x-model.number="item.unit_price"></div>
               </div>
               
               <div class="item-card-footer">
@@ -3495,8 +3815,8 @@
             <option value="">すべての月</option>
           </select>
         </div>
-        <!-- デスクトップでだけ表示されるテーブルヘッダー -->
-        <div class="hist-table-header" style="display:none">
+        <!-- デスクトップでだけ表示されるテーブルヘッダー (Sticky) -->
+        <div class="hist-table-header sticky-on" style="display:none">
           <span data-sort="invoice_number">伝票番号</span>
           <span data-sort="doc_type">種別</span>
           <span data-sort="customer_name">取引先 / 件数</span>
@@ -3505,7 +3825,15 @@
         </div>
         <div id="hist-list" x-data="{ isDesktop: window.innerWidth >= 1024 }" @resize.window.debounce.100ms="isDesktop = window.innerWidth >= 1024">
           <template x-if="!$store.app.history.length">
-            <div class="empty-state">履歴がありません</div>
+            <div class="empty-state">
+              <div class="empty-state-icon">📒</div>
+              <div class="empty-state-title">履歴がまだありません</div>
+              <div class="empty-state-desc">タグの撮影 → AI解析 → 確定で<br>ここに伝票が並びます。</div>
+              <button class="btn btn-gold" type="button"
+                      @click="document.querySelector('.tab[data-tab=create]').click(); $('btn-new')?.click(); haptic('medium');">
+                ＋ 新規作成へ
+              </button>
+            </div>
           </template>
           
           <template x-for="inv in $store.app.history" :key="inv.id">
@@ -3554,12 +3882,18 @@
                     </div>
                     <div class="hist-actions-row">
                       <button class="btn btn-gold btn-sm" @click.stop="quickPreview(inv.id)">高速プレビュー</button>
-                      <button x-if="inv.status !== 'locked'" class="btn btn-gold btn-sm" @click.stop="lockHist(inv.id)">確定</button>
+                      <button x-if="inv.status !== 'locked'" class="btn btn-gold btn-sm"
+                              x-init="bindLongPress($el, () => lockHist(inv.id))"
+                              title="長押しで確定"
+                              @click.stop.prevent>確定 (長押し)</button>
                       <button x-if="inv.status === 'locked'" class="btn btn-outline btn-sm" @click.stop="unlockHist(inv.id)">解除</button>
                       <button x-if="inv.status === 'locked'" class="btn btn-blue btn-sm" @click.stop="uploadDrive(inv.id, $el)">保存 Drive</button>
                       <button class="btn btn-outline btn-sm" @click.stop="downloadZip(inv.id)">ZIP</button>
                       <button x-if="inv.status !== 'locked'" class="btn btn-outline btn-sm" @click.stop="editHist(inv.id)">編集</button>
-                      <button class="btn btn-red btn-sm" @click.stop="delHist(inv.id)">削除</button>
+                      <button class="btn btn-red btn-sm"
+                              x-init="bindLongPress($el, () => delHist(inv.id))"
+                              title="長押しで削除"
+                              @click.stop.prevent>削除 (長押し)</button>
                     </div>
                   </div>
                 </div>
@@ -3636,10 +3970,20 @@
             <div class="form-group"><label>取引先名</label><input type="text" id="new-cust-name"
                 placeholder="例: 株式会社 〇〇 御中"></div>
             <div class="form-group" style="max-width:90px"><label>掛率(%)</label><input type="number" id="new-cust-rate"
-                value="35"></div>
+                inputmode="numeric" value="35"></div>
           </div>
           <button class="btn btn-gold btn-sm" id="btn-add-cust" style="width:100%;margin-top:6px">＋
             取引先を追加</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">⚜ 表示設定</div>
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:14px; padding:6px 2px;">
+          <div style="min-width:0">
+            <div style="font-weight:600; color:var(--text-primary)">テーマ</div>
+            <div style="font-size:12px; color:var(--text-muted); margin-top:4px">ライト / ダークの切り替え</div>
+          </div>
+          <button id="theme-toggle-settings" class="theme-toggle" type="button" title="テーマ切替" aria-label="テーマ切替">☀</button>
         </div>
       </div>
       <div class="card">
@@ -3679,6 +4023,121 @@
 
   <script>
     const $ = id => document.getElementById(id);
+
+    // ===== UX Utilities =====
+    // 触覚フィードバック (Web Vibration API + iOS WebView ブリッジ対応)
+    window.haptic = function (kind = 'light') {
+      const map = { light: 10, medium: 18, heavy: 30, success: [10, 30, 10], error: [40, 60, 40] };
+      const pattern = map[kind] ?? 10;
+      try { navigator.vibrate && navigator.vibrate(pattern); } catch (e) { }
+      // iOS WebView 用ブリッジ（任意・存在すれば送信）
+      try { window.webkit?.messageHandlers?.haptic?.postMessage(kind); } catch (e) { }
+    };
+
+    // 長押し確定: 指定ミリ秒押し続けると callback が走る
+    window.bindLongPress = function (btn, callback, holdMs = 1200) {
+      if (!btn || btn.dataset.lpBound) return;
+      btn.dataset.lpBound = '1';
+      btn.classList.add('btn-longpress');
+      let timer = null, start = 0, raf = 0;
+      const reset = () => {
+        cancelAnimationFrame(raf);
+        clearTimeout(timer);
+        btn.classList.remove('pressing');
+        btn.style.setProperty('--lp-progress', '0%');
+        timer = null;
+      };
+      const begin = (e) => {
+        if (btn.disabled) return;
+        e.preventDefault();
+        start = Date.now();
+        btn.classList.add('pressing');
+        haptic('light');
+        const tick = () => {
+          const p = Math.min(100, ((Date.now() - start) / holdMs) * 100);
+          btn.style.setProperty('--lp-progress', p + '%');
+          if (p < 100) raf = requestAnimationFrame(tick);
+        };
+        raf = requestAnimationFrame(tick);
+        timer = setTimeout(() => {
+          haptic('success');
+          reset();
+          callback();
+        }, holdMs);
+      };
+      btn.addEventListener('pointerdown', begin);
+      btn.addEventListener('pointerup', reset);
+      btn.addEventListener('pointerleave', reset);
+      btn.addEventListener('pointercancel', reset);
+    };
+
+    // スワイプアクション: 履歴行を左にスワイプして操作ボタンを表示
+    window.bindSwipeRow = function (row, actions) {
+      if (!row || row.dataset.swipeBound) return;
+      row.dataset.swipeBound = '1';
+      const content = row.querySelector('.swipe-row-content');
+      const actionsEl = row.querySelector('.swipe-row-actions');
+      if (!content || !actionsEl) return;
+      let startX = 0, currentX = 0, dragging = false, opened = false;
+      const maxX = -Math.min(actions.length * 84, 252);
+
+      const onStart = (e) => {
+        const t = e.touches?.[0] || e;
+        startX = t.clientX;
+        dragging = true;
+        content.style.transition = 'none';
+      };
+      const onMove = (e) => {
+        if (!dragging) return;
+        const t = e.touches?.[0] || e;
+        let dx = t.clientX - startX + (opened ? maxX : 0);
+        if (dx > 0) dx = 0;
+        if (dx < maxX - 40) dx = maxX - 40;
+        currentX = dx;
+        content.style.transform = `translateX(${dx}px)`;
+      };
+      const onEnd = () => {
+        if (!dragging) return;
+        dragging = false;
+        content.style.transition = '';
+        opened = currentX < maxX / 2;
+        content.style.transform = opened ? `translateX(${maxX}px)` : 'translateX(0)';
+        if (opened) haptic('light');
+      };
+      content.addEventListener('touchstart', onStart, { passive: true });
+      content.addEventListener('touchmove', onMove, { passive: true });
+      content.addEventListener('touchend', onEnd);
+      // 行外クリックで閉じる
+      document.addEventListener('click', (e) => {
+        if (opened && !row.contains(e.target)) {
+          opened = false;
+          content.style.transform = 'translateX(0)';
+        }
+      });
+    };
+
+    // スケルトン HTML 生成
+    window.skeletonRows = function (count = 4) {
+      let html = '';
+      for (let i = 0; i < count; i++) {
+        html += `<div class="skel skel-row"></div>`;
+      }
+      return html;
+    };
+
+    // テーマ切替 (light/dark)
+    window.applyTheme = function (theme) {
+      if (!theme) {
+        const stored = localStorage.getItem('laura-theme');
+        const prefers = window.matchMedia?.('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+        theme = stored || prefers;
+      }
+      document.documentElement.setAttribute('data-theme', theme);
+      localStorage.setItem('laura-theme', theme);
+      const icon = theme === 'light' ? '🌙' : '☀';
+      document.querySelectorAll('.theme-toggle').forEach(btn => { btn.textContent = icon; });
+    };
+    applyTheme();
 
     // --- Alpine.js Store ---
     document.addEventListener('alpine:init', () => {
@@ -4348,12 +4807,22 @@
 
     async function loadHistory() {
       const t = $('hist-type-filter')?.value || 'all';
+      // スケルトン表示（既に履歴がある場合は出さない: ちらつき防止）
+      const histList = $('hist-list');
+      const hadData = (Alpine.store('app').history || []).length > 0;
+      if (histList && !hadData) {
+        histList.dataset.loadingSkeleton = '1';
+        histList.insertAdjacentHTML('beforeend', `<div id="skel-wrap">${skeletonRows(4)}</div>`);
+      }
       try {
         await Alpine.store('app').fetchHistory(t);
         updateMonthFilter(allHistory);
         applyHistoryFilters();
       } catch (e) {
         console.error("History load error:", e);
+      } finally {
+        $('skel-wrap')?.remove();
+        if (histList) delete histList.dataset.loadingSkeleton;
       }
     }
     $('hist-type-filter')?.addEventListener('change', loadHistory);
@@ -4408,10 +4877,15 @@
     }
 
     async function delHist(id) {
-      if (!confirm('この伝票を削除してもよろしいですか？')) return;
+      // 長押し UI で誤タップは抑止済み。確認ダイアログは省略してフローを軽くする。
+      // Optimistic UI: 即座にリストから消す。失敗時はリロードで戻す。
+      const store = Alpine.store('app');
+      const before = (store.history || []).slice();
+      store.history = before.filter(h => h.id !== id);
       try {
         const r = await fetch(`/api/history/${id}`, { method: 'DELETE' });
         if (!r.ok) throw new Error('削除に失敗しました');
+        haptic('success');
         toast('✦ 削除完了', 'ok');
         if (selectedHistId === id) {
           selectedHistId = null;
@@ -4419,13 +4893,20 @@
           if (pane) pane.innerHTML = '';
         }
         loadHistory();
-      } catch (e) { toast(e.message, 'err'); }
+      } catch (e) {
+        // 失敗時はロールバック
+        store.history = before;
+        haptic('error');
+        toast(e.message, 'err');
+      }
     }
 
     async function lockHist(id) {
-      if (!confirm('この伝票を確定しますか？確定後は内容を編集できません。')) return;
+      // 長押し UI で確認済み。確認ダイアログは省略。
+      haptic('medium');
       jobManager.enqueue('lock', `/api/jobs/lock/${id}`, {}, {
         onSuccess: () => {
+          haptic('success');
           loadHistory();
           if (selectedHistId === id) selectHistItem({ id });
         }
@@ -4464,7 +4945,7 @@
         if (pane && isDesktop) {
           const lockBtn = d.status === 'locked'
             ? `<button class="btn btn-outline btn-sm" onclick="unlockHist(${d.invoice_id})">🔓 解除</button>`
-            : `<button class="btn btn-gold btn-sm" onclick="lockHist(${d.invoice_id})">✦ 確定</button>`;
+            : `<button class="btn btn-gold btn-sm" id="dt-lock-${d.invoice_id}" data-lock-id="${d.invoice_id}">✦ 確定 (長押し)</button>`;
           const driveBtn = d.status === 'locked'
             ? `<button class="btn btn-blue btn-sm" onclick="uploadDrive(${d.invoice_id}, this)"><div class="spinner"></div>☁️ Drive</button>`
             : '';
@@ -4511,6 +4992,9 @@
           initTabSwitchers();
           const payload = { customer_name: d.customer_name, discount_rate: d.discount_rate, items: d.items };
           renderSummaryView(payload, d, 'hist-summary-content');
+          // 重要操作の長押し化
+          const lockEl = document.querySelector(`[data-lock-id="${d.invoice_id}"]`);
+          if (lockEl) bindLongPress(lockEl, () => lockHist(d.invoice_id));
         } else {
           pdfData = d.pdf_base64; excelData = d.excel_base64;
           detailPdfData = d.detail_pdf_base64; detailExcelData = d.detail_excel_base64;
@@ -5159,12 +5643,40 @@
         if (t.classList.contains('active')) {
           document.querySelectorAll('.sidebar-tab').forEach(s => s.classList.remove('active'));
           document.querySelector(`.sidebar-tab[data-tab="${t.dataset.tab}"]`)?.classList.add('active');
+          // モバイル下タブとも同期
+          document.querySelectorAll('.bn-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === t.dataset.tab));
           const tc = $('topbar-current');
           if (tc) tc.textContent = tabLabels[t.dataset.tab] || '';
+          // 新規作成時のみ FAB を非表示（同タブ内で意味がないため）
+          const fab = $('fab-new');
+          if (fab) fab.style.display = (t.dataset.tab === 'create') ? 'none' : '';
         }
       });
     });
     document.querySelectorAll('.tab').forEach(t => observer.observe(t, { attributes: true, attributeFilter: ['class'] }));
+
+    // ===== Mobile Bottom Nav handlers =====
+    document.querySelectorAll('.bn-tab').forEach(b => b.addEventListener('click', () => {
+      haptic('light');
+      document.querySelector(`.tab[data-tab="${b.dataset.tab}"]`)?.click();
+    }));
+
+    // ===== FAB (新規作成 quick) =====
+    $('fab-new')?.addEventListener('click', () => {
+      haptic('medium');
+      document.querySelector('.tab[data-tab="create"]')?.click();
+      $('btn-new')?.click();
+    });
+
+    // ===== Theme toggle =====
+    document.querySelectorAll('.theme-toggle').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const current = document.documentElement.getAttribute('data-theme') || 'dark';
+        const next = current === 'light' ? 'dark' : 'light';
+        applyTheme(next);
+        haptic('light');
+      });
+    });
 
     // Statusbar clock
     function updateClock() {

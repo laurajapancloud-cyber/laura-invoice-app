@@ -1,8 +1,7 @@
 import os
 import json
+import logging
 import secrets
-import psycopg2
-from psycopg2.extras import RealDictCursor
 from typing import Annotated, List, Dict, Any, Optional
 import base64
 from io import BytesIO
@@ -12,17 +11,41 @@ import time
 import re
 import requests
 import uuid
-from supabase import create_client, Client as SupabaseClient
+
+# psycopg2 / supabase はオプション (ローカル UI プレビューでは不要)
+try:
+    import psycopg2
+    from psycopg2.extras import RealDictCursor
+except ImportError:
+    psycopg2 = None
+    RealDictCursor = None
+
+try:
+    from supabase import create_client, Client as SupabaseClient
+except ImportError:
+    create_client = None
+    SupabaseClient = None
+
+# ==================== Logging Setup ====================
+logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "INFO").upper(),
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
+logger = logging.getLogger("laura")
 
 from fastapi import FastAPI, UploadFile, File, Depends, HTTPException, status, Response, Request, Form, BackgroundTasks
 from fastapi.staticfiles import StaticFiles
 from fastapi.security import APIKeyCookie
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, RedirectResponse, StreamingResponse, Response
+from fastapi.concurrency import run_in_threadpool
 import zipfile
 import urllib.parse
 import hashlib
-import google.generativeai as genai
+try:
+    import google.generativeai as genai
+except ImportError:
+    genai = None
 try:
     from weasyprint import HTML
 except (ImportError, OSError):
@@ -72,6 +95,8 @@ load_dotenv()
 
 APP_USERNAME = os.getenv("APP_USERNAME")
 APP_PASSWORD = os.getenv("APP_PASSWORD")
+# テストモード（認証情報なしで test/test ログインを許可）。明示的に "true" を指定した時のみ有効。
+DEV_MODE = os.getenv("DEV_MODE", "").lower() == "true"
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 GOOGLE_CREDENTIALS_JSON = os.getenv("GOOGLE_CREDENTIALS_JSON")
@@ -84,8 +109,8 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
 STORAGE_BUCKET = "invoices"
 
-supabase_client: Optional[SupabaseClient] = None
-if SUPABASE_URL and SUPABASE_SERVICE_KEY:
+supabase_client: Optional["SupabaseClient"] = None
+if SUPABASE_URL and SUPABASE_SERVICE_KEY and create_client:
     supabase_client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
 DOC_TYPE_PREFIXES = {
@@ -107,9 +132,6 @@ def storage_upload(path: str, data: bytes, mime: str) -> str:
     """Supabase Storage にアップロードし、保存パスを返す"""
     if not supabase_client:
         raise Exception("Supabase Storage が未設定です")
-    try:
-        supabase_client.storage.from_(STORAGE_BUCKET).remove([path])
-    except: pass
     supabase_client.storage.from_(STORAGE_BUCKET).upload(
         path, data, file_options={"content-type": mime, "upsert": "true"}
     )
@@ -120,11 +142,15 @@ def storage_download(path: str) -> bytes:
     if not supabase_client:
         raise Exception("Supabase Storage が未設定です")
     return supabase_client.storage.from_(STORAGE_BUCKET).download(path)
-    print("Warning: Missing required environment variables.")
 
 # AI Initialization
-genai.configure(api_key=GEMINI_API_KEY)
-gemini_model = genai.GenerativeModel("gemini-2.5-flash")
+gemini_model = None
+if genai and GEMINI_API_KEY:
+    try:
+        genai.configure(api_key=GEMINI_API_KEY)
+        gemini_model = genai.GenerativeModel("gemini-2.5-flash")
+    except Exception as e:
+        logger.warning("Gemini init failed: %s", e)
 
 openai_client = None
 if OPENAI_API_KEY and OpenAI:
@@ -151,7 +177,7 @@ if GOOGLE_CREDENTIALS_JSON and vision:
         creds = service_account.Credentials.from_service_account_info(creds_dict)
         vision_client = vision.ImageAnnotatorClient(credentials=creds)
     except Exception as e:
-        print(f"Warning: Cloud Vision init failed: {e}")
+        logger.warning("Cloud Vision init failed: %s", e)
 
 def get_drive_service():
     """Google Drive API service (uses same service account JSON as Vision)."""
@@ -165,7 +191,7 @@ def get_drive_service():
         )
         return gdrive_build("drive", "v3", credentials=creds, cache_discovery=False)
     except Exception as e:
-        print(f"Drive init failed: {e}")
+        logger.warning("Drive init failed: %s", e)
         return None
 
 def extract_json_array(text: str):
@@ -198,7 +224,10 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 
 def get_db():
     if not DATABASE_URL:
-        print("Warning: DATABASE_URL not set. Running in NO-DB mode.")
+        logger.warning("DATABASE_URL not set. Running in NO-DB mode.")
+        return None
+    if not psycopg2:
+        logger.warning("psycopg2 がインストールされていません。NO-DB モードで動作します。")
         return None
     # SupabaseのURIに含まれるSSLモードに対応
     conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
@@ -320,16 +349,15 @@ def init_db():
                 ("株式会社 タム 御中", 35),
                 ("株式会社 サンプル 御中", 40),
             ])
-    conn.commit()
-    conn.close()
+    try:
+        conn.commit()
+    finally:
+        conn.close()
 
 def generate_invoice_number(doc_type='delivery'):
-    conn = require_db()
-    if not conn: return f"LJ-ERROR"
-    with conn.cursor() as cur:
+    with db_conn() as conn, conn.cursor() as cur:
         res = generate_invoice_number_safe(cur, doc_type)
-    conn.commit()
-    conn.close()
+        conn.commit()
     return res
 
 def generate_invoice_number_safe(cur, doc_type):
@@ -355,39 +383,46 @@ def db_create_job(job_type: str, payload: dict):
     conn = get_db()
     if not conn: return jid
     import random
-    with conn.cursor() as cur:
-        # 50回に1回程度の確率で、7日以上前の古いジョブを掃除する
-        if random.random() < 0.02:
-            try:
-                cur.execute("DELETE FROM jobs WHERE created_at < NOW() - INTERVAL '7 days'")
-            except: pass
-        
-        cur.execute(
-            "INSERT INTO jobs (id, type, status, payload) VALUES (%s, %s, %s, %s)",
-            (jid, job_type, 'pending', json.dumps(payload))
-        )
-        conn.commit()
-    conn.close()
+    try:
+        with conn.cursor() as cur:
+            # 50回に1回程度の確率で、7日以上前の古いジョブを掃除する
+            if random.random() < 0.02:
+                try:
+                    cur.execute("DELETE FROM jobs WHERE created_at < NOW() - INTERVAL '7 days'")
+                except Exception as e:
+                    logger.warning("jobs gc failed: %s", e)
+
+            cur.execute(
+                "INSERT INTO jobs (id, type, status, payload) VALUES (%s, %s, %s, %s)",
+                (jid, job_type, 'pending', json.dumps(payload))
+            )
+            conn.commit()
+    finally:
+        conn.close()
     return jid
 
 def db_update_job(jid: str, status: str, result: dict = None, error: str = None):
     conn = get_db()
     if not conn: return
-    with conn.cursor() as cur:
-        cur.execute(
-            "UPDATE jobs SET status=%s, result=%s, error=%s, updated_at=NOW() WHERE id=%s",
-            (status, json.dumps(result) if result else None, error, jid)
-        )
-        conn.commit()
-    conn.close()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE jobs SET status=%s, result=%s, error=%s, updated_at=NOW() WHERE id=%s",
+                (status, json.dumps(result) if result else None, error, jid)
+            )
+            conn.commit()
+    finally:
+        conn.close()
 
 def db_get_job(jid: str):
     conn = get_db()
     if not conn: return None
-    with conn.cursor() as cur:
-        cur.execute("SELECT * FROM jobs WHERE id=%s", (jid,))
-        row = cur.fetchone()
-    conn.close()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT * FROM jobs WHERE id=%s", (jid,))
+            row = cur.fetchone()
+    finally:
+        conn.close()
     if row:
         row = dict(row)
         if isinstance(row['payload'], str): row['payload'] = json.loads(row['payload'])
@@ -398,7 +433,93 @@ def db_get_job(jid: str):
 try:
     init_db()
 except Exception as e:
-    print(f"DB Init Failed: {e}")
+    logger.error("DB Init Failed: %s", e)
+
+# ==================== Local Font Setup (PDF高速化) ====================
+FONT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "static", "fonts"))
+_font_css_cache: Optional[str] = None
+
+def _ensure_fonts_downloaded():
+    """Noto Sans JP の woff2 を一度だけダウンロードしてローカルに保存。
+    PDF 生成のたびに Google Fonts を叩かないための高速化。"""
+    os.makedirs(FONT_DIR, exist_ok=True)
+    marker = os.path.join(FONT_DIR, ".ready")
+    if os.path.exists(marker):
+        return True
+    try:
+        # User-Agent を woff2 対応のものにしてリクエストすると woff2 URL が返る
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"
+            )
+        }
+        css_url = "https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap"
+        css_resp = requests.get(css_url, headers=headers, timeout=15)
+        css_resp.raise_for_status()
+        css_text = css_resp.text
+
+        # @font-face ブロックを切り出して、必要な weight (400/700) かつ日本語サブセットだけ拾う
+        blocks = re.findall(r"@font-face\s*\{[^}]+\}", css_text)
+        wanted_weights = {"400", "700"}
+        downloaded = []
+        for blk in blocks:
+            weight_m = re.search(r"font-weight:\s*(\d+)", blk)
+            url_m = re.search(r"url\((https://[^)]+\.woff2)\)", blk)
+            if not (weight_m and url_m):
+                continue
+            weight = weight_m.group(1)
+            if weight not in wanted_weights:
+                continue
+            # 日本語サブセット (Unicode range に CJK Unified Ideographs などを含む) のみ採用。
+            # シンプルには U+30...4E... 4F... 等を含むブロックを判定。
+            if "U+4E00" not in blk and "U+30" not in blk:
+                continue
+            fname = f"NotoSansJP-{weight}.woff2"
+            fpath = os.path.join(FONT_DIR, fname)
+            if not os.path.exists(fpath):
+                font_resp = requests.get(url_m.group(1), headers=headers, timeout=30)
+                font_resp.raise_for_status()
+                with open(fpath, "wb") as f:
+                    f.write(font_resp.content)
+            downloaded.append((weight, fname))
+            wanted_weights.discard(weight)
+            if not wanted_weights:
+                break
+
+        if downloaded:
+            with open(marker, "w") as f:
+                f.write(",".join(f"{w}:{n}" for w, n in downloaded))
+            return True
+    except Exception as e:
+        logger.warning("Font download failed (PDF will use fallback): %s", e)
+    return False
+
+def get_pdf_font_css() -> str:
+    """PDF テンプレート埋め込み用の @font-face CSS を返す。
+    ローカルフォントがあればそれを使い、無ければ空文字（システムフォントにフォールバック）。"""
+    global _font_css_cache
+    if _font_css_cache is not None:
+        return _font_css_cache
+
+    _ensure_fonts_downloaded()
+    parts = []
+    for weight in ("400", "700"):
+        fpath = os.path.join(FONT_DIR, f"NotoSansJP-{weight}.woff2")
+        if os.path.exists(fpath):
+            file_url = "file:///" + fpath.replace(os.sep, "/").lstrip("/")
+            parts.append(
+                f"@font-face {{ font-family: 'Noto Sans JP'; font-style: normal; "
+                f"font-weight: {weight}; src: url('{file_url}') format('woff2'); }}"
+            )
+    _font_css_cache = "\n".join(parts)
+    return _font_css_cache
+
+# 起動時にフォントを取得（失敗してもアプリは起動する）
+try:
+    _ensure_fonts_downloaded()
+except Exception as e:
+    logger.warning("Font preload skipped: %s", e)
 
 # ==================== FastAPI App ====================
 app = FastAPI()
@@ -406,18 +527,108 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 cookie_sec = APIKeyCookie(name="laura_session", auto_error=False)
 templates = Jinja2Templates(directory="templates")
 
+# ==================== CSRF Protection (Origin/Referer check) ====================
+# 状態変更メソッドに対してリクエスト元オリジンをチェックし、
+# Cookie 認証 + SameSite=Lax と組み合わせて CSRF を防ぐ。
+_STATE_CHANGING_METHODS = {"POST", "PUT", "DELETE", "PATCH"}
+# 環境変数で許可オリジンを上書き可能（カンマ区切り）。未指定時は同一オリジンのみ許可。
+_EXTRA_ALLOWED_ORIGINS = {
+    o.strip().rstrip("/")
+    for o in os.getenv("ALLOWED_ORIGINS", "").split(",")
+    if o.strip()
+}
+
+@app.middleware("http")
+async def origin_check_middleware(request: Request, call_next):
+    if request.method in _STATE_CHANGING_METHODS:
+        # 自分自身が想定するオリジン（プロキシ経由対応のため Host + scheme から再構築）
+        forwarded_proto = request.headers.get("x-forwarded-proto") or request.url.scheme
+        host = request.headers.get("host", "")
+        same_origin = f"{forwarded_proto}://{host}".rstrip("/") if host else None
+
+        origin = (request.headers.get("origin") or "").rstrip("/")
+        referer = request.headers.get("referer") or ""
+
+        allowed = {same_origin} if same_origin else set()
+        allowed |= _EXTRA_ALLOWED_ORIGINS
+
+        ok = False
+        if origin:
+            ok = origin in allowed
+        elif referer:
+            # Referer は full URL なので origin 部分だけ抽出
+            try:
+                from urllib.parse import urlparse
+                p = urlparse(referer)
+                ref_origin = f"{p.scheme}://{p.netloc}".rstrip("/")
+                ok = ref_origin in allowed
+            except Exception:
+                ok = False
+        else:
+            # ブラウザ以外（ヘルスチェック・curl など）は Origin/Referer が無い場合がある。
+            # /login のみ Origin/Referer 無しでも許容（ブラウザによっては送らないため）。
+            if request.url.path in {"/login"}:
+                ok = True
+
+        if not ok:
+            logger.warning("CSRF blocked: method=%s path=%s origin=%r referer=%r",
+                           request.method, request.url.path, origin, referer)
+            return JSONResponse(status_code=403, content={"detail": "CSRF check failed"})
+
+    return await call_next(request)
+
+_credentials_configured = bool(APP_USERNAME and APP_PASSWORD)
+if not _credentials_configured and not DEV_MODE:
+    logger.error("APP_USERNAME / APP_PASSWORD が未設定です。本番起動を拒否します。"
+                 " ローカル開発で test/test ログインを許可するには DEV_MODE=true を設定してください。")
+
+def _set_session_cookie(resp, token: str):
+    resp.set_cookie(
+        key="laura_session",
+        value=token,
+        max_age=60*60*24*365,
+        httponly=True,
+        secure=True,
+        samesite="lax"
+    )
+
 def get_session_token():
-    if not APP_USERNAME or not APP_PASSWORD: return "test_token"
-    return hashlib.sha256(f"{APP_USERNAME}:{APP_PASSWORD}:laurajapan".encode()).hexdigest()
+    if _credentials_configured:
+        return hashlib.sha256(f"{APP_USERNAME}:{APP_PASSWORD}:laurajapan".encode()).hexdigest()
+    # DEV_MODE時のみ使用される固定トークン
+    return hashlib.sha256(b"laura-dev-mode-token").hexdigest()
 
 def authenticate(token: Annotated[str, Depends(cookie_sec)]):
+    if not _credentials_configured and not DEV_MODE:
+        # 認証情報が未設定で DEV_MODE でもない場合は全リクエストを拒否
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Auth not configured")
     valid_token = get_session_token()
-    if not APP_USERNAME or not APP_PASSWORD:
-        if token == "test_token": return "test"
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
     if not token or not secrets.compare_digest(token, valid_token):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
-    return APP_USERNAME
+    return APP_USERNAME or "dev"
+
+# /login ブルートフォース対策: IP単位で 1分あたり 8 回まで
+_login_attempts: Dict[str, List[float]] = {}
+_LOGIN_WINDOW_SEC = 60
+_LOGIN_MAX_ATTEMPTS = 8
+
+def _check_login_rate_limit(request: Request) -> bool:
+    ip = request.client.host if request.client else "unknown"
+    now = time.time()
+    bucket = _login_attempts.setdefault(ip, [])
+    # 古い記録を破棄
+    cutoff = now - _LOGIN_WINDOW_SEC
+    bucket[:] = [t for t in bucket if t > cutoff]
+    if len(bucket) >= _LOGIN_MAX_ATTEMPTS:
+        return False
+    bucket.append(now)
+    # メモリ肥大防止: 一定数を超えたら他IPの古い記録を一斉GC
+    if len(_login_attempts) > 1024:
+        for k in list(_login_attempts.keys()):
+            _login_attempts[k] = [t for t in _login_attempts[k] if t > cutoff]
+            if not _login_attempts[k]:
+                del _login_attempts[k]
+    return True
 
 @app.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
@@ -425,26 +636,29 @@ async def login_page(request: Request):
 
 @app.post("/login", response_class=HTMLResponse)
 async def login_post(request: Request, username: str = Form(...), password: str = Form(...)):
-    if not APP_USERNAME or not APP_PASSWORD:
+    if not _check_login_rate_limit(request):
+        return templates.TemplateResponse(
+            request=request, name="login.html",
+            context={"error": "試行回数が多すぎます。しばらく待ってから再試行してください。"},
+            status_code=429,
+        )
+
+    if not _credentials_configured:
+        if not DEV_MODE:
+            return templates.TemplateResponse(request=request, name="login.html", context={"error": "サーバー設定エラー: 認証情報が未設定です"})
+        # DEV_MODE: test/test のみ許可
         if username == "test" and password == "test":
             resp = RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
-            resp.set_cookie(key="laura_session", value="test_token", max_age=60*60*24*365)
+            _set_session_cookie(resp, get_session_token())
             return resp
-        return templates.TemplateResponse(request=request, name="login.html", context={"error": "サーバー設定エラー"})
-        
+        return templates.TemplateResponse(request=request, name="login.html", context={"error": "IDまたはパスワードが間違っています"})
+
     is_correct_username = secrets.compare_digest(username.encode("utf8"), APP_USERNAME.encode("utf8"))
     is_correct_password = secrets.compare_digest(password.encode("utf8"), APP_PASSWORD.encode("utf8"))
-    
+
     if is_correct_username and is_correct_password:
         resp = RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
-        resp.set_cookie(
-            key="laura_session", 
-            value=get_session_token(), 
-            max_age=60*60*24*365,
-            httponly=True,
-            secure=True,
-            samesite="lax"
-        )
+        _set_session_cookie(resp, get_session_token())
         return resp
     else:
         return templates.TemplateResponse(request=request, name="login.html", context={"error": "IDまたはパスワードが間違っています"})
@@ -551,63 +765,45 @@ async def get_dashboard(username: Annotated[str, Depends(authenticate)]):
 # ==================== User Master API ====================
 @app.get("/api/users")
 async def get_users(username: Annotated[str, Depends(authenticate)]):
-    conn = require_db()
-    if not conn: return []
-    with conn.cursor() as cur:
+    with db_conn() as conn, conn.cursor() as cur:
         cur.execute("SELECT id, name, color FROM users ORDER BY id")
         rows = cur.fetchall()
-    conn.close()
     return [dict(r) for r in rows]
 
 @app.post("/api/users")
 async def add_user(username: Annotated[str, Depends(authenticate)], name: str = Form(...), color: str = Form("#c9a961")):
-    conn = require_db()
-    if not conn: return {"status": "no-db-mode"}
-    with conn.cursor() as cur:
+    with db_conn() as conn, conn.cursor() as cur:
         cur.execute("INSERT INTO users (name, color) VALUES (%s, %s)", (name, color))
-    conn.commit()
-    conn.close()
+        conn.commit()
     return {"status": "ok"}
 
 @app.delete("/api/users/{uid}")
 async def delete_user(uid: int, username: Annotated[str, Depends(authenticate)]):
-    conn = require_db()
-    if not conn: return {"status": "no-db-mode"}
-    with conn.cursor() as cur:
+    with db_conn() as conn, conn.cursor() as cur:
         cur.execute("DELETE FROM users WHERE id = %s", (uid,))
-    conn.commit()
-    conn.close()
+        conn.commit()
     return {"status": "ok"}
 
 # ==================== Customer Master API ====================
 @app.get("/api/customers")
 async def get_customers(username: Annotated[str, Depends(authenticate)]):
-    conn = require_db()
-    if not conn: return []
-    with conn.cursor() as cur:
+    with db_conn() as conn, conn.cursor() as cur:
         cur.execute("SELECT id, name, discount_rate FROM customers ORDER BY id")
         rows = cur.fetchall()
-    conn.close()
     return [dict(r) for r in rows]
 
 @app.post("/api/customers")
 async def add_customer(username: Annotated[str, Depends(authenticate)], name: str = Form(...), discount_rate: int = Form(35)):
-    conn = require_db()
-    if not conn: return {"status": "no-db-mode"}
-    with conn.cursor() as cur:
+    with db_conn() as conn, conn.cursor() as cur:
         cur.execute("INSERT INTO customers (name, discount_rate) VALUES (%s, %s)", (name, discount_rate))
-    conn.commit()
-    conn.close()
+        conn.commit()
     return {"status": "ok"}
 
 @app.delete("/api/customers/{cid}")
 async def delete_customer(cid: int, username: Annotated[str, Depends(authenticate)]):
-    conn = require_db()
-    if not conn: return {"status": "no-db-mode"}
-    with conn.cursor() as cur:
+    with db_conn() as conn, conn.cursor() as cur:
         cur.execute("DELETE FROM customers WHERE id = %s", (cid,))
-    conn.commit()
-    conn.close()
+        conn.commit()
     return {"status": "ok"}
 
 
@@ -650,12 +846,9 @@ def analyze_images_internal(jid: str, image_parts: list, ai_model: str):
                     "color": col_match.group(1) if col_match else "-",
                     "size": sz_match.group(1) if sz_match else "-",
                     "unit_price": unit_price,
-                    "source_image_no": i
+                    "quantity": 1,
+                    "source_image_no": i,
                 })
-            # Visionの場合もログを記録するために後続処理へ合流させる
-            # db_update_job は関数の最後で行う形に整理（省略）
-            # ここでは暫定的に items_data を chunk_data に代入
-            chunk_data = items_data
 
 
         elif ai_model in ["azure", "openai"]:
@@ -692,7 +885,7 @@ def analyze_images_internal(jid: str, image_parts: list, ai_model: str):
                     if not isinstance(chunk_data, list): chunk_data = [chunk_data]
                     items_data.extend(chunk_data)
                 except Exception as e:
-                    print(f"Chunk parsing failed ({ai_model}, offset {i}): {e}")
+                    logger.warning("Chunk parsing failed (%s, offset %d): %s", ai_model, i, e)
 
         elif ai_model == "gemini":
             CHUNK_SIZE = 20
@@ -713,17 +906,17 @@ def analyze_images_internal(jid: str, image_parts: list, ai_model: str):
                     if not isinstance(chunk_data, list): chunk_data = [chunk_data]
                     items_data.extend(chunk_data)
                 except Exception as e:
-                    print(f"Chunk parsing failed (gemini, offset {i}): {e}")
+                    logger.warning("Chunk parsing failed (gemini, offset %d): %s", i, e)
         
         chunk_data = items_data  # normalize variable name for the rest of the function
         
         # Record usage
         try:
-            conn = require_db()
-            if conn:
-                with conn.cursor() as cur: cur.execute("INSERT INTO api_usage (ai_model, image_count) VALUES (%s, %s)", (ai_model, len(image_parts)))
-                conn.commit(); conn.close()
-        except: pass
+            with db_conn() as conn, conn.cursor() as cur:
+                cur.execute("INSERT INTO api_usage (ai_model, image_count) VALUES (%s, %s)", (ai_model, len(image_parts)))
+                conn.commit()
+        except Exception as e:
+            logger.warning("api_usage log failed: %s", e)
         
         db_update_job(jid, 'done', result={"items": chunk_data})
     except Exception as e:
@@ -736,9 +929,8 @@ async def analyze_images(request: Request, username: Annotated[str, Depends(auth
     for file in files:
         data = await file.read()
         image_parts.append({"mime_type": file.content_type or "image/jpeg", "data": data, "base64": base64.b64encode(data).decode()})
-    # For compatibility, we run it sync here but return the result directly as before
-    # (The mission says "existing APIs should NOT be broken")
-    analyze_images_internal(jid, image_parts, ai_model)
+    # AI 呼び出しは同期的に長時間ブロックするのでイベントループから外す
+    await run_in_threadpool(analyze_images_internal, jid, image_parts, ai_model)
     job = db_get_job(jid)
     if job['status'] == 'failed': raise HTTPException(500, job['error'])
     return JSONResponse(job['result'])
@@ -850,13 +1042,13 @@ def build_detail_excel(invoice_number: str, customer_name: str, items: list, doc
 
 def build_detail_pdf(invoice_number: str, customer_name: str, items: list, doc_type='delivery') -> bytes:
     """商品明細表 PDF"""
-    from jinja2 import Template
     titles = DOC_TYPE_TITLES.get(doc_type, DOC_TYPE_TITLES["delivery"])
+    font_css = get_pdf_font_css()
     rows_html = ""
     for i, item in enumerate(items):
         rows_html += f"<tr><td>{i+1}</td><td>{item.get('code','')}</td><td>{item.get('color','')}</td><td>{item.get('size','')}</td><td>{item.get('quantity',0)}</td><td>¥{item.get('unit_price',0):,}</td></tr>"
     html_str = f"""<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8">
-    <style>@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap');
+    <style>{font_css}
     body{{font-family:'Noto Sans JP',sans-serif;font-size:12px;}}
     .title{{font-size:20px;font-weight:bold;text-align:center;margin-bottom:10px;}}
     .meta{{margin-bottom:15px;}}
@@ -873,7 +1065,8 @@ def build_invoice_pdf(invoice_data: dict) -> bytes:
     from jinja2 import Environment, FileSystemLoader
     env = Environment(loader=FileSystemLoader("templates"))
     template = env.get_template("invoice_template.html")
-    html_str = template.render(**invoice_data)
+    render_data = {**invoice_data, "font_face_css": get_pdf_font_css()}
+    html_str = template.render(**render_data)
     return HTML(string=html_str).write_pdf()
 
 def build_invoice_excel(invoice_data: dict) -> bytes:
@@ -1045,43 +1238,52 @@ async def preview_documents(username: Annotated[str, Depends(authenticate)], pay
     }
 
 
+def _save_invoice_record(payload: "DocumentRequest"):
+    """伝票レコードを INSERT/UPDATE して (inv_id, invoice_number, inv_data) を返す共通処理"""
+    doc_type = payload.doc_type or "delivery"
+    with db_conn() as conn, conn.cursor() as cur:
+        if payload.invoice_id:
+            cur.execute("SELECT invoice_number, status FROM invoices WHERE id = %s", (payload.invoice_id,))
+            row = cur.fetchone()
+            if not row: raise Exception("Invoice not found")
+            if row["status"] == "locked": raise Exception("確定済みの伝票は編集できません。")
+            invoice_number = row["invoice_number"]
+        else:
+            invoice_number = generate_invoice_number_safe(cur, doc_type)
+
+        inv_data = assemble_invoice_data(
+            {"invoice_number": invoice_number, "customer_name": payload.customer_name},
+            payload.items, payload.discount_rate, doc_type,
+        )
+
+        if payload.invoice_id:
+            cur.execute("""
+                UPDATE invoices SET customer_name=%s, discount_rate=%s, total_net_amount=%s, total_tax_amount=%s, total_grand_total=%s,
+                item_count=%s, status='draft', locked_at=NULL, doc_type=%s, user_id=%s,
+                pdf_storage_path=NULL, excel_storage_path=NULL, detail_pdf_storage_path=NULL, detail_excel_storage_path=NULL
+                WHERE id=%s
+            """, (payload.customer_name, payload.discount_rate, inv_data["total_net_amount"], inv_data["total_tax_amount"], inv_data["total_grand_total"], len(inv_data["items"]), doc_type, payload.user_id, payload.invoice_id))
+            cur.execute("DELETE FROM invoice_items WHERE invoice_id=%s", (payload.invoice_id,))
+            inv_id = payload.invoice_id
+        else:
+            cur.execute("""
+                INSERT INTO invoices (invoice_number, customer_name, discount_rate, total_net_amount, total_tax_amount, total_grand_total, item_count, status, doc_type, user_id)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,'draft',%s,%s) RETURNING id
+            """, (invoice_number, payload.customer_name, payload.discount_rate, inv_data["total_net_amount"], inv_data["total_tax_amount"], inv_data["total_grand_total"], len(inv_data["items"]), doc_type, payload.user_id))
+            inv_id = cur.fetchone()['id']
+
+        for item in inv_data["items"]:
+            cur.execute("INSERT INTO invoice_items (invoice_id, code, color, size, unit_price, quantity, net_amount) VALUES (%s,%s,%s,%s,%s,%s,%s)",
+                         (inv_id, item["code"], item["color"], item["size"], item["unit_price"], item["quantity"], item["net_amount"]))
+        conn.commit()
+    return inv_id, invoice_number, inv_data
+
+
 def generate_documents_internal(jid: str, payload_dict: dict):
     try:
         payload = DocumentRequest(**payload_dict)
         doc_type = payload.doc_type or "delivery"
-        with db_conn() as conn, conn.cursor() as cur:
-            if payload.invoice_id:
-                cur.execute("SELECT invoice_number, status FROM invoices WHERE id = %s", (payload.invoice_id,))
-                row = cur.fetchone()
-                if not row: raise Exception("Invoice not found")
-                if row["status"] == "locked": raise Exception("確定済みの伝票は編集できません。")
-                invoice_number = row["invoice_number"]
-            else:
-                invoice_number = generate_invoice_number_safe(cur, doc_type)
-
-            inv_data = assemble_invoice_data({"invoice_number": invoice_number, "customer_name": payload.customer_name}, payload.items, payload.discount_rate, doc_type)
-
-            if payload.invoice_id:
-                cur.execute("""
-                    UPDATE invoices SET customer_name=%s, discount_rate=%s, total_net_amount=%s, total_tax_amount=%s, total_grand_total=%s, 
-                    item_count=%s, status='draft', locked_at=NULL, doc_type=%s, user_id=%s,
-                    pdf_storage_path=NULL, excel_storage_path=NULL, detail_pdf_storage_path=NULL, detail_excel_storage_path=NULL
-                    WHERE id=%s
-                """, (payload.customer_name, payload.discount_rate, inv_data["total_net_amount"], inv_data["total_tax_amount"], inv_data["total_grand_total"], len(inv_data["items"]), doc_type, payload.user_id, payload.invoice_id))
-                cur.execute("DELETE FROM invoice_items WHERE invoice_id=%s", (payload.invoice_id,))
-                inv_id = payload.invoice_id
-            else:
-                cur.execute("""
-                    INSERT INTO invoices (invoice_number, customer_name, discount_rate, total_net_amount, total_tax_amount, total_grand_total, item_count, status, doc_type, user_id) 
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,'draft',%s,%s) RETURNING id
-                """, (invoice_number, payload.customer_name, payload.discount_rate, inv_data["total_net_amount"], inv_data["total_tax_amount"], inv_data["total_grand_total"], len(inv_data["items"]), doc_type, payload.user_id))
-                inv_id = cur.fetchone()['id']
-            
-            for item in inv_data["items"]:
-                cur.execute("INSERT INTO invoice_items (invoice_id, code, color, size, unit_price, quantity, net_amount) VALUES (%s,%s,%s,%s,%s,%s,%s)",
-                             (inv_id, item["code"], item["color"], item["size"], item["unit_price"], item["quantity"], item["net_amount"]))
-            conn.commit()
-
+        inv_id, invoice_number, _ = _save_invoice_record(payload)
         result = {
             "invoice_id": inv_id, "invoice_number": invoice_number, "status": "draft", "doc_type": doc_type,
         }
@@ -1091,41 +1293,37 @@ def generate_documents_internal(jid: str, payload_dict: dict):
 
 @app.post("/generate-documents")
 async def generate_documents(request: Request, username: Annotated[str, Depends(authenticate)], payload: DocumentRequest):
-    # Keep compatibility but use internal logic
-    jid = db_create_job('generate', payload.dict())
-    
-    # 同期APIでは効率化のため、ここで1回だけ生成して返す
+    """同期APIだが二重生成を避けるため _save_invoice_record で得た inv_data をそのまま使う"""
+    jid = db_create_job('generate', payload.model_dump())
     try:
-        inv_id = None
-        # DB保存処理を最小限に（generate_documents_internalの共通ロジックを流用しつつ最適化）
-        # ※本来は共通化すべきですが、まずは高速化を優先
-        generate_documents_internal(jid, payload.dict())
-        job = db_get_job(jid)
-        if job['status'] == 'failed': raise HTTPException(500, job['error'])
-        
-        inv_id = job['result']['invoice_id']
-        inv_data = assemble_invoice_data({"invoice_number": job['result']['invoice_number'], "customer_name": payload.customer_name}, payload.items, payload.discount_rate, payload.doc_type or "delivery")
-        files = build_all_files(inv_data) # ここで生成
-        
+        inv_id, invoice_number, inv_data = _save_invoice_record(payload)
+        files = build_all_files(inv_data)
+        result = {
+            "invoice_id": inv_id, "invoice_number": invoice_number, "status": "draft",
+            "doc_type": payload.doc_type or "delivery",
+        }
+        db_update_job(jid, 'done', result=result)
+
         return JSONResponse({
-            **job['result'],
+            **result,
             "pdf_base64": base64.b64encode(files["pdf"]).decode(),
             "excel_base64": base64.b64encode(files["excel"]).decode(),
             "detail_pdf_base64": base64.b64encode(files["detail_pdf"]).decode(),
             "detail_excel_base64": base64.b64encode(files["detail_excel"]).decode(),
         })
     except Exception as e:
+        db_update_job(jid, 'failed', error=str(e))
         raise HTTPException(500, str(e))
 
 @app.post("/api/jobs/generate")
 async def enqueue_generate(bt: BackgroundTasks, username: Annotated[str, Depends(authenticate)], payload: DocumentRequest):
-    jid = db_create_job('generate', payload.dict())
-    bt.add_task(generate_documents_internal, jid, payload.dict())
+    jid = db_create_job('generate', payload.model_dump())
+    bt.add_task(generate_documents_internal, jid, payload.model_dump())
     return {"job_id": jid, "status": "pending"}
 
 
 
-def lock_invoice_internal(jid: str, inv_id: int):
+def lock_invoice_internal(jid: str, inv_id: int, bt: Optional[BackgroundTasks] = None):
     try:
         with db_conn() as conn, conn.cursor() as cur:
             # status が 'locked' でない場合のみ更新を実行（レースコンディション対策）
@@ -1167,24 +1365,30 @@ def lock_invoice_internal(jid: str, inv_id: int):
                 """, (paths["pdf"], paths["excel"], paths["detail_pdf"], paths["detail_excel"], inv_id))
                 conn.commit()
         except Exception as e:
-            print(f"Storage cache failed: {e}") # 失敗してもロック処理自体は継続
+            logger.warning("Storage cache failed (lock 処理は継続): %s", e)
 
         db_update_job(jid, 'done', result={"status": "locked"})
 
-        # 【自動Drive同期】確定が済んだら別スレッドでDrive同期をキック
+        # 【自動Drive同期】確定後、Drive 同期を開始する
+        # - 呼び出し側が BackgroundTasks を渡してくれた場合 → そちらに登録
+        # - そうでない場合（同期API/threadpool 経由）→ この場で同期実行（fire-and-forget は廃止）
         drive_jid = db_create_job('drive_upload', {"invoice_id": inv_id})
-        
-        # 👇 asyncio ではなく標準の threading を使う形に修正！
-        import threading
-        threading.Thread(target=upload_drive_internal, args=(drive_jid, inv_id)).start()
+        if bt is not None:
+            bt.add_task(upload_drive_internal, drive_jid, inv_id)
+        else:
+            try:
+                upload_drive_internal(drive_jid, inv_id)
+            except Exception as e:
+                logger.warning("Drive auto-sync after lock failed: %s", e)
 
     except Exception as e:
         db_update_job(jid, 'failed', error=str(e))
 
 @app.post("/api/history/{inv_id}/lock")
-async def lock_invoice(inv_id: int, username: Annotated[str, Depends(authenticate)]):
+async def lock_invoice(inv_id: int, bt: BackgroundTasks, username: Annotated[str, Depends(authenticate)]):
     jid = db_create_job('lock', {"inv_id": inv_id})
-    lock_invoice_internal(jid, inv_id)
+    # ロック処理は threadpool で同期実行し、Drive 同期はレスポンス後の BackgroundTasks に乗せる
+    await run_in_threadpool(lock_invoice_internal, jid, inv_id, bt)
     job = db_get_job(jid)
     if job['status'] == 'failed': raise HTTPException(500, job['error'])
     return job['result']
@@ -1192,7 +1396,7 @@ async def lock_invoice(inv_id: int, username: Annotated[str, Depends(authenticat
 @app.post("/api/jobs/lock/{inv_id}")
 async def enqueue_lock(bt: BackgroundTasks, inv_id: int, username: Annotated[str, Depends(authenticate)]):
     jid = db_create_job('lock', {"inv_id": inv_id})
-    bt.add_task(lock_invoice_internal, jid, inv_id)
+    bt.add_task(lock_invoice_internal, jid, inv_id, bt)
     return {"job_id": jid, "status": "pending"}
 
 
@@ -1206,14 +1410,12 @@ async def unlock_invoice(inv_id: int, username: Annotated[str, Depends(authentic
 # ==================== History & Serving API ====================
 @app.get("/api/history")
 async def get_history(username: Annotated[str, Depends(authenticate)], doc_type: Optional[str] = None, user_id: Optional[int] = None):
-    conn = require_db()
-    if not conn: return []
-    with conn.cursor() as cur:
+    with db_conn() as conn, conn.cursor() as cur:
         query = """
             SELECT i.id, i.invoice_number, i.customer_name, i.total_grand_total, i.item_count, i.status, i.doc_type,
             u.name as user_name, u.color as user_color,
-            to_char(i.locked_at, 'YYYY-MM-DD"T"HH24:MI:SS') as locked_at, 
-            to_char(i.created_at, 'YYYY-MM-DD\"T\"HH24:MI:SS') as created_at 
+            to_char(i.locked_at, 'YYYY-MM-DD"T"HH24:MI:SS') as locked_at,
+            to_char(i.created_at, 'YYYY-MM-DD\"T\"HH24:MI:SS') as created_at
             FROM invoices i
             LEFT JOIN users u ON i.user_id = u.id
             WHERE 1=1
@@ -1225,11 +1427,10 @@ async def get_history(username: Annotated[str, Depends(authenticate)], doc_type:
         if user_id:
             query += " AND i.user_id = %s"
             params.append(user_id)
-            
+
         query += " ORDER BY i.id DESC"
         cur.execute(query, tuple(params))
         rows = cur.fetchall()
-    conn.close()
     return [dict(r) for r in rows]
 
 # kind: "pdf" | "excel" | "detail_pdf" | "detail_excel"
@@ -1351,19 +1552,16 @@ async def dl_zip(inv_id: int, username: Annotated[str, Depends(authenticate)]):
             }
         )
     except Exception as e:
-        print(f"ZIP download failed for inv_id {inv_id}: {e}")
+        logger.exception("ZIP download failed for inv_id %s: %s", inv_id, e)
         raise HTTPException(status_code=500, detail=f"ZIP生成に失敗しました: {str(e)}")
 
 @app.get("/api/history/{inv_id}/items")
 async def get_history_items(inv_id: int, username: Annotated[str, Depends(authenticate)]):
-    conn = require_db()
-    if not conn: return {"items": []}
-    with conn.cursor() as cur:
+    with db_conn() as conn, conn.cursor() as cur:
         cur.execute("SELECT code, color, size, unit_price, quantity FROM invoice_items WHERE invoice_id = %s", (inv_id,))
         rows = cur.fetchall()
-        cur.execute("SELECT invoice_number, customer_name, discount_rate FROM invoices WHERE id = %s", (inv_id,))
+        cur.execute("SELECT invoice_number, customer_name, discount_rate, doc_type FROM invoices WHERE id = %s", (inv_id,))
         inv = cur.fetchone()
-    conn.close()
     if not inv: raise HTTPException(status_code=404, detail="Invoice not found")
     return {"invoice_number": inv["invoice_number"], "customer_name": inv["customer_name"], "discount_rate": inv["discount_rate"], "doc_type": inv.get("doc_type", "delivery"), "items": [dict(r) for r in rows]}
 
@@ -1376,15 +1574,15 @@ async def delete_history(inv_id: int, username: Annotated[str, Depends(authentic
         
         # 確定済みであっても削除を許可する（403回避）
         
-        if STORAGE_BUCKET:
-            try:
-                from supabase_config import supabase
-                for col in ['pdf_storage_path', 'excel_storage_path', 'detail_pdf_storage_path', 'detail_excel_storage_path']:
-                    path = row.get(col)
-                    if path:
-                        supabase.storage.from_(STORAGE_BUCKET).remove([path])
-            except Exception as e:
-                print(f"Failed cleanup for {inv_id}: {e}")
+        if STORAGE_BUCKET and supabase_client:
+            for col in ['pdf_storage_path', 'excel_storage_path', 'detail_pdf_storage_path', 'detail_excel_storage_path']:
+                path = row.get(col)
+                if not path:
+                    continue
+                try:
+                    supabase_client.storage.from_(STORAGE_BUCKET).remove([path])
+                except Exception as e:
+                    logger.warning("Failed cleanup for %s (%s): %s", inv_id, col, e)
 
         cur.execute("DELETE FROM invoice_items WHERE invoice_id = %s", (inv_id,))
         cur.execute("DELETE FROM invoices WHERE id = %s", (inv_id,))
@@ -1442,7 +1640,7 @@ def upload_drive_internal(jid: str, inv_id: int):
 @app.post("/api/history/{inv_id}/upload-drive")
 async def upload_to_drive(inv_id: int, username: Annotated[str, Depends(authenticate)]):
     jid = db_create_job('drive_upload', {"invoice_id": inv_id})
-    upload_drive_internal(jid, inv_id)
+    await run_in_threadpool(upload_drive_internal, jid, inv_id)
     job = db_get_job(jid)
     if job['status'] == 'failed': return JSONResponse(status_code=500, content={"detail": job['error']})
     return job['result']
