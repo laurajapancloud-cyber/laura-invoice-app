@@ -1018,8 +1018,8 @@ def build_detail_excel(invoice_number: str, customer_name: str, items: list, doc
             r = current_r
             ws.row_dimensions[r].height = 22
             
-            # No. は 1-5 の繰り返し
-            ws[f"A{r}"] = i + 1
+            # No. は通し番号（1, 2, 3...）
+            ws[f"A{r}"] = item_idx + 1
             ws[f"A{r}"].alignment = Alignment(horizontal="center", vertical="center")
             ws[f"A{r}"].font = Font(size=9, color="888888")
 
