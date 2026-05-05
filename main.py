@@ -1510,6 +1510,9 @@ def serve_file(inv_id: int, kind: str):
     fname = f'{customer}_{date_str}_{label}.{cfg["ext"]}'
     # === 変更ここまで ===
 
+    # 日本語ファイル名を安全にヘッダーに含めるためのエンコード
+    encoded_fname = urllib.parse.quote(fname)
+
     # キャッシュがあればそれを使う
     if inv.get(cfg["path_field"]):
         try:
@@ -1517,7 +1520,7 @@ def serve_file(inv_id: int, kind: str):
             return Response(
                 content=content,
                 media_type=cfg["mime"],
-                headers={"Content-Disposition": f'attachment; filename="{fname}"'}
+                headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded_fname}"}
             )
         except: pass # 取得失敗時は再生成へ
 
@@ -1529,7 +1532,7 @@ def serve_file(inv_id: int, kind: str):
     return Response(
         content=files[cfg["files_key"]], 
         media_type=cfg["mime"],
-        headers={"Content-Disposition": f'attachment; filename="{fname}"'}
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded_fname}"}
     )
 
 
