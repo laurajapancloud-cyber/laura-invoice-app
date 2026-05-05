@@ -4622,8 +4622,8 @@
 
       if (window.innerWidth <= 768) {
         const containerWidth = container.clientWidth;
-        const targetWidth = 640; // 基準幅をさらに絞って大きく表示 (640px)
-        const docHeight = 1000; 
+        const targetWidth = 520; // ★限界まで絞って大きく表示 (520px)
+        const docHeight = 740;  // 幅に合わせてA4比率(1:1.41)で高さを調整
         const scale = containerWidth / targetWidth;
         
         // iOS Safari対策: 強制的にサイズを固定
@@ -4643,7 +4643,7 @@
         const marginNeeded = docHeight - scaledHeight;
         frame.style.marginBottom = `-${marginNeeded}px`;
 
-        container.style.height = 'auto'; // 高さは自動に任せる
+        container.style.height = 'auto';
         container.style.overflow = 'visible';
       } else {
         // PCリセット処理
