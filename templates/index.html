@@ -4196,6 +4196,7 @@
         // --- マスターデータと履歴 ---
         customers: [],
         history: [],
+        rawHistory: [],
         
         async fetchCustomers() {
           try {
@@ -4207,7 +4208,9 @@
         async fetchHistory(type = 'all') {
           try {
             const r = await fetch(`/api/history?doc_type=${type}`);
-            this.history = await r.json();
+            this.rawHistory = await r.json();
+            // 取得後にフィルタリングを適用
+            if (window.applyHistoryFilters) applyHistoryFilters();
           } catch (e) { console.error('fetchHistory failed', e); }
         }
       });
@@ -4226,8 +4229,8 @@
         set: (val) => { Alpine.store('app').currentUser = val; }
       });
       Object.defineProperty(window, 'allHistory', {
-        get: () => Alpine.store('app').history,
-        set: (val) => { Alpine.store('app').history = val; }
+        get: () => Alpine.store('app').rawHistory,
+        set: (val) => { Alpine.store('app').rawHistory = val; }
       });
 
       // アプリ初期化
@@ -4282,8 +4285,14 @@
           const current = filter.value;
           filter.innerHTML = '<option value="">すべてのユーザー</option>' +
             allUsers.map(u => `<option value="${u.id}">${u.name}</option>`).join('');
-          if (!current && currentUser) filter.value = currentUser.id;
-          else filter.value = current;
+          
+          // 初回のみ現在のユーザーをデフォルト選択にする
+          if (!filter.dataset.init && currentUser) {
+            filter.value = currentUser.id;
+            filter.dataset.init = '1';
+          } else {
+            filter.value = current;
+          }
         }
       } catch (e) { console.error(e); }
     }
@@ -4819,7 +4828,6 @@
       try {
         await Alpine.store('app').fetchHistory(t);
         updateMonthFilter(allHistory);
-        applyHistoryFilters();
       } catch (e) {
         console.error("History load error:", e);
       } finally {
