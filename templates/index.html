@@ -10,7 +10,8 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700;800&family=Noto+Sans+JP:wght@300;400;500;700&display=swap"
     rel="stylesheet">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📄</text></svg>">
+  <link rel="icon"
+    href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📄</text></svg>">
   <link rel="manifest" href="/manifest.json">
   <meta name="theme-color" content="#c9a961">
   <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
@@ -2613,7 +2614,7 @@
         border-top: 1px solid var(--border);
         backdrop-filter: blur(16px);
         -webkit-backdrop-filter: blur(16px);
-        box-shadow: 0 -4px 20px rgba(0,0,0,0.4);
+        box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.4);
       }
 
       .mobile-action-bar.visible {
@@ -3031,25 +3032,33 @@
 
     /* ---- Skeleton shimmer (体感速度向上) ---- */
     @keyframes skel-shimmer {
-      0% { background-position: -200% 0; }
-      100% { background-position: 200% 0; }
+      0% {
+        background-position: -200% 0;
+      }
+
+      100% {
+        background-position: 200% 0;
+      }
     }
+
     .skel {
       background: linear-gradient(90deg,
-        rgba(255,255,255,0.04) 0%,
-        rgba(255,255,255,0.10) 50%,
-        rgba(255,255,255,0.04) 100%);
+          rgba(255, 255, 255, 0.04) 0%,
+          rgba(255, 255, 255, 0.10) 50%,
+          rgba(255, 255, 255, 0.04) 100%);
       background-size: 200% 100%;
       animation: skel-shimmer 1.4s ease-in-out infinite;
       border-radius: 8px;
       display: inline-block;
     }
+
     .skel-row {
       height: 64px;
       width: 100%;
       margin: 8px 0;
       border-radius: 12px;
     }
+
     .skel-line {
       height: 12px;
       border-radius: 6px;
@@ -3061,12 +3070,14 @@
       padding: 48px 20px;
       color: var(--text-muted);
     }
+
     .empty-state-icon {
       font-size: 48px;
       opacity: 0.6;
       margin-bottom: 12px;
       filter: sepia(0.4) hue-rotate(-15deg) saturate(1.3);
     }
+
     .empty-state-title {
       font-family: 'Cormorant Garamond', serif;
       font-size: 20px;
@@ -3074,12 +3085,14 @@
       margin-bottom: 6px;
       letter-spacing: 0.04em;
     }
+
     .empty-state-desc {
       font-size: 13px;
       color: var(--text-muted);
       margin-bottom: 18px;
       line-height: 1.6;
     }
+
     .empty-state .btn {
       display: inline-flex;
       max-width: 220px;
@@ -3092,17 +3105,21 @@
       top: 0;
       background: var(--bg-elevated);
       z-index: 5;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
     }
 
     /* ---- Micro-animations for buttons ---- */
-    .btn, .doctype-btn, .sidebar-tab, .tab {
+    .btn,
+    .doctype-btn,
+    .sidebar-tab,
+    .tab {
       transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1),
-                  box-shadow 0.2s ease,
-                  background-color 0.2s ease,
-                  color 0.2s ease,
-                  border-color 0.2s ease;
+        box-shadow 0.2s ease,
+        background-color 0.2s ease,
+        color 0.2s ease,
+        border-color 0.2s ease;
     }
+
     .btn:active:not(:disabled),
     .doctype-btn:active {
       transform: scale(0.96);
@@ -3113,6 +3130,7 @@
       position: relative;
       overflow: hidden;
     }
+
     .btn-longpress::after {
       content: '';
       position: absolute;
@@ -3124,6 +3142,7 @@
       transition: width 0.05s linear;
       pointer-events: none;
     }
+
     .btn-longpress.pressing::after {
       width: var(--lp-progress, 0%);
     }
@@ -3136,17 +3155,19 @@
       right: 0;
       bottom: 0;
       z-index: 90;
-      background: linear-gradient(180deg, rgba(20,20,20,0.92), rgba(10,10,10,0.98));
+      background: linear-gradient(180deg, rgba(20, 20, 20, 0.92), rgba(10, 10, 10, 0.98));
       border-top: 1px solid var(--border);
       backdrop-filter: blur(14px);
       -webkit-backdrop-filter: blur(14px);
       padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
     }
+
     .bottom-nav-inner {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
       gap: 2px;
     }
+
     .bn-tab {
       display: flex;
       flex-direction: column;
@@ -3164,14 +3185,17 @@
       user-select: none;
       transition: color 0.2s, background 0.2s, transform 0.15s;
     }
+
     .bn-tab .bn-icon {
       font-size: 20px;
       line-height: 1;
     }
+
     .bn-tab.active {
       color: var(--gold-bright);
       background: var(--gold-soft);
     }
+
     .bn-tab:active {
       transform: scale(0.94);
     }
@@ -3192,24 +3216,46 @@
       font-weight: 700;
       cursor: pointer;
       box-shadow: 0 8px 24px rgba(201, 169, 97, 0.45),
-                  0 4px 12px rgba(0, 0, 0, 0.4);
+        0 4px 12px rgba(0, 0, 0, 0.4);
       z-index: 95;
       transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s;
     }
-    .fab:active { transform: scale(0.92); }
-    .fab:hover { box-shadow: 0 10px 28px rgba(201, 169, 97, 0.55); }
+
+    .fab:active {
+      transform: scale(0.92);
+    }
+
+    .fab:hover {
+      box-shadow: 0 10px 28px rgba(201, 169, 97, 0.55);
+    }
 
     /* ---- Mobile only: show bottom-nav, hide top tabs row, add bottom padding ---- */
     @media (max-width: 1023px) {
-      .bottom-nav { display: block; }
-      .fab { display: flex; align-items: center; justify-content: center; }
-      body { padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
-      .app-header .tabs { display: none; }
+      .bottom-nav {
+        display: block;
+      }
+
+      .fab {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      body {
+        padding-bottom: calc(72px + env(safe-area-inset-bottom));
+      }
+
+      .app-header .tabs {
+        display: none;
+      }
     }
 
     /* ---- Bottom sheet (mobile modal) ---- */
     @media (max-width: 768px) {
-      .modal-overlay.modal-as-sheet { align-items: flex-end !important; }
+      .modal-overlay.modal-as-sheet {
+        align-items: flex-end !important;
+      }
+
       .modal-overlay.modal-as-sheet .modal-content {
         width: 100% !important;
         max-width: 100% !important;
@@ -3217,10 +3263,17 @@
         border-radius: 18px 18px 0 0 !important;
         animation: sheet-slide-up 0.3s cubic-bezier(0.16, 1, 0.3, 1);
       }
+
       @keyframes sheet-slide-up {
-        from { transform: translateY(100%); }
-        to   { transform: translateY(0); }
+        from {
+          transform: translateY(100%);
+        }
+
+        to {
+          transform: translateY(0);
+        }
       }
+
       .modal-as-sheet .modal-content::before {
         content: '';
         display: block;
@@ -3238,12 +3291,14 @@
       overflow: hidden;
       touch-action: pan-y;
     }
+
     .swipe-row-content {
       position: relative;
       transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
       will-change: transform;
       background: var(--bg-card);
     }
+
     .swipe-row-actions {
       position: absolute;
       right: 0;
@@ -3253,6 +3308,7 @@
       align-items: stretch;
       gap: 1px;
     }
+
     .swipe-action {
       display: flex;
       align-items: center;
@@ -3266,9 +3322,18 @@
       border: none;
       user-select: none;
     }
-    .swipe-action.danger { background: linear-gradient(180deg, #b03a3a, #841f1f); }
-    .swipe-action.info   { background: linear-gradient(180deg, #345aa1, #21407c); }
-    .swipe-action.copy   { background: linear-gradient(180deg, #4a4a4a, #2c2c2c); }
+
+    .swipe-action.danger {
+      background: linear-gradient(180deg, #b03a3a, #841f1f);
+    }
+
+    .swipe-action.info {
+      background: linear-gradient(180deg, #345aa1, #21407c);
+    }
+
+    .swipe-action.copy {
+      background: linear-gradient(180deg, #4a4a4a, #2c2c2c);
+    }
 
     /* ---- Light mode (auto via prefers-color-scheme + manual override) ---- */
     [data-theme="light"] {
@@ -3288,17 +3353,20 @@
       --border-strong: rgba(168, 137, 63, 0.45);
       --border-subtle: rgba(0, 0, 0, 0.08);
     }
+
     [data-theme="light"] body {
       background:
         radial-gradient(ellipse 80% 50% at 50% -10%, rgba(168, 137, 63, .08), transparent 60%),
         var(--bg-base);
     }
+
     [data-theme="light"] .form-group input,
     [data-theme="light"] .form-group select {
       background: #ffffff;
       color: var(--text-primary);
-      border-color: rgba(0,0,0,0.12);
+      border-color: rgba(0, 0, 0, 0.12);
     }
+
     [data-theme="light"] .form-group input:focus,
     [data-theme="light"] .form-group select:focus {
       background: #fffdf6;
@@ -3318,6 +3386,7 @@
       font-size: 16px;
       transition: all 0.2s;
     }
+
     .theme-toggle:hover {
       color: var(--gold-bright);
       border-color: var(--gold);
@@ -3547,7 +3616,8 @@
         <span>🔍</span><span>検索...</span>
         <span class="cmdk-shortcut">⌘K</span>
       </button>
-      <button id="theme-toggle" class="theme-toggle" type="button" title="テーマ切替" aria-label="テーマ切替" style="margin-left:8px">☀</button>
+      <button id="theme-toggle" class="theme-toggle" type="button" title="テーマ切替" aria-label="テーマ切替"
+        style="margin-left:8px">☀</button>
     </div>
   </div>
 
@@ -3623,9 +3693,10 @@
         <div class="toast" id="toast"></div>
       </div>
 
-      <div class="card" id="preview-card" style="display:none" x-data="{ isDesktop: window.innerWidth >= 1200 }" @resize.window.debounce.100ms="isDesktop = window.innerWidth >= 1200">
+      <div class="card" id="preview-card" style="display:none" x-data="{ isDesktop: window.innerWidth >= 1200 }"
+        @resize.window.debounce.100ms="isDesktop = window.innerWidth >= 1200">
         <div class="card-title" id="preview-title">✎ 読み取り結果（タップで修正可能）</div>
-        
+
         <!-- デスクトップ表示 (Table) -->
         <div class="item-table-container" x-show="isDesktop">
           <table class="pc-item-table">
@@ -3643,22 +3714,28 @@
             </thead>
             <tbody>
               <template x-for="(item, index) in $store.app.items" :key="index">
-                <tr :style="validateItem(item).level !== 'ok' ? `box-shadow: inset 4px 0 0 ${validateItem(item).level === 'error' ? 'var(--red)' : 'var(--gold-bright)'}` : ''">
+                <tr
+                  :style="validateItem(item).level !== 'ok' ? `box-shadow: inset 4px 0 0 ${validateItem(item).level === 'error' ? 'var(--red)' : 'var(--gold-bright)'}` : ''">
                   <td x-text="index + 1" style="font-size:12px; color:var(--text-muted); text-align:center"></td>
                   <td><input x-model="item.code" style="font-weight:600"></td>
                   <td><input x-model="item.color"></td>
                   <td><input x-model="item.size"></td>
                   <td>
                     <div class="qty-stepper">
-                      <button class="qty-btn minus" type="button" @click="item.quantity--; haptic('light')" :disabled="item.quantity <= 1">-</button>
+                      <button class="qty-btn minus" type="button" @click="item.quantity--; haptic('light')"
+                        :disabled="item.quantity <= 1">-</button>
                       <input type="number" inputmode="numeric" pattern="[0-9]*" x-model.number="item.quantity">
                       <button class="qty-btn plus" type="button" @click="item.quantity++; haptic('light')">+</button>
                     </div>
                   </td>
-                  <td><input type="number" inputmode="numeric" pattern="[0-9]*" x-model.number="item.unit_price" style="font-weight:700; color:var(--gold-bright)"></td>
-                  <td style="text-align:right; font-family:'Cormorant Garamond',serif; font-size:17px; font-weight:700; color:var(--gold-bright); white-space:nowrap;" x-text="'¥' + $store.app.calcItemAmount(item).toLocaleString()"></td>
+                  <td><input type="number" inputmode="numeric" pattern="[0-9]*" x-model.number="item.unit_price"
+                      style="font-weight:700; color:var(--gold-bright)"></td>
+                  <td
+                    style="text-align:right; font-family:'Cormorant Garamond',serif; font-size:17px; font-weight:700; color:var(--gold-bright); white-space:nowrap;"
+                    x-text="'¥' + $store.app.calcItemAmount(item).toLocaleString()"></td>
                   <td style="text-align:center">
-                    <button class="item-card-del" type="button" @click="$store.app.removeItem(index)" style="position:static; padding:4px 8px; background:rgba(224,97,87,0.12); border-radius:4px; font-size:12px">✕</button>
+                    <button class="item-card-del" type="button" @click="$store.app.removeItem(index)"
+                      style="position:static; padding:4px 8px; background:rgba(224,97,87,0.12); border-radius:4px; font-size:12px">✕</button>
                   </td>
                 </tr>
               </template>
@@ -3674,7 +3751,7 @@
                 <span class="item-card-num" x-text="'N° ' + String(index + 1).padStart(2, '0')"></span>
                 <button class="item-card-del" type="button" @click="$store.app.removeItem(index)">✕</button>
               </div>
-              
+
               <div class="ai-badges">
                 <template x-for="err in validateItem(item).errors">
                   <span class="ai-badge ai-badge-error" x-text="'⚠ ' + err"></span>
@@ -3705,16 +3782,19 @@
                 <div class="item-field"><label>サイズ</label><input x-model="item.size"></div>
                 <div class="item-field"><label>数量</label>
                   <div class="qty-stepper">
-                    <button type="button" class="qty-btn minus" @click="item.quantity--; haptic('light')" :disabled="item.quantity <= 1">-</button>
+                    <button type="button" class="qty-btn minus" @click="item.quantity--; haptic('light')"
+                      :disabled="item.quantity <= 1">-</button>
                     <input type="number" inputmode="numeric" pattern="[0-9]*" x-model.number="item.quantity">
                     <button type="button" class="qty-btn plus" @click="item.quantity++; haptic('light')">+</button>
                   </div>
                 </div>
-                <div class="item-field"><label>単価</label><input type="number" inputmode="numeric" pattern="[0-9]*" x-model.number="item.unit_price"></div>
+                <div class="item-field"><label>単価</label><input type="number" inputmode="numeric" pattern="[0-9]*"
+                    x-model.number="item.unit_price"></div>
               </div>
-              
+
               <div class="item-card-footer">
-                <span class="item-card-price" x-text="$store.app.rate + '% x ' + (($store.app.docType === 'return' || $store.app.docType === 'prov_return') ? '-' : '') + Math.abs(item.quantity || 1) + '個'"></span>
+                <span class="item-card-price"
+                  x-text="$store.app.rate + '% x ' + (($store.app.docType === 'return' || $store.app.docType === 'prov_return') ? '-' : '') + Math.abs(item.quantity || 1) + '個'"></span>
                 <span class="item-card-total" x-text="'¥' + $store.app.calcItemAmount(item).toLocaleString()"></span>
               </div>
             </div>
@@ -3725,22 +3805,23 @@
         <div id="preview-summary-wrap">
           <div class="preview-summary">
             <div class="preview-summary-row">
-               <span>小計 (税抜)</span>
-               <span x-text="'¥' + $store.app.subtotal.toLocaleString()"></span>
+              <span>小計 (税抜)</span>
+              <span x-text="'¥' + $store.app.subtotal.toLocaleString()"></span>
             </div>
             <div class="preview-summary-row">
-               <span>消費税 (10%)</span>
-               <span x-text="'¥' + $store.app.tax.toLocaleString()"></span>
+              <span>消費税 (10%)</span>
+              <span x-text="'¥' + $store.app.tax.toLocaleString()"></span>
             </div>
             <div class="preview-summary-row total">
-               <span>合計 (税込)</span>
-               <span x-text="'¥' + $store.app.grandTotal.toLocaleString()"></span>
+              <span>合計 (税込)</span>
+              <span x-text="'¥' + $store.app.grandTotal.toLocaleString()"></span>
             </div>
           </div>
         </div>
 
-        <button class="btn btn-outline btn-sm" id="btn-add-row" @click="$store.app.addItem()" style="margin-top:14px;width:100%">＋ 空白行を追加</button>
-        
+        <button class="btn btn-outline btn-sm" id="btn-add-row" @click="$store.app.addItem()"
+          style="margin-top:14px;width:100%">＋ 空白行を追加</button>
+
         <div style="margin-top:18px">
           <button class="btn btn-gold" id="btn-generate">
             <div class="spinner" id="sp2"></div>最終データを確定して保存
@@ -3826,7 +3907,8 @@
           <span data-sort="total_grand_total" style="text-align:right">金額</span>
           <span data-sort="status">状態</span>
         </div>
-        <div id="hist-list" x-data="{ isDesktop: window.innerWidth >= 1024 }" @resize.window.debounce.100ms="isDesktop = window.innerWidth >= 1024">
+        <div id="hist-list" x-data="{ isDesktop: window.innerWidth >= 1024 }"
+          @resize.window.debounce.100ms="isDesktop = window.innerWidth >= 1024">
           <template x-if="$store.app.isLoadingHistory">
             <div id="skel-wrap" x-html="skeletonRows(4)"></div>
           </template>
@@ -3836,34 +3918,40 @@
               <div class="empty-state-title">履歴がまだありません</div>
               <div class="empty-state-desc">タグの撮影 → AI解析 → 確定で<br>ここに伝票が並びます。</div>
               <button class="btn btn-gold" type="button"
-                      @click="document.querySelector('.tab[data-tab=create]').click(); $('btn-new')?.click(); haptic('medium');">
+                @click="document.querySelector('.tab[data-tab=create]').click(); $('btn-new')?.click(); haptic('medium');">
                 ＋ 新規作成へ
               </button>
             </div>
           </template>
-          
+
           <template x-for="inv in $store.app.history" :key="inv.id">
-            <div :class="'hist-item' + (inv.status === 'locked' ? ' locked' : '') + (selectedHistId === inv.id ? ' selected' : '')"
-                 @click="selectHistItem(inv, $event)">
-              
+            <div
+              :class="'hist-item' + (inv.status === 'locked' ? ' locked' : '') + (selectedHistId === inv.id ? ' selected' : '')"
+              @click="selectHistItem(inv, $event)">
+
               <!-- デスクトップ表示 -->
               <template x-if="isDesktop">
                 <div style="display: contents">
                   <div class="hist-num" x-text="inv.invoice_number"></div>
                   <div>
-                    <span class="badge" :style="`background:${TYPE_COLORS[inv.doc_type] || '#666'}1a; color:${TYPE_COLORS[inv.doc_type] || '#aaa'}; border:1px solid ${TYPE_COLORS[inv.doc_type] || '#666'}`"
-                          x-text="TYPE_TITLES[inv.doc_type]?.label || '不明'"></span>
+                    <span class="badge"
+                      :style="`background:${TYPE_COLORS[inv.doc_type] || '#666'}1a; color:${TYPE_COLORS[inv.doc_type] || '#aaa'}; border:1px solid ${TYPE_COLORS[inv.doc_type] || '#666'}`"
+                      x-text="TYPE_TITLES[inv.doc_type]?.label || '不明'"></span>
                   </div>
                   <div style="min-width:0">
-                    <div style="color:var(--text-primary); font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">
+                    <div
+                      style="color:var(--text-primary); font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">
                       <span x-text="inv.customer_name"></span>
-                      <span x-show="inv.user_name" :style="`font-size:10px; color:${inv.user_color}; margin-left:4px`" x-text="'● ' + inv.user_name"></span>
+                      <span x-show="inv.user_name" :style="`font-size:10px; color:${inv.user_color}; margin-left:4px`"
+                        x-text="'● ' + inv.user_name"></span>
                     </div>
-                    <div class="hist-meta" x-text="inv.item_count + '点 • ' + (inv.created_at || '').split('T')[0]"></div>
+                    <div class="hist-meta" x-text="inv.item_count + '点 • ' + (inv.created_at || '').split('T')[0]">
+                    </div>
                   </div>
                   <div class="hist-amt" x-text="'¥' + (inv.total_grand_total || 0).toLocaleString()"></div>
                   <div>
-                    <span :class="'status-badge status-' + (inv.status || 'draft')" x-text="inv.status === 'locked' ? '確定済' : '下書き'"></span>
+                    <span :class="'status-badge status-' + (inv.status || 'draft')"
+                      x-text="inv.status === 'locked' ? '確定済' : '下書き'"></span>
                   </div>
                 </div>
               </template>
@@ -3875,31 +3963,34 @@
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px">
                       <div class="hist-num">
                         <span x-text="inv.invoice_number"></span>
-                        <span :class="'status-badge status-' + (inv.status || 'draft')" x-text="inv.status === 'locked' ? '確定済' : '下書き'"></span>
+                        <span :class="'status-badge status-' + (inv.status || 'draft')"
+                          x-text="inv.status === 'locked' ? '確定済' : '下書き'"></span>
                       </div>
                       <div class="hist-amt" x-text="'¥' + (inv.total_grand_total || 0).toLocaleString()"></div>
                     </div>
                     <div class="hist-meta">
-                      <span class="badge" :style="`background:${TYPE_COLORS[inv.doc_type] || '#666'}1a; color:${TYPE_COLORS[inv.doc_type] || '#aaa'}; border:1px solid ${TYPE_COLORS[inv.doc_type] || '#666'}`"
-                            x-text="TYPE_TITLES[inv.doc_type]?.label || '不明'"></span>
+                      <span class="badge"
+                        :style="`background:${TYPE_COLORS[inv.doc_type] || '#666'}1a; color:${TYPE_COLORS[inv.doc_type] || '#aaa'}; border:1px solid ${TYPE_COLORS[inv.doc_type] || '#666'}`"
+                        x-text="TYPE_TITLES[inv.doc_type]?.label || '不明'"></span>
                       <span x-text="inv.customer_name"></span>
-                      <span x-show="inv.user_name" :style="`font-size:10px; color:${inv.user_color}; margin-left:4px`" x-text="'● ' + inv.user_name"></span>
+                      <span x-show="inv.user_name" :style="`font-size:10px; color:${inv.user_color}; margin-left:4px`"
+                        x-text="'● ' + inv.user_name"></span>
                       <span x-text="' • ' + inv.item_count + '点'"></span>
                     </div>
                     <div class="hist-actions-row">
                       <button class="btn btn-gold btn-sm" @click.stop="quickPreview(inv.id)">高速プレビュー</button>
                       <button x-if="inv.status !== 'locked'" class="btn btn-gold btn-sm"
-                              x-init="bindLongPress($el, () => lockHist(inv.id))"
-                              title="長押しで確定"
-                              @click.stop.prevent>確定 (長押し)</button>
-                      <button x-if="inv.status === 'locked'" class="btn btn-outline btn-sm" @click.stop="unlockHist(inv.id)">解除</button>
-                      <button x-if="inv.status === 'locked'" class="btn btn-blue btn-sm" @click.stop="uploadDrive(inv.id, $el)">保存 Drive</button>
+                        x-init="bindLongPress($el, () => lockHist(inv.id))" title="長押しで確定" @click.stop.prevent>確定
+                        (長押し)</button>
+                      <button x-if="inv.status === 'locked'" class="btn btn-outline btn-sm"
+                        @click.stop="unlockHist(inv.id)">解除</button>
+                      <button x-if="inv.status === 'locked'" class="btn btn-blue btn-sm"
+                        @click.stop="uploadDrive(inv.id, $el)">保存 Drive</button>
                       <button class="btn btn-outline btn-sm" @click.stop="downloadZip(inv.id)">ZIP</button>
-                      <button x-if="inv.status !== 'locked'" class="btn btn-outline btn-sm" @click.stop="editHist(inv.id)">編集</button>
-                      <button class="btn btn-red btn-sm"
-                              x-init="bindLongPress($el, () => delHist(inv.id))"
-                              title="長押しで削除"
-                              @click.stop.prevent>削除 (長押し)</button>
+                      <button x-if="inv.status !== 'locked'" class="btn btn-outline btn-sm"
+                        @click.stop="editHist(inv.id)">編集</button>
+                      <button class="btn btn-red btn-sm" x-init="bindLongPress($el, () => delHist(inv.id))"
+                        title="長押しで削除" @click.stop.prevent>削除 (長押し)</button>
                     </div>
                   </div>
                 </div>
@@ -3963,7 +4054,8 @@
               <span x-text="c.name" style="font-weight:600"></span>
               <div style="display:flex; align-items:center; gap:12px">
                 <span style="font-size:12px; color:var(--text-muted)" x-text="c.discount_rate + '%'"></span>
-                <button @click="delCust(c.id)" style="background:none; border:none; color:var(--red); cursor:pointer; font-size:16px">×</button>
+                <button @click="delCust(c.id)"
+                  style="background:none; border:none; color:var(--red); cursor:pointer; font-size:16px">×</button>
               </div>
             </div>
           </template>
@@ -3989,7 +4081,8 @@
             <div style="font-weight:600; color:var(--text-primary)">テーマ</div>
             <div style="font-size:12px; color:var(--text-muted); margin-top:4px">ライト / ダークの切り替え</div>
           </div>
-          <button id="theme-toggle-settings" class="theme-toggle" type="button" title="テーマ切替" aria-label="テーマ切替">☀</button>
+          <button id="theme-toggle-settings" class="theme-toggle" type="button" title="テーマ切替"
+            aria-label="テーマ切替">☀</button>
         </div>
       </div>
       <div class="card">
@@ -4152,7 +4245,7 @@
         rate: 35,
         docType: 'delivery',
         currentUser: JSON.parse(localStorage.getItem('laura-current-user') || 'null'),
-        
+
         init() {
           // 初期化時に各種データを取得
           this.rate = getRate();
@@ -4162,23 +4255,23 @@
           // 追加: 自動保存の監視
           Alpine.effect(() => {
             // 以下の値の変更を追跡
-            this.items.forEach(it => Object.values(it));
+            JSON.stringify(this.items);
             this.rate;
             this.docType;
             if (window.scheduleAutosave) scheduleAutosave();
           });
         },
-        
+
         get itemsCount() { return this.items.length; },
-        
+
         addItem() {
           this.items.push({ code: '', color: '', size: '', quantity: 1, unit_price: 0 });
         },
-        
+
         removeItem(index) {
           this.items.splice(index, 1);
         },
-        
+
         calcItemAmount(item) {
           const q = parseInt(item.quantity) || 0;
           const up = parseInt(item.unit_price) || 0;
@@ -4186,7 +4279,7 @@
           const sign = isReturn ? -1 : 1;
           return Math.trunc(up * (this.rate / 100) * q * sign);
         },
-        
+
         get subtotal() {
           return this.items.reduce((acc, it) => acc + this.calcItemAmount(it), 0);
         },
@@ -4196,20 +4289,20 @@
         get grandTotal() {
           return this.subtotal + this.tax;
         },
-        
+
         // --- マスターデータと履歴 ---
         customers: [],
         history: [],
         rawHistory: [],
         isLoadingHistory: false,
-        
+
         async fetchCustomers() {
           try {
             const r = await fetch('/api/customers');
             this.customers = await r.json();
           } catch (e) { console.error('fetchCustomers failed', e); }
         },
-        
+
         async fetchHistory(type = 'all') {
           try {
             const r = await fetch(`/api/history?doc_type=${type}`);
@@ -4243,7 +4336,7 @@
         restoreDraftIfExists();
       });
       initTabSwitchers();
-      
+
       // ユーザー初期化
       (async () => {
         loadUsers(); // 常にユーザー一覧をロードしてプルダウン等を更新
@@ -4291,7 +4384,7 @@
           const current = filter.value;
           filter.innerHTML = '<option value="">すべてのユーザー</option>' +
             allUsers.map(u => `<option value="${u.id}">${u.name}</option>`).join('');
-          
+
           // 初回のみ現在のユーザーをデフォルト選択にする
           if (!filter.dataset.init && currentUser) {
             filter.value = currentUser.id;
@@ -4725,9 +4818,32 @@
     function openPreviewModal(d, payload) {
       $('modal-title').textContent = `📄 ${d.invoice_number || 'PREVIEW'} - プレビュー`;
       $('modal-preview').style.display = 'flex';
-      $('modal-pdf-frame').src = b64ToBlobUrl(d.pdf_base64, 'application/pdf');
-      $('modal-detail-frame').src = b64ToBlobUrl(d.detail_pdf_base64, 'application/pdf');
-      renderExcelGrid(d.excel_base64);
+
+      if (d.pdf_base64) {
+        $('modal-pdf-frame').src = b64ToBlobUrl(d.pdf_base64, 'application/pdf');
+      } else if (d.invoice_number && d.invoice_number.startsWith('PREVIEW')) {
+        // プレビュー生成待ちの間、ローディングを表示してチラつきを抑える
+        const frame = $('modal-pdf-frame');
+        const doc = frame.contentWindow.document;
+        doc.open();
+        doc.write('<div style="display:flex; justify-content:center; align-items:center; height:100vh; font-family:sans-serif; color:#888;">描画中...</div>');
+        doc.close();
+      } else {
+        $('modal-pdf-frame').src = 'about:blank';
+      }
+
+      if (d.detail_pdf_base64) {
+        $('modal-detail-frame').src = b64ToBlobUrl(d.detail_pdf_base64, 'application/pdf');
+      } else {
+        $('modal-detail-frame').src = 'about:blank';
+      }
+
+      if (d.excel_base64) {
+        renderExcelGrid(d.excel_base64);
+      } else {
+        renderExcelGridLocal(payload);
+      }
+
       renderSummaryView(payload, d, 'modal-summary-content');
 
       // ★ iOSアプリ環境ならサーバーURLから直接取得、ブラウザならBase64から
@@ -4737,10 +4853,10 @@
         document.querySelector('.btn-dl-dpdf').onclick = () => dlFromServer(`/api/history/${d.id}/detail-pdf`, `明細表_${d.invoice_number}.pdf`);
         document.querySelector('.btn-dl-dxl').onclick = () => dlFromServer(`/api/history/${d.id}/detail-excel`, `明細表_${d.invoice_number}.xlsx`);
       } else {
-        document.querySelector('.btn-dl-pdf').onclick = () => dl64(d.pdf_base64, `納品書_${d.invoice_number}.pdf`, 'application/pdf');
-        document.querySelector('.btn-dl-xl').onclick = () => dl64(d.excel_base64, `納品書_${d.invoice_number}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        document.querySelector('.btn-dl-dpdf').onclick = () => dl64(d.detail_pdf_base64, `明細表_${d.invoice_number}.pdf`, 'application/pdf');
-        document.querySelector('.btn-dl-dxl').onclick = () => dl64(d.detail_excel_base64, `明細表_${d.invoice_number}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        if (d.pdf_base64) document.querySelector('.btn-dl-pdf').onclick = () => dl64(d.pdf_base64, `納品書_${d.invoice_number}.pdf`, 'application/pdf');
+        if (d.excel_base64) document.querySelector('.btn-dl-xl').onclick = () => dl64(d.excel_base64, `納品書_${d.invoice_number}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        if (d.detail_pdf_base64) document.querySelector('.btn-dl-dpdf').onclick = () => dl64(d.detail_pdf_base64, `明細表_${d.invoice_number}.pdf`, 'application/pdf');
+        if (d.detail_excel_base64) document.querySelector('.btn-dl-dxl').onclick = () => dl64(d.detail_excel_base64, `明細表_${d.invoice_number}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       }
 
       const driveBtn = $('modal-btn-drive');
@@ -4759,6 +4875,7 @@
     }
 
     function renderExcelGrid(b64) {
+      if (!b64) return;
       try {
         const wb = XLSX.read(b64, { type: 'base64' });
         const ws = wb.Sheets[wb.SheetNames[0]];
@@ -4766,6 +4883,43 @@
       } catch (e) {
         $('excel-preview-grid').innerHTML = '<div style="padding:20px;color:red">Excelの解析に失敗しました</div>';
       }
+    }
+
+    function renderExcelGridLocal(payload) {
+      const items = payload.items, rate = payload.discount_rate;
+      const isReturn = payload.doc_type === 'return' || payload.doc_type === 'prov_return';
+      const sign = isReturn ? -1 : 1;
+
+      let rowsHtml = items.map((it, i) => {
+        const q = Math.abs(parseInt(it.quantity) || 1) * sign;
+        const amount = Math.trunc((it.unit_price || 0) * (rate / 100) * q);
+        return `
+              <tr>
+                  <td>${it.code || '-'}</td>
+                  <td>${it.color || '-'}</td>
+                  <td>${it.size || '-'}</td>
+                  <td>-</td>
+                  <td>${q}</td>
+                  <td>¥${(it.unit_price || 0).toLocaleString()}</td>
+                  <td>¥${amount.toLocaleString()}</td>
+                  <td>${rate}%</td>
+              </tr>
+          `;
+      }).join('');
+
+      $('excel-preview-grid').innerHTML = `
+          <div style="padding:10px; background:#fff; color:#333; font-family:sans-serif; font-size:12px; overflow-x:auto;">
+            <table style="width:100%; border-collapse:collapse; min-width:600px;" border="1">
+                <thead>
+                    <tr style="background:#D9E1F2;">
+                        <th>品番</th><th>カラー</th><th>サイズ</th><th>バーコード</th><th>数量</th><th>単価</th><th>金額</th><th>掛率</th>
+                    </tr>
+                </thead>
+                <tbody>${rowsHtml}</tbody>
+            </table>
+            <div style="margin-top:10px; font-size:10px; color:#888;">※プレビュー用簡易表示（バーコード等は省略されています）</div>
+          </div>
+      `;
     }
 
     function renderSummaryView(payload, d, targetId) {
@@ -4826,7 +4980,7 @@
       const histList = $('hist-list');
       if (!histList) return;
       const t = $('hist-type-filter')?.value || 'all';
-      
+
       const hadData = (Alpine.store('app').history || []).length > 0;
       if (!hadData) Alpine.store('app').isLoadingHistory = true;
 
@@ -5092,20 +5246,45 @@
         doc_type: currentDocType,
         user_id: currentUser?.id
       };
+
+      // UIを即座にプレビューモーダルへ切り替え (高速化)
+      const dummyData = {
+        invoice_number: "PREVIEW-" + new Date().getTime().toString().slice(-6),
+        doc_type: currentDocType
+      };
+
+      $('modal-title').textContent = `📄 ${dummyData.invoice_number} - プレビュー`;
+      $('modal-preview').style.display = 'flex';
+
+      // 概要タブとExcelタブ(ローカル)は即座に描画
+      renderSummaryView(payload, dummyData, 'modal-summary-content');
+      renderExcelGridLocal(payload);
+
+      // バックエンドからHTMLテンプレートを取得して描画 (高速プレビュー)
       try {
-        showGenProgress(5);
         const r = await fetch('/api/preview', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
-        if (!r.ok) throw new Error('プレビュー生成失敗');
+        if (!r.ok) throw new Error('プレビュー取得失敗');
         const d = await r.json();
-        hideGenProgress();
-        setTimeout(() => openPreviewModal(d, payload), 700);
+
+        // iframeにHTMLを直接流し込む
+        const frame = $('modal-pdf-frame');
+        const doc = frame.contentWindow.document;
+        doc.open();
+        doc.write(d.html_preview);
+        doc.close();
+
+        // ダウンロードボタンの設定 (プレビュー時は保存前のため案内を出す)
+        document.querySelector('.btn-dl-pdf').onclick = () => toast('PDFは「保存・発行」後にダウンロード可能です', 'info');
+        document.querySelector('.btn-dl-xl').onclick = () => toast('Excelは「保存・発行」後にダウンロード可能です', 'info');
+        document.querySelector('.btn-dl-dpdf').onclick = () => toast('明細PDFは「保存・発行」後にダウンロード可能です', 'info');
+        document.querySelector('.btn-dl-dxl').onclick = () => toast('明細Excelは「保存・発行」後にダウンロード可能です', 'info');
       } catch (e) {
-        hideGenProgress();
-        toast(e.message, 'err');
+        console.error(e);
+        toast('プレビューの取得に失敗しました', 'err');
       }
     });
 
@@ -5326,15 +5505,15 @@
       // 表示された瞬間に Alpine.js が $store.app.items を元にレンダリングします。
       $('preview-card').style.display = 'block';
       updateMobileActionBar();
-      
+
       // 必要に応じてスクロール
       window.scrollTo({ top: $('preview-card').offsetTop - 20, behavior: 'smooth' });
     }
 
     // 以下の関数は Alpine.js 内で処理されるため不要になりましたが、
     // 他の箇所からの呼び出しエラーを防ぐために空の関数として残すか、互換性を持たせます。
-    function updateSummary() {}
-    function syncInputs() {}
+    function updateSummary() { }
+    function syncInputs() { }
     function delRow(i) {
       Alpine.store('app').removeItem(i);
     }

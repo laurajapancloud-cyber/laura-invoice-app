@@ -15,9 +15,11 @@ import uuid
 # psycopg2 / supabase はオプション (ローカル UI プレビューでは不要)
 try:
     import psycopg2
+    from psycopg2 import pool
     from psycopg2.extras import RealDictCursor
 except ImportError:
     psycopg2 = None
+    pool = None
     RealDictCursor = None
 
 try:
@@ -220,36 +222,34 @@ def extract_json_array(text: str):
 
 	return data
 
-# ==================== PostgreSQL (Supabase) Database ====================
-DATABASE_URL = os.getenv("DATABASE_URL")
-
-def get_db():
-    if not DATABASE_URL:
-        logger.warning("DATABASE_URL not set. Running in NO-DB mode.")
-        return None
-    if not psycopg2:
-        logger.warning("psycopg2 がインストールされていません。NO-DB モードで動作します。")
-        return None
-    # SupabaseのURIに含まれるSSLモードに対応
-    conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
-    return conn
-
-def require_db():
-    conn = get_db()
-    if not conn:
-        raise HTTPException(status_code=500, detail="DATABASE_URL is not configured")
-    return conn
-
-from contextlib import contextmanager
+# グローバルにプールを保持（最小1、最大20コネクション）
+db_pool = None
+if DATABASE_URL and psycopg2 and pool:
+    try:
+        db_pool = pool.ThreadedConnectionPool(1, 20, DATABASE_URL, cursor_factory=RealDictCursor)
+        logger.info("Database threaded connection pool initialized.")
+    except Exception as e:
+        logger.error("DB Pool creation failed: %s", e)
 
 @contextmanager
 def db_conn():
-    """データベース接続を安全に管理するコンテキストマネージャ"""
-    conn = require_db()
+    """プールからコネクションを取得し、使い終わったら返却する"""
+    if not db_pool:
+        # プールが無い場合はフォールバック（またはエラー）
+        if DATABASE_URL and psycopg2:
+            conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+            try:
+                yield conn
+            finally:
+                conn.close()
+            return
+        raise HTTPException(status_code=500, detail="Database connection not available")
+    
+    conn = db_pool.getconn()
     try:
         yield conn
     finally:
-        conn.close()
+        db_pool.putconn(conn)
 
 def init_db():
     conn = get_db()
@@ -692,7 +692,7 @@ async def health():
 
 # ==================== Dashboard API ====================
 @app.get("/api/dashboard")
-async def get_dashboard(username: Annotated[str, Depends(authenticate)]):
+def get_dashboard(username: Annotated[str, Depends(authenticate)]):
     with db_conn() as conn, conn.cursor() as cur:
         # DBセッションをJSTに設定
         try:
@@ -765,21 +765,21 @@ async def get_dashboard(username: Annotated[str, Depends(authenticate)]):
 
 # ==================== User Master API ====================
 @app.get("/api/users")
-async def get_users(username: Annotated[str, Depends(authenticate)]):
+def get_users(username: Annotated[str, Depends(authenticate)]):
     with db_conn() as conn, conn.cursor() as cur:
         cur.execute("SELECT id, name, color FROM users ORDER BY id")
         rows = cur.fetchall()
     return [dict(r) for r in rows]
 
 @app.post("/api/users")
-async def add_user(username: Annotated[str, Depends(authenticate)], name: str = Form(...), color: str = Form("#c9a961")):
+def add_user(username: Annotated[str, Depends(authenticate)], name: str = Form(...), color: str = Form("#c9a961")):
     with db_conn() as conn, conn.cursor() as cur:
         cur.execute("INSERT INTO users (name, color) VALUES (%s, %s)", (name, color))
         conn.commit()
     return {"status": "ok"}
 
 @app.delete("/api/users/{uid}")
-async def delete_user(uid: int, username: Annotated[str, Depends(authenticate)]):
+def delete_user(uid: int, username: Annotated[str, Depends(authenticate)]):
     with db_conn() as conn, conn.cursor() as cur:
         cur.execute("DELETE FROM users WHERE id = %s", (uid,))
         conn.commit()
@@ -787,21 +787,21 @@ async def delete_user(uid: int, username: Annotated[str, Depends(authenticate)])
 
 # ==================== Customer Master API ====================
 @app.get("/api/customers")
-async def get_customers(username: Annotated[str, Depends(authenticate)]):
+def get_customers(username: Annotated[str, Depends(authenticate)]):
     with db_conn() as conn, conn.cursor() as cur:
         cur.execute("SELECT id, name, discount_rate FROM customers ORDER BY id")
         rows = cur.fetchall()
     return [dict(r) for r in rows]
 
 @app.post("/api/customers")
-async def add_customer(username: Annotated[str, Depends(authenticate)], name: str = Form(...), discount_rate: int = Form(35)):
+def add_customer(username: Annotated[str, Depends(authenticate)], name: str = Form(...), discount_rate: int = Form(35)):
     with db_conn() as conn, conn.cursor() as cur:
         cur.execute("INSERT INTO customers (name, discount_rate) VALUES (%s, %s)", (name, discount_rate))
         conn.commit()
     return {"status": "ok"}
 
 @app.delete("/api/customers/{cid}")
-async def delete_customer(cid: int, username: Annotated[str, Depends(authenticate)]):
+def delete_customer(cid: int, username: Annotated[str, Depends(authenticate)]):
     with db_conn() as conn, conn.cursor() as cur:
         cur.execute("DELETE FROM customers WHERE id = %s", (cid,))
         conn.commit()
@@ -1082,7 +1082,7 @@ def build_invoice_pdf(invoice_data: dict) -> bytes:
         return b""
     return HTML(string=html_str).write_pdf()
 
-def build_invoice_excel(invoice_data: dict) -> bytes:
+def build_invoice_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
     """納品書 Excel (バーコード付き)"""
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -1142,17 +1142,19 @@ def build_invoice_excel(invoice_data: dict) -> bytes:
             ws[f"{col}{r}"].border = border_thin
         
         # ハイフンを除去して連結し、バーコード化
-        try:
-            bc_str = f"{item['code']}{item['color']}{item['size']}".replace("-", "")
-            ean = barcode.get('code128', bc_str, writer=ImageWriter())
-            bc_io = BytesIO()
-            ean.write(bc_io)
-            img = ExcelImage(bc_io)
-            img.width, img.height = 120, 30
-            marker = AnchorMarker(col=3, colOff=pixels_to_EMU(10), row=r-1, rowOff=pixels_to_EMU(5))
-            img.anchor = OneCellAnchor(_from=marker, ext=XDRPositiveSize2D(cx=pixels_to_EMU(120), cy=pixels_to_EMU(30)))
-            ws.add_image(img)
-        except: pass
+        if not is_preview:
+            try:
+                bc_str = f"{item['code']}{item['color']}{item['size']}".replace("-", "")
+                ean = barcode.get('code128', bc_str, writer=ImageWriter())
+                bc_io = BytesIO()
+                ean.write(bc_io)
+                img = ExcelImage(bc_io)
+                img.width, img.height = 120, 30
+                marker = AnchorMarker(col=3, colOff=pixels_to_EMU(10), row=r-1, rowOff=pixels_to_EMU(5))
+                img.anchor = OneCellAnchor(_from=marker, ext=XDRPositiveSize2D(cx=pixels_to_EMU(120), cy=pixels_to_EMU(30)))
+                ws.add_image(img)
+            except:
+                pass
 
     last_r = start_row + len(invoice_data["items"]) + 2
     ws.cell(row=last_r, column=7, value="小計")
@@ -1166,12 +1168,12 @@ def build_invoice_excel(invoice_data: dict) -> bytes:
     wb.save(out)
     return out.getvalue()
 
-def build_all_files(invoice_data: dict) -> dict:
+def build_all_files(invoice_data: dict, is_preview: bool = False) -> dict:
     """4ファイルまとめて生成"""
     doc_type = invoice_data.get("doc_type", "delivery")
     return {
         "pdf": build_invoice_pdf(invoice_data),
-        "excel": build_invoice_excel(invoice_data),
+        "excel": build_invoice_excel(invoice_data, is_preview=is_preview),
         "detail_pdf": build_detail_pdf(invoice_data["invoice_number"], invoice_data["customer_name"], invoice_data["items"], doc_type),
         "detail_excel": build_detail_excel(invoice_data["invoice_number"], invoice_data["customer_name"], invoice_data["items"], doc_type),
     }
@@ -1234,20 +1236,24 @@ class DocumentRequest(BaseModel):
     user_id: Optional[int] = None
 
 @app.post("/api/preview")
-async def preview_documents(username: Annotated[str, Depends(authenticate)], payload: DocumentRequest):
-    """保存せず、PDF/Excelだけ生成して返す"""
+def preview_documents(username: Annotated[str, Depends(authenticate)], payload: DocumentRequest):
+    """保存せず、HTMLテンプレートをそのまま返す（爆速プレビュー）"""
     inv_data = assemble_invoice_data(
         {"invoice_number": "PREVIEW-" + get_jst_now().strftime("%H%M%S"), "customer_name": payload.customer_name},
         payload.items, payload.discount_rate, payload.doc_type or "delivery"
     )
-    files = build_all_files(inv_data)
+    
+    # WeasyPrintでPDF化せず、Jinja2のHTML文字列をそのまま返す
+    from jinja2 import Environment, FileSystemLoader
+    env = Environment(loader=FileSystemLoader("templates"))
+    template = env.get_template("invoice_template.html")
+    render_data = {**inv_data, "font_face_css": get_pdf_font_css()}
+    html_str = template.render(**render_data)
+    
     return {
         "invoice_number": inv_data["invoice_number"],
         "doc_type": inv_data["doc_type"],
-        "pdf_base64": base64.b64encode(files["pdf"]).decode(),
-        "excel_base64": base64.b64encode(files["excel"]).decode(),
-        "detail_pdf_base64": base64.b64encode(files["detail_pdf"]).decode(),
-        "detail_excel_base64": base64.b64encode(files["detail_excel"]).decode(),
+        "html_preview": html_str,
     }
 
 
@@ -1305,7 +1311,7 @@ def generate_documents_internal(jid: str, payload_dict: dict):
         db_update_job(jid, 'failed', error=str(e))
 
 @app.post("/generate-documents")
-async def generate_documents(request: Request, username: Annotated[str, Depends(authenticate)], payload: DocumentRequest):
+def generate_documents(request: Request, username: Annotated[str, Depends(authenticate)], payload: DocumentRequest):
     """同期APIだが二重生成を避けるため _save_invoice_record で得た inv_data をそのまま使う"""
     jid = db_create_job('generate', payload.model_dump())
     try:
@@ -1422,7 +1428,7 @@ async def unlock_invoice(inv_id: int, username: Annotated[str, Depends(authentic
 
 # ==================== History & Serving API ====================
 @app.get("/api/history")
-async def get_history(username: Annotated[str, Depends(authenticate)], doc_type: Optional[str] = None, user_id: Optional[int] = None):
+def get_history(username: Annotated[str, Depends(authenticate)], doc_type: Optional[str] = None, user_id: Optional[int] = None):
     with db_conn() as conn, conn.cursor() as cur:
         query = """
             SELECT i.id, i.invoice_number, i.customer_name, i.total_grand_total, i.item_count, i.status, i.doc_type, i.user_id,
@@ -1464,7 +1470,26 @@ def serve_file(inv_id: int, kind: str):
         cur.execute("SELECT code,color,size,unit_price,quantity FROM invoice_items WHERE invoice_id=%s", (inv_id,))
         items = [dict(r) for r in cur.fetchall()]
 
-    fname = f'{inv["invoice_number"]}_{kind}.{cfg["ext"]}'
+    # === ここからファイル名生成の変更 ===
+    customer = safe_filename(inv.get("customer_name") or "Unknown")
+    
+    # 日付の取得（確定日 or 作成日）
+    dt = inv.get("locked_at") or inv.get("created_at") or get_jst_now()
+    if isinstance(dt, str):
+        try: dt = datetime.datetime.fromisoformat(dt.replace("Z", "+00:00"))
+        except: dt = get_jst_now()
+    date_str = f"{dt.month}月{dt.day}日"
+
+    # 種類（納品書、商品明細表など）の取得
+    doc_type = inv.get("doc_type", "delivery")
+    title_map = DOC_TYPE_TITLES.get(doc_type, DOC_TYPE_TITLES["delivery"])
+    if kind in ("pdf", "excel"):
+        label = title_map["pdf_title"]  # 例: 納品書
+    else:
+        label = title_map["detail_pdf_title"]  # 例: 商品明細表
+
+    fname = f'{customer}_{date_str}_{label}.{cfg["ext"]}'
+    # === 変更ここまで ===
 
     # キャッシュがあればそれを使う
     if inv.get(cfg["path_field"]):
@@ -1490,19 +1515,19 @@ def serve_file(inv_id: int, kind: str):
 
 
 @app.get("/api/history/{inv_id}/pdf")
-async def dl_pdf(inv_id: int, username: Annotated[str, Depends(authenticate)]):
+def dl_pdf(inv_id: int, username: Annotated[str, Depends(authenticate)]):
     return serve_file(inv_id, "pdf")
 
 @app.get("/api/history/{inv_id}/excel")
-async def dl_excel(inv_id: int, username: Annotated[str, Depends(authenticate)]):
+def dl_excel(inv_id: int, username: Annotated[str, Depends(authenticate)]):
     return serve_file(inv_id, "excel")
 
 @app.get("/api/history/{inv_id}/detail-pdf")
-async def dl_detail_pdf(inv_id: int, username: Annotated[str, Depends(authenticate)]):
+def dl_detail_pdf(inv_id: int, username: Annotated[str, Depends(authenticate)]):
     return serve_file(inv_id, "detail_pdf")
 
 @app.get("/api/history/{inv_id}/detail-excel")
-async def dl_detail_excel(inv_id: int, username: Annotated[str, Depends(authenticate)]):
+def dl_detail_excel(inv_id: int, username: Annotated[str, Depends(authenticate)]):
     return serve_file(inv_id, "detail_excel")
 
 def get_doc_type_folder_label(doc_type: str) -> str:
@@ -1520,7 +1545,7 @@ def safe_filename(name: str) -> str:
     return re.sub(r'[\\/:*?"<>|]+', "_", name).strip()
 
 def get_invoice_generated_files(inv_id: int):
-    """伝票の生成ファイル（4種類）を取得する。常に再生成する（オンデマンド）"""
+    """伝票の生成ファイル（4種類）を取得する。キャッシュがあればそれを使う"""
     with db_conn() as conn, conn.cursor() as cur:
         cur.execute("SELECT * FROM invoices WHERE id=%s", (inv_id,))
         inv = cur.fetchone()
@@ -1529,14 +1554,32 @@ def get_invoice_generated_files(inv_id: int):
         cur.execute("SELECT code, color, size, unit_price, quantity FROM invoice_items WHERE invoice_id=%s", (inv_id,))
         items = [dict(r) for r in cur.fetchall()]
 
-    dr = inv.get("discount_rate") or 100
-    inv_data = assemble_invoice_data(dict(inv), items, dr, inv.get("doc_type", "delivery"))
-    files = build_all_files(inv_data)
+    files = {}
+    needs_generation = False
     
+    # Storageのパスを確認し、すべて揃っていればダウンロード
+    for kind, cfg in KIND_CONFIG.items():
+        path = inv.get(cfg["path_field"])
+        if path:
+            try:
+                files[cfg["files_key"]] = storage_download(path)
+            except Exception:
+                needs_generation = True
+                break
+        else:
+            needs_generation = True
+            break
+
+    # キャッシュが無い、または取得に失敗した場合のみ再生成
+    if needs_generation:
+        dr = inv.get("discount_rate") or 100
+        inv_data = assemble_invoice_data(dict(inv), items, dr, inv.get("doc_type", "delivery"))
+        files = build_all_files(inv_data)
+        
     return dict(inv), files
 
 @app.get("/api/history/{inv_id}/zip")
-async def dl_zip(inv_id: int, username: Annotated[str, Depends(authenticate)]):
+def dl_zip(inv_id: int, username: Annotated[str, Depends(authenticate)]):
     """伝票に関連する4ファイルをZIPにまとめてダウンロードする"""
     try:
         inv, files = get_invoice_generated_files(inv_id)
@@ -1553,7 +1596,17 @@ async def dl_zip(inv_id: int, username: Annotated[str, Depends(authenticate)]):
             z.writestr(f"{inv_num}_{customer}_{titles['detail_pdf_title']}.xlsx", files["detail_excel"])
         
         zip_buffer.seek(0)
-        zip_name = f"{inv_num}_{customer}_documents.zip"
+        
+        # === ここからZIPファイル名の変更 ===
+        dt = inv.get("locked_at") or inv.get("created_at") or get_jst_now()
+        if isinstance(dt, str):
+            try: dt = datetime.datetime.fromisoformat(dt.replace("Z", "+00:00"))
+            except: dt = get_jst_now()
+        date_str = f"{dt.month}月{dt.day}日"
+        
+        zip_name = f"{customer}_{date_str}.zip"
+        # === 変更ここまで ===
+
         # 日本語ファイル名を安全にヘッダーに含めるためのエンコード (RFC 6266)
         encoded_filename = urllib.parse.quote(zip_name)
         
@@ -1569,7 +1622,7 @@ async def dl_zip(inv_id: int, username: Annotated[str, Depends(authenticate)]):
         raise HTTPException(status_code=500, detail=f"ZIP生成に失敗しました: {str(e)}")
 
 @app.get("/api/history/{inv_id}/items")
-async def get_history_items(inv_id: int, username: Annotated[str, Depends(authenticate)]):
+def get_history_items(inv_id: int, username: Annotated[str, Depends(authenticate)]):
     with db_conn() as conn, conn.cursor() as cur:
         cur.execute("SELECT code, color, size, unit_price, quantity FROM invoice_items WHERE invoice_id = %s", (inv_id,))
         rows = cur.fetchall()
@@ -1579,7 +1632,7 @@ async def get_history_items(inv_id: int, username: Annotated[str, Depends(authen
     return {"invoice_number": inv["invoice_number"], "customer_name": inv["customer_name"], "discount_rate": inv["discount_rate"], "doc_type": inv.get("doc_type", "delivery"), "items": [dict(r) for r in rows]}
 
 @app.delete("/api/history/{inv_id}")
-async def delete_history(inv_id: int, username: Annotated[str, Depends(authenticate)]):
+def delete_history(inv_id: int, username: Annotated[str, Depends(authenticate)]):
     with db_conn() as conn, conn.cursor() as cur:
         cur.execute("SELECT pdf_storage_path, excel_storage_path, detail_pdf_storage_path, detail_excel_storage_path FROM invoices WHERE id = %s", (inv_id,))
         row = cur.fetchone()
@@ -1651,34 +1704,34 @@ def upload_drive_internal(jid: str, inv_id: int):
         db_update_job(jid, 'failed', error=str(e))
 
 @app.post("/api/history/{inv_id}/upload-drive")
-async def upload_to_drive(inv_id: int, username: Annotated[str, Depends(authenticate)]):
+def upload_to_drive(inv_id: int, username: Annotated[str, Depends(authenticate)]):
     jid = db_create_job('drive_upload', {"invoice_id": inv_id})
-    await run_in_threadpool(upload_drive_internal, jid, inv_id)
+    upload_drive_internal(jid, inv_id)
     job = db_get_job(jid)
     if job['status'] == 'failed': return JSONResponse(status_code=500, content={"detail": job['error']})
     return job['result']
 
 @app.post("/api/jobs/drive-upload")
-async def enqueue_drive_upload(bt: BackgroundTasks, username: Annotated[str, Depends(authenticate)], inv_id: int = Form(...)):
+def enqueue_drive_upload(bt: BackgroundTasks, username: Annotated[str, Depends(authenticate)], inv_id: int = Form(...)):
     jid = db_create_job('drive_upload', {"invoice_id": inv_id})
     bt.add_task(upload_drive_internal, jid, inv_id)
     return {"job_id": jid, "status": "pending"}
 
 @app.get("/api/jobs")
-async def get_jobs(username: Annotated[str, Depends(authenticate)], limit: int = 20):
+def get_jobs(username: Annotated[str, Depends(authenticate)], limit: int = 20):
     with db_conn() as conn, conn.cursor() as cur:
         cur.execute("SELECT id, type, status, created_at, updated_at FROM jobs ORDER BY created_at DESC LIMIT %s", (limit,))
         rows = [dict(r) for r in cur.fetchall()]
     return rows
 
 @app.get("/api/jobs/{job_id}")
-async def get_job_status(job_id: str, username: Annotated[str, Depends(authenticate)]):
+def get_job_status(job_id: str, username: Annotated[str, Depends(authenticate)]):
     job = db_get_job(job_id)
     if not job: raise HTTPException(404, "Job not found")
     return job
 
 @app.get("/api/history/{inv_id}/data")
-async def get_history_data(inv_id: int, username: Annotated[str, Depends(authenticate)]):
+def get_history_data(inv_id: int, username: Annotated[str, Depends(authenticate)]):
     with db_conn() as conn, conn.cursor() as cur:
         cur.execute("SELECT * FROM invoices WHERE id=%s", (inv_id,))
         row = cur.fetchone()
@@ -1706,7 +1759,7 @@ async def get_history_data(inv_id: int, username: Annotated[str, Depends(authent
 
 
 @app.get("/manual", response_class=HTMLResponse)
-async def get_manual(request: Request):
+def get_manual(request: Request):
     return templates.TemplateResponse(request=request, name="manual.html")
 
 
