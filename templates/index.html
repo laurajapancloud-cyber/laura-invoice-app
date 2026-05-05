@@ -362,6 +362,12 @@
       position: relative;
       overflow: hidden;
       box-shadow: none;
+      -webkit-touch-callout: none;
+      /* iOSの長押しメニューを無効化 */
+      -webkit-user-select: none;
+      /* Safari向けテキスト選択無効化 */
+      user-select: none;
+      /* 一般向けテキスト選択無効化 */
     }
 
     .btn:disabled {
@@ -3337,21 +3343,24 @@
 
     /* ---- Light mode (auto via prefers-color-scheme + manual override) ---- */
     [data-theme="light"] {
-      --bg-base: #faf7f0;
+      --bg-base: #f7f5f0;
       --bg-elevated: #ffffff;
       --bg-card: #ffffff;
-      --bg-card-hover: #f5efe2;
-      --bg-input: #f9f6ee;
+      --bg-card-hover: #f0ebd8;
+      --bg-input: #ffffff;
       --gold: #a8893f;
       --gold-bright: #c9a961;
-      --gold-deep: #6b5828;
+      --gold-deep: #7a6327;
       --gold-soft: rgba(168, 137, 63, 0.12);
-      --text-primary: #1d1a13;
-      --text-secondary: #4a4434;
-      --text-muted: #807558;
-      --border: rgba(168, 137, 63, 0.22);
-      --border-strong: rgba(168, 137, 63, 0.45);
+      --text-primary: #2a261f;
+      --text-secondary: #575141;
+      --text-muted: #857c67;
+      --border: rgba(168, 137, 63, 0.35);
+      --border-strong: rgba(168, 137, 63, 0.6);
       --border-subtle: rgba(0, 0, 0, 0.08);
+
+      --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.04);
+      --shadow-md: 0 6px 18px rgba(0, 0, 0, 0.06);
     }
 
     [data-theme="light"] body {
@@ -3360,18 +3369,137 @@
         var(--bg-base);
     }
 
+    /* === ハードコードされた黒背景・文字色の強制上書き === */
+
+    /* ヘッダー・サイドバー・ステータスバー */
+    [data-theme="light"] .app-header {
+      background: rgba(255, 255, 255, 0.95);
+      border-bottom: 1px solid var(--border);
+    }
+
+    [data-theme="light"] .sidebar {
+      background: #ffffff;
+      border-right: 1px solid var(--border);
+    }
+
+    [data-theme="light"] .statusbar {
+      background: #ffffff;
+      border-top: 1px solid var(--border);
+      color: var(--text-secondary);
+    }
+
+    /* 入力フォーム全般 */
     [data-theme="light"] .form-group input,
-    [data-theme="light"] .form-group select {
+    [data-theme="light"] .form-group select,
+    [data-theme="light"] #hist-search,
+    [data-theme="light"] #hist-type-filter,
+    [data-theme="light"] #hist-user-filter,
+    [data-theme="light"] #hist-month-filter,
+    [data-theme="light"] .item-field input,
+    [data-theme="light"] .qty-stepper {
       background: #ffffff;
       color: var(--text-primary);
-      border-color: rgba(0, 0, 0, 0.12);
+      border: 1px solid var(--border-strong);
     }
 
+    /* フォーカス時のハイライト */
     [data-theme="light"] .form-group input:focus,
-    [data-theme="light"] .form-group select:focus {
-      background: #fffdf6;
+    [data-theme="light"] .form-group select:focus,
+    [data-theme="light"] #hist-search:focus,
+    [data-theme="light"] .item-field input:focus {
+      background: #fffcf2;
+      border-color: var(--gold-deep);
+      box-shadow: 0 0 0 3px rgba(201, 169, 97, 0.2);
     }
 
+    /* ボタン類 */
+    [data-theme="light"] .btn-dark,
+    [data-theme="light"] .btn-outline {
+      background: #ffffff;
+      color: var(--text-secondary);
+      border: 1px solid var(--border-strong);
+    }
+
+    [data-theme="light"] .btn-dark:hover:not(:disabled),
+    [data-theme="light"] .btn-outline:hover:not(:disabled) {
+      background: var(--bg-card-hover);
+      color: var(--gold-deep);
+      border-color: var(--gold);
+    }
+
+    /* ドキュメント種別ボタン */
+    [data-theme="light"] .doctype-btn {
+      background: #ffffff;
+      color: var(--text-secondary);
+      border: 1px solid var(--border-strong);
+    }
+
+    /* プレビューサマリー（合計金額の黒い箱） */
+    [data-theme="light"] .preview-summary {
+      background: #ffffff;
+      border: 1px solid var(--border-strong);
+      box-shadow: var(--shadow-sm);
+    }
+
+    [data-theme="light"] .preview-summary-row {
+      color: var(--text-secondary);
+    }
+
+    [data-theme="light"] .preview-summary-row.total {
+      color: var(--gold-deep);
+      border-top: 1px solid var(--border-strong);
+    }
+
+    /* アイテムカードとアップロードエリア */
+    [data-theme="light"] .item-card {
+      background: #ffffff;
+      border: 1px solid var(--border-strong);
+    }
+
+    [data-theme="light"] .item-card-header .item-card-num {
+      background: var(--bg-card-hover);
+      color: var(--gold-deep);
+      border-color: var(--gold);
+    }
+
+    [data-theme="light"] .upload-area {
+      background: #ffffff;
+      border: 1.5px dashed var(--border-strong);
+    }
+
+    [data-theme="light"] .upload-area:hover {
+      background: var(--bg-card-hover);
+    }
+
+    /* デスクトップ用テーブルリスト */
+    [data-theme="light"] .pc-item-table input {
+      color: var(--text-primary);
+    }
+
+    [data-theme="light"] .pc-item-table input:hover {
+      background: rgba(0, 0, 0, 0.03);
+      border-color: var(--border);
+    }
+
+    [data-theme="light"] .pc-item-table input:focus {
+      background: #ffffff;
+      border-color: var(--gold-deep);
+    }
+
+    [data-theme="light"] .hist-table-header {
+      background: #ffffff;
+      border-bottom: 1px solid var(--border-strong);
+    }
+
+    [data-theme="light"] .hist-item {
+      border-bottom: 1px solid var(--border-subtle) !important;
+    }
+
+    [data-theme="light"] .hist-item:nth-child(even) {
+      background: rgba(0, 0, 0, 0.02);
+    }
+
+    /* テーマ切り替えボタン */
     .theme-toggle {
       background: transparent;
       border: 1px solid var(--border-strong);
