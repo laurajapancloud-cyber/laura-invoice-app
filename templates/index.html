@@ -4621,11 +4621,11 @@
       const container = frame.parentElement;
       if (window.innerWidth <= 768) {
         const containerWidth = container.clientWidth;
-        const targetWidth = 800; // 帳票の基準幅
+        const targetWidth = 720; // 基準幅を少し絞って表示を大きくする
         const scale = containerWidth / targetWidth;
         
-        // A4の比率(1:1.414)を考慮した高さ
-        const docHeight = 1130; 
+        // A4の比率を考慮した高さ
+        const docHeight = 1020; 
         frame.style.width = targetWidth + 'px';
         frame.style.height = docHeight + 'px';
         frame.style.transform = `scale(${scale})`;
@@ -4633,9 +4633,9 @@
         frame.style.border = 'none';
         frame.style.display = 'block';
 
-        // コンテナ側の高さを「縮小後の高さ」に固定して下の余白を消す
-        container.style.height = (docHeight * scale) + 'px';
-        container.style.overflow = 'hidden';
+        // コンテナ側の高さを「縮小後の高さ + ボタン等の余白」に設定
+        container.style.height = (docHeight * scale + 100) + 'px';
+        container.style.overflow = 'visible';
       } else {
         frame.style.width = '100%';
         frame.style.height = '';
