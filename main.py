@@ -1317,7 +1317,8 @@ def preview_documents(username: Annotated[str, Depends(authenticate)], payload: 
     from jinja2 import Environment, FileSystemLoader
     env = Environment(loader=FileSystemLoader("templates"))
     template = env.get_template("invoice_template.html")
-    render_data = {**inv_data, "font_face_css": get_pdf_font_css()}
+    # preview用にはフォントCSSを空にする（ブラウザがGoogle Fontsを読むため）
+    render_data = {**inv_data, "font_face_css": ""}
     html_str = template.render(**render_data)
     
     return {
