@@ -828,6 +828,47 @@ def add_customer(username: Annotated[str, Depends(authenticate)], name: str = Fo
             raise HTTPException(400, "登録に失敗しました。店舗コードや店名が既に存在する可能性があります。")
     return {"status": "ok"}
 
+@app.put("/api/customers/{cid}")
+def update_customer(cid: int, username: Annotated[str, Depends(authenticate)], name: str = Form(...), discount_rate: int = Form(35), code: Optional[str] = Form(None)):
+    with db_conn() as conn, conn.cursor() as cur:
+        try:
+            cur.execute("UPDATE customers SET name=%s, code=%s, discount_rate=%s WHERE id=%s", (name, code, discount_rate, cid))
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            raise HTTPException(400, "更新に失敗しました。店舗コードや店名が重複している可能性があります。")
+    return {"status": "ok"}
+
+@app.post("/api/customers/import")
+def import_customers_api(username: Annotated[str, Depends(authenticate)], data: str = Form(...)):
+    count = 0
+    with db_conn() as conn, conn.cursor() as cur:
+        for line in data.strip().split("\n"):
+            parts = line.split("\t")
+            if len(parts) >= 3:
+                name = parts[0].strip()
+                code = parts[1].strip()
+                try:
+                    rate = int(parts[2].strip())
+                except ValueError:
+                    rate = 35
+                if not name:
+                    continue
+                try:
+                    cur.execute("""
+                        INSERT INTO customers (name, code, discount_rate)
+                        VALUES (%s, %s, %s)
+                        ON CONFLICT (name) DO UPDATE SET
+                            code = EXCLUDED.code,
+                            discount_rate = EXCLUDED.discount_rate;
+                    """, (name, code, rate))
+                    count += 1
+                except Exception as e:
+                    conn.rollback()
+                    continue
+        conn.commit()
+    return {"status": "ok", "count": count}
+
 @app.delete("/api/customers/{cid}")
 def delete_customer(cid: int, username: Annotated[str, Depends(authenticate)]):
     with db_conn() as conn, conn.cursor() as cur:
@@ -1139,7 +1180,8 @@ def build_invoice_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
     ws["B1"].font = Font(size=14, bold=True)
     
     ws["F1"] = "No."
-    ws["G1"] = invoice_data['invoice_number']
+    # No. の隣（伝票番号）は空欄にする
+    ws["G1"] = ""
     ws["G1"].fill = fill_yellow
     
     ws["B3"] = "コード"
