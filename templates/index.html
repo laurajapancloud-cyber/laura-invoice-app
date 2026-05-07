@@ -5534,13 +5534,15 @@
       const match = customers.find(c => c.code === code);
       if (match) {
         const sel = $('sel-customer');
-        const jsonStr = JSON.stringify(match);
         for(let i=0; i < sel.options.length; i++) {
-          if(sel.options[i].value === jsonStr) {
-            sel.selectedIndex = i;
-            sel.dispatchEvent(new Event('change'));
-            break;
-          }
+          try {
+            const optVal = JSON.parse(sel.options[i].value);
+            if (optVal && optVal.id === match.id) {
+              sel.selectedIndex = i;
+              sel.dispatchEvent(new Event('change'));
+              break;
+            }
+          } catch(e) {}
         }
       }
     }
