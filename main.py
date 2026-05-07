@@ -125,8 +125,8 @@ DOC_TYPE_LABELS = {
     "prov_delivery": "仮納品", "prov_return": "仮返品",
 }
 DOC_TYPE_TITLES = {
-    "delivery":      {"main": "御 納 品 書", "detail": "商 品 明 細 表",   "pdf_title": "納品書",   "detail_pdf_title": "商品明細表"},
-    "return":        {"main": "御 返 品 書", "detail": "返 品 明 細 表",   "pdf_title": "返品書",   "detail_pdf_title": "返品明細表"},
+    "delivery":      {"main": "納 品 書", "detail": "商 品 明 細 表",   "pdf_title": "納品書",   "detail_pdf_title": "商品明細表"},
+    "return":        {"main": "返 品 書", "detail": "返 品 明 細 表",   "pdf_title": "返品書",   "detail_pdf_title": "返品明細表"},
     "prov_delivery": {"main": "仮 納 品 書", "detail": "仮納品 明細表",     "pdf_title": "仮納品書", "detail_pdf_title": "仮納品明細表"},
     "prov_return":   {"main": "仮 返 品 書", "detail": "仮返品 明細表",     "pdf_title": "仮返品書", "detail_pdf_title": "仮返品明細表"},
 }
@@ -290,10 +290,12 @@ def init_db():
             CREATE TABLE IF NOT EXISTS customers (
                 id SERIAL PRIMARY KEY,
                 name TEXT NOT NULL UNIQUE,
+                code TEXT UNIQUE,
                 discount_rate INTEGER NOT NULL DEFAULT 35,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             );
         """)
+        cur.execute("ALTER TABLE customers ADD COLUMN IF NOT EXISTS code TEXT UNIQUE;")
         
         # Invoices table
         cur.execute("""
@@ -319,6 +321,7 @@ def init_db():
         """)
         cur.execute("ALTER TABLE invoices ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;")
         cur.execute("ALTER TABLE invoices ADD COLUMN IF NOT EXISTS doc_type TEXT NOT NULL DEFAULT 'delivery';")
+        cur.execute("ALTER TABLE invoices ADD COLUMN IF NOT EXISTS customer_code TEXT;")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_invoices_doc_type ON invoices(doc_type);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_invoices_user ON invoices(user_id);")
 
@@ -810,15 +813,19 @@ def delete_user(uid: int, username: Annotated[str, Depends(authenticate)]):
 @app.get("/api/customers")
 def get_customers(username: Annotated[str, Depends(authenticate)]):
     with db_conn() as conn, conn.cursor() as cur:
-        cur.execute("SELECT id, name, discount_rate FROM customers ORDER BY id")
+        cur.execute("SELECT id, name, code, discount_rate FROM customers ORDER BY id")
         rows = cur.fetchall()
     return [dict(r) for r in rows]
 
 @app.post("/api/customers")
-def add_customer(username: Annotated[str, Depends(authenticate)], name: str = Form(...), discount_rate: int = Form(35)):
+def add_customer(username: Annotated[str, Depends(authenticate)], name: str = Form(...), discount_rate: int = Form(35), code: Optional[str] = Form(None)):
     with db_conn() as conn, conn.cursor() as cur:
-        cur.execute("INSERT INTO customers (name, discount_rate) VALUES (%s, %s)", (name, discount_rate))
-        conn.commit()
+        try:
+            cur.execute("INSERT INTO customers (name, code, discount_rate) VALUES (%s, %s, %s)", (name, code, discount_rate))
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            raise HTTPException(400, "登録に失敗しました。店舗コードや店名が既に存在する可能性があります。")
     return {"status": "ok"}
 
 @app.delete("/api/customers/{cid}")
@@ -1063,6 +1070,12 @@ def build_detail_excel(invoice_number: str, customer_name: str, items: list, doc
             
             current_r += 1
 
+    # 全セルを中央揃えにする
+    for row in ws.iter_rows(min_row=1, max_row=ws.max_row, min_col=1, max_col=ws.max_column):
+        for cell in row:
+            if cell.value is not None:
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+
     out = BytesIO()
     wb.save(out)
     return out.getvalue()
@@ -1112,57 +1125,86 @@ def build_invoice_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
     fill_blue = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
     border_thin = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
     
-    ws.merge_cells("A1:E1")
-    ws["A1"] = invoice_data.get("doc_title_main", "御 納 品 書")
-    ws["A1"].font = Font(size=24, bold=True)
-    ws["A1"].alignment = Alignment(horizontal="center")
+    # Header format requested by user
+    doc_type = invoice_data.get("doc_type", "delivery")
+    label_map = {
+        "delivery": "納品",
+        "return": "返品",
+        "prov_delivery": "仮納品",
+        "prov_return": "仮返品"
+    }
+    ws["A1"] = label_map.get(doc_type, "納品")
+    ws["B1"] = "伝票"
+    ws["A1"].font = Font(size=14, bold=True)
+    ws["B1"].font = Font(size=14, bold=True)
     
     ws["F1"] = "No."
     ws["G1"] = invoice_data['invoice_number']
     ws["G1"].fill = fill_yellow
+    
+    ws["B3"] = "コード"
+    ws["B4"] = invoice_data.get("customer_code", "")
+    ws["B4"].fill = fill_yellow
+    
+    ws["D3"] = "店名"
+    ws["D4"] = invoice_data['customer_name']
+    ws["D4"].fill = fill_yellow
+    
     ws["F3"] = "日付"
     ws["G3"] = invoice_data['date']
-    ws["A4"] = "店名"
-    ws["A5"] = invoice_data['customer_name']
-    ws["A5"].font = Font(size=14, bold=True)
-    ws["A5"].fill = fill_yellow
+
+    ws.merge_cells("E3:E4")
+    store_code = invoice_data.get("customer_code", "")
+    if store_code and not is_preview:
+        try:
+            bc_store = barcode.get('code128', store_code, writer=ImageWriter())
+            bc_io_store = BytesIO()
+            bc_store.write(bc_io_store)
+            img_store = ExcelImage(bc_io_store)
+            img_store.width, img_store.height = 120, 30
+            # E column is col 5 (0-indexed col 4), E3 is row 3
+            marker_store = AnchorMarker(col=4, colOff=pixels_to_EMU(10), row=2, rowOff=pixels_to_EMU(5))
+            img_store.anchor = OneCellAnchor(_from=marker_store, ext=XDRPositiveSize2D(cx=pixels_to_EMU(120), cy=pixels_to_EMU(30)))
+            ws.add_image(img_store)
+        except:
+            pass
 
     headers = ["品番", "カラー", "サイズ", "バーコード", "数量", "単価", "金額", "掛率"]
-    h_cols = ["A", "B", "C", "D", "E", "F", "G", "H"]
-    start_row = 8
+    h_cols = ["B", "C", "D", "E", "F", "G", "H", "I"]
+    start_row = 7
     for col, txt in zip(h_cols, headers):
         cell = ws[f"{col}{start_row}"]
         cell.value = txt
         cell.fill = fill_blue
         cell.border = border_thin
-        cell.alignment = Alignment(horizontal="center")
 
-    ws.column_dimensions['A'].width = 15
-    ws.column_dimensions['B'].width = 10
+    ws.column_dimensions['A'].width = 5
+    ws.column_dimensions['B'].width = 15
     ws.column_dimensions['C'].width = 10
-    ws.column_dimensions['D'].width = 30
-    ws.column_dimensions['E'].width = 10
-    ws.column_dimensions['F'].width = 15
+    ws.column_dimensions['D'].width = 10
+    ws.column_dimensions['E'].width = 30
+    ws.column_dimensions['F'].width = 10
     ws.column_dimensions['G'].width = 15
     ws.column_dimensions['H'].width = 15
+    ws.column_dimensions['I'].width = 10
 
     for i, item in enumerate(invoice_data["items"]):
         r = start_row + 1 + i
         ws.row_dimensions[r].height = 45
-        ws[f"A{r}"] = item["code"]
-        ws[f"B{r}"] = item["color"]
-        ws[f"C{r}"] = item["size"]
-        ws[f"E{r}"] = item["quantity"]
-        ws[f"F{r}"] = item["unit_price"]
-        ws[f"F{r}"].number_format = '#,##0'
-        ws[f"G{r}"] = item["net_amount"]
+        ws[f"A{r}"] = i + 1
+        ws[f"B{r}"] = item["code"]
+        ws[f"C{r}"] = item["color"]
+        ws[f"D{r}"] = item["size"]
+        ws[f"F{r}"] = item["quantity"]
+        ws[f"G{r}"] = item["unit_price"]
         ws[f"G{r}"].number_format = '#,##0'
-        ws[f"H{r}"] = f"{invoice_data['discount_rate']}%"
+        ws[f"H{r}"] = item["net_amount"]
+        ws[f"H{r}"].number_format = '#,##0'
+        ws[f"I{r}"] = f"{invoice_data['discount_rate']}%"
         
-        for col in ["A","B","C","D","E","F","G","H"]:
+        for col in ["A","B","C","D","E","F","G","H","I"]:
             ws[f"{col}{r}"].border = border_thin
         
-        # ハイフンを除去して連結し、バーコード化
         if not is_preview:
             try:
                 bc_str = f"{item['code']}{item['color']}{item['size']}".replace("-", "")
@@ -1171,7 +1213,7 @@ def build_invoice_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
                 ean.write(bc_io)
                 img = ExcelImage(bc_io)
                 img.width, img.height = 120, 30
-                marker = AnchorMarker(col=3, colOff=pixels_to_EMU(10), row=r-1, rowOff=pixels_to_EMU(5))
+                marker = AnchorMarker(col=4, colOff=pixels_to_EMU(10), row=r-1, rowOff=pixels_to_EMU(5))
                 img.anchor = OneCellAnchor(_from=marker, ext=XDRPositiveSize2D(cx=pixels_to_EMU(120), cy=pixels_to_EMU(30)))
                 ws.add_image(img)
             except:
@@ -1184,6 +1226,12 @@ def build_invoice_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
     ws.cell(row=last_r+1, column=8, value=invoice_data["total_tax_amount"])
     ws.cell(row=last_r+2, column=7, value="合計金額")
     ws.cell(row=last_r+2, column=8, value=invoice_data["total_grand_total"])
+
+    # 全セルを中央揃えにする
+    for row in ws.iter_rows(min_row=1, max_row=ws.max_row, min_col=1, max_col=ws.max_column):
+        for cell in row:
+            if cell.value is not None:
+                cell.alignment = Alignment(horizontal="center", vertical="center")
 
     out = BytesIO()
     wb.save(out)
@@ -1236,7 +1284,7 @@ def assemble_invoice_data(inv_info: dict, items_input: list, discount_rate: int,
     titles = DOC_TYPE_TITLES.get(doc_type, DOC_TYPE_TITLES["delivery"])
 
     return {
-        "invoice_number": inv_info["invoice_number"], "customer_name": inv_info["customer_name"],
+        "invoice_number": inv_info["invoice_number"], "customer_name": inv_info["customer_name"], "customer_code": inv_info.get("customer_code", ""),
         "discount_rate": discount_rate, "items": processed,
         "total_net_amount": total_net, "total_tax_amount": total_tax, "total_grand_total": total_grand,
         "issuer": "株式会社 ラウラジャパン", "date": dt.strftime("%Y年%m月%d日"),
@@ -1250,6 +1298,7 @@ def assemble_invoice_data(inv_info: dict, items_input: list, discount_rate: int,
 # ==================== Document Generation API ====================
 class DocumentRequest(BaseModel):
     invoice_id: Optional[int] = None
+    customer_code: Optional[str] = None
     customer_name: str
     discount_rate: int
     items: List[Dict[str, Any]]
@@ -1292,24 +1341,24 @@ def _save_invoice_record(payload: "DocumentRequest"):
             invoice_number = generate_invoice_number_safe(cur, doc_type)
 
         inv_data = assemble_invoice_data(
-            {"invoice_number": invoice_number, "customer_name": payload.customer_name},
+            {"invoice_number": invoice_number, "customer_name": payload.customer_name, "customer_code": payload.customer_code},
             payload.items, payload.discount_rate, doc_type,
         )
 
         if payload.invoice_id:
             cur.execute("""
-                UPDATE invoices SET customer_name=%s, discount_rate=%s, total_net_amount=%s, total_tax_amount=%s, total_grand_total=%s,
+                UPDATE invoices SET customer_name=%s, customer_code=%s, discount_rate=%s, total_net_amount=%s, total_tax_amount=%s, total_grand_total=%s,
                 item_count=%s, status='draft', locked_at=NULL, doc_type=%s, user_id=%s,
                 pdf_storage_path=NULL, excel_storage_path=NULL, detail_pdf_storage_path=NULL, detail_excel_storage_path=NULL
                 WHERE id=%s
-            """, (payload.customer_name, payload.discount_rate, inv_data["total_net_amount"], inv_data["total_tax_amount"], inv_data["total_grand_total"], len(inv_data["items"]), doc_type, payload.user_id, payload.invoice_id))
+            """, (payload.customer_name, payload.customer_code, payload.discount_rate, inv_data["total_net_amount"], inv_data["total_tax_amount"], inv_data["total_grand_total"], len(inv_data["items"]), doc_type, payload.user_id, payload.invoice_id))
             cur.execute("DELETE FROM invoice_items WHERE invoice_id=%s", (payload.invoice_id,))
             inv_id = payload.invoice_id
         else:
             cur.execute("""
-                INSERT INTO invoices (invoice_number, customer_name, discount_rate, total_net_amount, total_tax_amount, total_grand_total, item_count, status, doc_type, user_id)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,'draft',%s,%s) RETURNING id
-            """, (invoice_number, payload.customer_name, payload.discount_rate, inv_data["total_net_amount"], inv_data["total_tax_amount"], inv_data["total_grand_total"], len(inv_data["items"]), doc_type, payload.user_id))
+                INSERT INTO invoices (invoice_number, customer_name, customer_code, discount_rate, total_net_amount, total_tax_amount, total_grand_total, item_count, status, doc_type, user_id)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,'draft',%s,%s) RETURNING id
+            """, (invoice_number, payload.customer_name, payload.customer_code, payload.discount_rate, inv_data["total_net_amount"], inv_data["total_tax_amount"], inv_data["total_grand_total"], len(inv_data["items"]), doc_type, payload.user_id))
             inv_id = cur.fetchone()['id']
 
         for item in inv_data["items"]:
