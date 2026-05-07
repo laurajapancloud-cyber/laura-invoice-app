@@ -756,7 +756,7 @@ def get_dashboard(username: Annotated[str, Depends(authenticate)]):
             for r in rows:
                 dt = r['doc_type']
                 cnt = r['cnt']
-                amt = r['total']
+                amt = abs(r['total']) # 絶対値で扱う
                 total_cnt += cnt
                 if dt in return_types:
                     return_cnt += cnt
