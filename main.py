@@ -790,7 +790,7 @@ def get_dashboard(username: Annotated[str, Depends(authenticate)]):
             m = r['month']
             if m not in monthly_map:
                 monthly_map[m] = {'month': m, 'delivery': 0, 'return': 0, 'net': 0, 'cnt': 0}
-            amt = r['total']
+            amt = abs(r['total']) # 絶対値で扱う
             monthly_map[m]['cnt'] += r['cnt']
             if r['doc_type'] in return_types:
                 monthly_map[m]['return'] += amt
@@ -811,10 +811,11 @@ def get_dashboard(username: Annotated[str, Depends(authenticate)]):
             name = r['customer_name']
             if name not in cust_map:
                 cust_map[name] = 0
+            amt = abs(r['total']) # 絶対値で扱う
             if r['doc_type'] in return_types:
-                cust_map[name] -= r['total']
+                cust_map[name] -= amt
             else:
-                cust_map[name] += r['total']
+                cust_map[name] += amt
         top_customers = sorted(
             [{'customer_name': k, 'total': v} for k, v in cust_map.items()],
             key=lambda x: x['total'], reverse=True
