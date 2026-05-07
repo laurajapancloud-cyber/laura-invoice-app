@@ -4238,7 +4238,7 @@
           </div>
           <textarea id="cust-import-data" rows="5" placeholder="KEN&#9;AI1022&#9;55&#10;べにや&#9;AK2002&#9;55"
             style="width:100%;padding:10px;font-size:12px;background:var(--bg-input);border:1px solid var(--border);border-radius:8px;color:var(--text-primary);font-family:monospace;resize:vertical;"></textarea>
-          <button class="btn btn-gold btn-sm" id="btn-import-cust" style="width:100%;margin-top:6px;">📥 インポート実行</button>
+          <button class="btn btn-gold btn-sm" id="btn-import-cust" onclick="importCustomers()" style="width:100%;margin-top:6px;">📥 インポート実行</button>
         </div>
       </div>
       <div class="card">
@@ -5274,22 +5274,27 @@
       });
     }
 
-    $('btn-import-cust')?.addEventListener('click', async () => {
+    async function importCustomers() {
       const data = $('cust-import-data').value.trim();
       if (!data) return toast('データを貼り付けてください', 'err');
-      if (!confirm(`データをインポートします。既存の同名の取引先は上書きされます。よろしいですか？`)) return;
+      if (!confirm('データをインポートします。既存の同名の取引先は上書きされます。よろしいですか？')) return;
       const fd = new FormData();
       fd.append('data', data);
-      const res = await fetch('/api/customers/import', { method: 'POST', body: fd });
-      if (res.ok) {
-        const result = await res.json();
-        toast(`${result.count}件インポートしました`);
-        $('cust-import-data').value = '';
-        loadCustomers();
-      } else {
-        toast('インポートに失敗しました', 'err');
+      try {
+        const res = await fetch('/api/customers/import', { method: 'POST', body: fd });
+        if (res.ok) {
+          const result = await res.json();
+          toast(`${result.count}件インポートしました`);
+          $('cust-import-data').value = '';
+          loadCustomers();
+        } else {
+          const err = await res.json();
+          toast(err.detail || 'インポートに失敗しました', 'err');
+        }
+      } catch(e) {
+        toast('インポートに失敗しました: ' + e.message, 'err');
       }
-    });
+    }
 
     // ===== History =====
     let selectedHistId = null;
