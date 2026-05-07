@@ -264,11 +264,13 @@ def db_conn():
     try:
         yield conn
     finally:
-        # コネクションがプール由来ならプールに返却、直接接続ならクローズ
-        if db_pool:
-            db_pool.putconn(conn)
-        else:
-            conn.close()
+        release_db(conn)
+
+def release_db(conn):
+    if db_pool:
+        db_pool.putconn(conn)
+    else:
+        conn.close()
 
 def init_db():
     conn = get_db()
@@ -372,7 +374,7 @@ def init_db():
     try:
         conn.commit()
     finally:
-        conn.close()
+        release_db(conn)
 
 def generate_invoice_number(doc_type='delivery'):
     with db_conn() as conn, conn.cursor() as cur:
@@ -418,7 +420,7 @@ def db_create_job(job_type: str, payload: dict):
             )
             conn.commit()
     finally:
-        conn.close()
+        release_db(conn)
     return jid
 
 def db_update_job(jid: str, status: str, result: dict = None, error: str = None):
@@ -432,7 +434,7 @@ def db_update_job(jid: str, status: str, result: dict = None, error: str = None)
             )
             conn.commit()
     finally:
-        conn.close()
+        release_db(conn)
 
 def db_get_job(jid: str):
     conn = get_db()
@@ -442,7 +444,7 @@ def db_get_job(jid: str):
             cur.execute("SELECT * FROM jobs WHERE id=%s", (jid,))
             row = cur.fetchone()
     finally:
-        conn.close()
+        release_db(conn)
     if row:
         row = dict(row)
         if isinstance(row['payload'], str): row['payload'] = json.loads(row['payload'])
