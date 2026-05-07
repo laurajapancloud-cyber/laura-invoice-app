@@ -729,35 +729,102 @@ def get_dashboard(username: Annotated[str, Depends(authenticate)]):
         # 前月の開始時刻 (JST)
         last_month_start = (month_start - datetime.timedelta(days=1)).replace(day=1)
         
-        # 今月の統計
+        # 今月の統計（全伝票タイプ）
         cur.execute(
-            "SELECT COUNT(*) as cnt, COALESCE(SUM(total_grand_total),0) as total FROM invoices WHERE created_at >= %s AND doc_type='delivery'",
+            """SELECT doc_type, COUNT(*) as cnt, COALESCE(SUM(total_grand_total),0) as total
+               FROM invoices WHERE created_at >= %s GROUP BY doc_type""",
             (month_start,)
         )
-        this_month = cur.fetchone()
+        this_month_rows = cur.fetchall()
         
-        # 前月の統計
+        # 前月の統計（全伝票タイプ）
         cur.execute(
-            "SELECT COUNT(*) as cnt, COALESCE(SUM(total_grand_total),0) as total FROM invoices WHERE created_at >= %s AND created_at < %s AND doc_type='delivery'",
+            """SELECT doc_type, COUNT(*) as cnt, COALESCE(SUM(total_grand_total),0) as total
+               FROM invoices WHERE created_at >= %s AND created_at < %s GROUP BY doc_type""",
             (last_month_start, month_start)
         )
-        last_month = cur.fetchone()
+        last_month_rows = cur.fetchall()
         
-        # 月別推移 (過去12ヶ月)
-        cur.execute(
-            "SELECT to_char(created_at, 'YYYY-MM') as month, COUNT(*) as cnt, COALESCE(SUM(total_grand_total),0) as total FROM invoices WHERE doc_type='delivery' GROUP BY month ORDER BY month DESC LIMIT 12"
-        )
-        monthly = cur.fetchall()
+        # 返品はマイナスとして集計する
+        return_types = {'return', 'prov_return'}
         
-        # 全期間の取引先別売上トップ5
+        def aggregate(rows):
+            total_cnt = 0
+            total_amt = 0
+            delivery_cnt = 0; delivery_amt = 0
+            return_cnt = 0; return_amt = 0
+            for r in rows:
+                dt = r['doc_type']
+                cnt = r['cnt']
+                amt = r['total']
+                total_cnt += cnt
+                if dt in return_types:
+                    return_cnt += cnt
+                    return_amt += amt
+                    total_amt -= amt  # 返品はマイナス
+                else:
+                    delivery_cnt += cnt
+                    delivery_amt += amt
+                    total_amt += amt
+            return {
+                'invoices': total_cnt,
+                'total_amount': total_amt,
+                'delivery_count': delivery_cnt,
+                'delivery_amount': delivery_amt,
+                'return_count': return_cnt,
+                'return_amount': return_amt,
+            }
+        
+        this_month = aggregate(this_month_rows)
+        last_month = aggregate(last_month_rows)
+        
+        # 月別推移 (過去12ヶ月, 納品/返品を分離)
         cur.execute(
-            "SELECT customer_name, SUM(total_grand_total) as total FROM invoices WHERE doc_type='delivery' GROUP BY customer_name ORDER BY total DESC LIMIT 5"
+            """SELECT to_char(created_at, 'YYYY-MM') as month, doc_type,
+                      COUNT(*) as cnt, COALESCE(SUM(total_grand_total),0) as total
+               FROM invoices GROUP BY month, doc_type ORDER BY month DESC LIMIT 60"""
         )
-        top_customers = cur.fetchall()
+        monthly_raw = cur.fetchall()
+        monthly_map = {}
+        for r in monthly_raw:
+            m = r['month']
+            if m not in monthly_map:
+                monthly_map[m] = {'month': m, 'delivery': 0, 'return': 0, 'net': 0, 'cnt': 0}
+            amt = r['total']
+            monthly_map[m]['cnt'] += r['cnt']
+            if r['doc_type'] in return_types:
+                monthly_map[m]['return'] += amt
+                monthly_map[m]['net'] -= amt
+            else:
+                monthly_map[m]['delivery'] += amt
+                monthly_map[m]['net'] += amt
+        monthly = sorted(monthly_map.values(), key=lambda x: x['month'], reverse=True)[:12]
+        
+        # 全期間の取引先別売上トップ5（返品をマイナスで加算）
+        cur.execute(
+            """SELECT customer_name, doc_type, SUM(total_grand_total) as total
+               FROM invoices GROUP BY customer_name, doc_type"""
+        )
+        cust_raw = cur.fetchall()
+        cust_map = {}
+        for r in cust_raw:
+            name = r['customer_name']
+            if name not in cust_map:
+                cust_map[name] = 0
+            if r['doc_type'] in return_types:
+                cust_map[name] -= r['total']
+            else:
+                cust_map[name] += r['total']
+        top_customers = sorted(
+            [{'customer_name': k, 'total': v} for k, v in cust_map.items()],
+            key=lambda x: x['total'], reverse=True
+        )[:5]
         
         # 全期間の商品別(品番)数量トップ5
         cur.execute(
-            "SELECT code, SUM(quantity) as qty FROM invoice_items ii JOIN invoices i ON ii.invoice_id = i.id WHERE i.doc_type='delivery' GROUP BY code ORDER BY qty DESC LIMIT 5"
+            """SELECT ii.code, SUM(ii.quantity) as qty
+               FROM invoice_items ii JOIN invoices i ON ii.invoice_id = i.id
+               GROUP BY ii.code ORDER BY qty DESC LIMIT 5"""
         )
         top_items = cur.fetchall()
 
@@ -779,10 +846,10 @@ def get_dashboard(username: Annotated[str, Depends(authenticate)]):
         usage_list.append({"model": model, "requests": u["cnt"], "images": imgs, "est_cost_yen": cost})
     
     return {
-        "this_month": {"invoices": this_month["cnt"], "total_amount": this_month["total"]},
-        "last_month": {"invoices": last_month["cnt"], "total_amount": last_month["total"]},
-        "monthly": [dict(m) for m in monthly],
-        "top_customers": [dict(c) for c in top_customers],
+        "this_month": this_month,
+        "last_month": last_month,
+        "monthly": monthly,
+        "top_customers": [dict(c) if not isinstance(c, dict) else c for c in top_customers],
         "top_items": [dict(i) for i in top_items],
         "api_usage": usage_list
     }

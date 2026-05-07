@@ -4145,19 +4145,35 @@
         <div class="stat-grid">
           <div class="stat-box">
             <div class="stat-val" id="dash-inv-cnt">0</div>
-            <div class="stat-label">今月の伝票数</div>
+            <div class="stat-label">伝票数（全種）</div>
             <div class="stat-sub" id="dash-inv-cnt-diff" style="font-size:10px; margin-top:4px"></div>
           </div>
           <div class="stat-box">
             <div class="stat-val" id="dash-inv-amt" style="font-size:24px">¥0</div>
-            <div class="stat-label">今月の合計金額</div>
+            <div class="stat-label">純売上（納品 − 返品）</div>
             <div class="stat-sub" id="dash-inv-amt-diff" style="font-size:10px; margin-top:4px"></div>
+          </div>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:16px;">
+          <div style="padding:12px; background:rgba(46,94,62,0.15); border-radius:10px; border:1px solid rgba(46,94,62,0.3);">
+            <div style="font-size:11px; color:var(--green); letter-spacing:0.08em; margin-bottom:4px;">📦 納品</div>
+            <div style="display:flex; justify-content:space-between; align-items:baseline;">
+              <span id="dash-delivery-cnt" style="font-size:22px; font-weight:700; color:var(--text-primary);">0</span>
+              <span id="dash-delivery-amt" style="font-size:14px; color:var(--text-secondary);">¥0</span>
+            </div>
+          </div>
+          <div style="padding:12px; background:rgba(200,51,46,0.12); border-radius:10px; border:1px solid rgba(200,51,46,0.3);">
+            <div style="font-size:11px; color:var(--red); letter-spacing:0.08em; margin-bottom:4px;">↩ 返品</div>
+            <div style="display:flex; justify-content:space-between; align-items:baseline;">
+              <span id="dash-return-cnt" style="font-size:22px; font-weight:700; color:var(--text-primary);">0</span>
+              <span id="dash-return-amt" style="font-size:14px; color:var(--red);">-¥0</span>
+            </div>
           </div>
         </div>
       </div>
       <div class="card" id="dash-top-card" style="display:grid; grid-template-columns:1fr 1fr; gap:20px">
         <div>
-          <div class="card-title" style="font-size:14px">🏆 取引先TOP5</div>
+          <div class="card-title" style="font-size:14px">🏆 取引先TOP5（純売上）</div>
           <div id="dash-top-customers" style="font-size:13px; color:var(--text-secondary)"></div>
         </div>
         <div>
@@ -4166,7 +4182,7 @@
         </div>
       </div>
       <div class="card">
-        <div class="card-title">📈 月別推移</div>
+        <div class="card-title">📈 月別推移（納品 / 返品）</div>
         <div class="bar-chart" id="bar-chart">
           <div class="empty-state">データがありません</div>
         </div>
@@ -4206,11 +4222,11 @@
               <!-- 編集モード (非表示) -->
               <div class="cust-edit" style="display:none; width:100%; margin-top:8px;">
                 <div style="display:flex; gap:6px; align-items:flex-end; flex-wrap:wrap;">
-                  <div style="flex:0 0 100px;"><label style="font-size:10px;color:var(--text-muted)">コード</label><input type="text" class="edit-code" style="width:100%;padding:6px 8px;font-size:12px;background:var(--bg-input);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);"></div>
-                  <div style="flex:1;"><label style="font-size:10px;color:var(--text-muted)">店名</label><input type="text" class="edit-name" style="width:100%;padding:6px 8px;font-size:12px;background:var(--bg-input);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);"></div>
-                  <div style="flex:0 0 70px;"><label style="font-size:10px;color:var(--text-muted)">掛率(%)</label><input type="number" class="edit-rate" style="width:100%;padding:6px 8px;font-size:12px;background:var(--bg-input);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);" inputmode="numeric"></div>
-                  <button class="btn btn-gold btn-sm" @click="saveEditCust(c.id, $el.closest('.cust-row'))" style="padding:6px 14px; font-size:12px;">保存</button>
-                  <button class="btn btn-sm" @click="cancelEditCust($el.closest('.cust-row'))" style="padding:6px 10px; font-size:12px; background:var(--bg-input); border:1px solid var(--border); color:var(--text-secondary);">取消</button>
+                  <div style="flex:0 0 100px;"><label style="font-size:10px;color:var(--gold);font-weight:600;">コード</label><input type="text" class="edit-code" style="width:100%;padding:8px 10px;font-size:13px;background:#2a2a2a;border:1.5px solid var(--gold);border-radius:6px;color:#fff;"></div>
+                  <div style="flex:1;"><label style="font-size:10px;color:var(--gold);font-weight:600;">店名</label><input type="text" class="edit-name" style="width:100%;padding:8px 10px;font-size:13px;background:#2a2a2a;border:1.5px solid var(--gold);border-radius:6px;color:#fff;"></div>
+                  <div style="flex:0 0 70px;"><label style="font-size:10px;color:var(--gold);font-weight:600;">掛率(%)</label><input type="number" class="edit-rate" style="width:100%;padding:8px 10px;font-size:13px;background:#2a2a2a;border:1.5px solid var(--gold);border-radius:6px;color:#fff;" inputmode="numeric"></div>
+                  <button class="btn btn-gold btn-sm" @click="saveEditCust(c.id, $el.closest('.cust-row'))" style="padding:8px 16px; font-size:12px;">保存</button>
+                  <button class="btn btn-sm" @click="cancelEditCust($el.closest('.cust-row'))" style="padding:8px 12px; font-size:12px; background:#333; border:1px solid var(--border); color:var(--text-secondary);">取消</button>
                 </div>
               </div>
             </div>
@@ -4230,15 +4246,6 @@
           </div>
           <button class="btn btn-gold btn-sm" id="btn-add-cust" style="width:100%;margin-top:6px">＋
             取引先を追加</button>
-        </div>
-        <div style="margin-top:18px;border-top:1px solid var(--border);padding-top:18px">
-          <div class="card-title" style="font-size:13px; margin-bottom:8px;">📥 一括インポート（Excel等からペースト）</div>
-          <div style="font-size:11px; color:var(--text-muted); margin-bottom:8px;">
-            タブ区切りで「店名 → コード → 掛率」の順に貼り付けてください。既存の店名は上書きされます。
-          </div>
-          <textarea id="cust-import-data" rows="5" placeholder="KEN&#9;AI1022&#9;55&#10;べにや&#9;AK2002&#9;55"
-            style="width:100%;padding:10px;font-size:12px;background:var(--bg-input);border:1px solid var(--border);border-radius:8px;color:var(--text-primary);font-family:monospace;resize:vertical;"></textarea>
-          <button class="btn btn-gold btn-sm" id="btn-import-cust" onclick="importCustomers()" style="width:100%;margin-top:6px;">📥 インポート実行</button>
         </div>
       </div>
       <div class="card">
@@ -6066,46 +6073,60 @@
         $('dash-inv-cnt').textContent = d.this_month.invoices;
         $('dash-inv-amt').textContent = '¥' + d.this_month.total_amount.toLocaleString();
 
+        // 納品/返品の内訳
+        if ($('dash-delivery-cnt')) {
+          $('dash-delivery-cnt').textContent = (d.this_month.delivery_count || 0) + '件';
+          $('dash-delivery-amt').textContent = '¥' + (d.this_month.delivery_amount || 0).toLocaleString();
+          $('dash-return-cnt').textContent = (d.this_month.return_count || 0) + '件';
+          $('dash-return-amt').textContent = '-¥' + (d.this_month.return_amount || 0).toLocaleString();
+        }
+
         const cntDiff = d.this_month.invoices - d.last_month.invoices;
         const amtDiff = d.this_month.total_amount - d.last_month.total_amount;
         $('dash-inv-cnt-diff').innerHTML = `前月比: <span style="color:${cntDiff >= 0 ? 'var(--green)' : 'var(--red)'}">${cntDiff >= 0 ? '+' : ''}${cntDiff}</span>`;
-        $('dash-inv-amt-diff').innerHTML = `前月比: <span style="color:${amtDiff >= 0 ? 'var(--green)' : 'var(--red)'}">${amtDiff >= 0 ? '+' : ''}${amtDiff.toLocaleString()}</span>`;
+        $('dash-inv-amt-diff').innerHTML = `前月比: <span style="color:${amtDiff >= 0 ? 'var(--green)' : 'var(--red)'}">${amtDiff >= 0 ? '+¥' : '-¥'}${Math.abs(amtDiff).toLocaleString()}</span>`;
 
         const tc = $('dash-top-customers');
         tc.innerHTML = '';
         if (d.top_customers.length) {
           d.top_customers.forEach((c, i) => {
             const div = document.createElement('div');
-            div.style.display = 'flex';
-            div.style.justifyContent = 'space-between';
-            div.style.padding = '4px 0';
-            div.innerHTML = `<span>${i + 1}. ${c.customer_name}</span><span>¥${c.total.toLocaleString()}</span>`;
+            div.style.cssText = 'display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.05);';
+            const color = c.total >= 0 ? 'var(--text-primary)' : 'var(--red)';
+            div.innerHTML = `<span style="color:var(--text-secondary)">${i + 1}. ${c.customer_name}</span><span style="font-weight:600; color:${color}">¥${c.total.toLocaleString()}</span>`;
             tc.appendChild(div);
           });
-        } else { tc.innerHTML = 'データなし'; }
+        } else { tc.innerHTML = '<div class="empty-state">データなし</div>'; }
 
         const ti = $('dash-top-items');
         ti.innerHTML = '';
         if (d.top_items.length) {
           d.top_items.forEach((it, i) => {
             const div = document.createElement('div');
-            div.style.display = 'flex';
-            div.style.justifyContent = 'space-between';
-            div.style.padding = '4px 0';
-            div.innerHTML = `<span>${i + 1}. ${it.code}</span><span>${it.qty}点</span>`;
+            div.style.cssText = 'display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.05);';
+            div.innerHTML = `<span style="color:var(--text-secondary)">${i + 1}. ${it.code}</span><span style="font-weight:600">${it.qty}点</span>`;
             ti.appendChild(div);
           });
-        } else { ti.innerHTML = 'データなし'; }
+        } else { ti.innerHTML = '<div class="empty-state">データなし</div>'; }
 
         const bc = $('bar-chart');
         bc.innerHTML = '';
         if (d.monthly.length) {
-          const max = Math.max(...d.monthly.map(m => m.total), 1);
+          const maxVal = Math.max(...d.monthly.map(m => Math.max(m.delivery || 0, m.return || 0)), 1);
           [...d.monthly].reverse().forEach(m => {
             const col = document.createElement('div');
             col.className = 'bar-col';
-            const h = Math.max(4, Math.round(m.total / max * 100));
-            col.innerHTML = `<div class="bar" style="height:${h}px"></div><div class="bar-label">${m.month.slice(5)}月</div>`;
+            col.style.position = 'relative';
+            const hD = Math.max(2, Math.round((m.delivery || 0) / maxVal * 100));
+            const hR = Math.max(0, Math.round((m.return || 0) / maxVal * 100));
+            col.innerHTML = `
+              <div style="display:flex; flex-direction:column; align-items:center; gap:2px;">
+                <div class="bar" style="height:${hD}px; background:var(--green); opacity:0.7; border-radius:3px 3px 0 0;"></div>
+                ${hR > 0 ? `<div style="height:${hR}px; width:100%; background:var(--red); opacity:0.6; border-radius:0 0 3px 3px;"></div>` : ''}
+              </div>
+              <div class="bar-label">${m.month.slice(5)}月</div>
+              <div style="font-size:9px; color:var(--text-muted); margin-top:2px;">¥${((m.net || 0) / 1000).toFixed(0)}k</div>`;
+            col.title = `納品: ¥${(m.delivery||0).toLocaleString()} / 返品: ¥${(m.return||0).toLocaleString()} / 純売上: ¥${(m.net||0).toLocaleString()}`;
             bc.appendChild(col);
           });
         } else {
