@@ -1086,12 +1086,46 @@ async def enqueue_analyze(bt: BackgroundTasks, username: Annotated[str, Depends(
 # ==================== Product Detail Sheet Logic ====================
 SIZE_COLUMNS = ["44", "46", "48", "50", "52"]
 
+def apply_a4_print_settings(ws, orientation="portrait", fit_to_width=True, fit_to_height=False):
+    """
+    Excel出力時の印刷設定をA4に固定する。
+    - orientation: "portrait" または "landscape"
+    - fit_to_width: 横幅を1ページに収める
+    - fit_to_height: 縦も1ページに収める
+    """
+    ws.page_setup.paperSize = ws.PAPERSIZE_A4
+    ws.page_setup.orientation = orientation
+
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+
+    if fit_to_width:
+        ws.page_setup.fitToWidth = 1
+    else:
+        ws.page_setup.fitToWidth = 0
+
+    if fit_to_height:
+        ws.page_setup.fitToHeight = 1
+    else:
+        ws.page_setup.fitToHeight = 0
+
+    # A4に収まりやすい余白
+    ws.page_margins.left = 0.35
+    ws.page_margins.right = 0.35
+    ws.page_margins.top = 0.45
+    ws.page_margins.bottom = 0.45
+    ws.page_margins.header = 0.2
+    ws.page_margins.footer = 0.2
+
+    ws.print_options.horizontalCentered = True
+
 def build_detail_excel(invoice_number: str, customer_name: str, items: list, doc_type='delivery') -> bytes:
     """商品明細表 Excel (サイズ別内訳)"""
     wb = openpyxl.Workbook()
     ws = wb.active
     titles = DOC_TYPE_TITLES.get(doc_type, DOC_TYPE_TITLES["delivery"])
     ws.title = titles["detail_pdf_title"] + "(新)"
+    
+    apply_a4_print_settings(ws, orientation="portrait", fit_to_width=True, fit_to_height=False)
 
     fill_header = PatternFill(start_color="F4ECD8", end_color="F4ECD8", fill_type="solid")
     fill_meta = PatternFill(start_color="FFF8E7", end_color="FFF8E7", fill_type="solid")
@@ -1185,6 +1219,10 @@ def build_detail_excel(invoice_number: str, customer_name: str, items: list, doc
             if cell.value is not None:
                 cell.alignment = Alignment(horizontal="center", vertical="center")
 
+    # 印刷範囲の設定
+    last_row = ws.max_row
+    ws.print_area = f"A1:K{last_row}"
+
     out = BytesIO()
     wb.save(out)
     return out.getvalue()
@@ -1230,6 +1268,8 @@ def build_invoice_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = invoice_data.get("doc_pdf_title", "伝票")
+    
+    apply_a4_print_settings(ws, orientation="portrait", fit_to_width=True, fit_to_height=False)
     fill_yellow = PatternFill(start_color="FFE699", end_color="FFE699", fill_type="solid")
     fill_blue = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
     border_thin = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
@@ -1264,6 +1304,10 @@ def build_invoice_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
     ws["G3"] = invoice_data['date']
 
     ws.merge_cells("E3:E4")
+    # 店舗コードバーコード用にサイズ調整
+    ws.row_dimensions[3].height = 32
+    ws.row_dimensions[4].height = 32
+
     store_code = invoice_data.get("customer_code", "")
     if store_code and not is_preview:
         try:
@@ -1271,10 +1315,20 @@ def build_invoice_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
             bc_io_store = BytesIO()
             bc_store.write(bc_io_store)
             img_store = ExcelImage(bc_io_store)
-            img_store.width, img_store.height = 120, 30
+            
+            # バーコードを大きくする
+            img_store.width, img_store.height = 220, 52
             # E column is col 5 (0-indexed col 4), E3 is row 3
-            marker_store = AnchorMarker(col=4, colOff=pixels_to_EMU(10), row=2, rowOff=pixels_to_EMU(5))
-            img_store.anchor = OneCellAnchor(_from=marker_store, ext=XDRPositiveSize2D(cx=pixels_to_EMU(120), cy=pixels_to_EMU(30)))
+            marker_store = AnchorMarker(
+                col=4, 
+                colOff=pixels_to_EMU(6), 
+                row=2, 
+                rowOff=pixels_to_EMU(4)
+            )
+            img_store.anchor = OneCellAnchor(
+                _from=marker_store, 
+                ext=XDRPositiveSize2D(cx=pixels_to_EMU(220), cy=pixels_to_EMU(52))
+            )
             ws.add_image(img_store)
         except:
             pass
@@ -1292,7 +1346,7 @@ def build_invoice_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
     ws.column_dimensions['B'].width = 15
     ws.column_dimensions['C'].width = 10
     ws.column_dimensions['D'].width = 10
-    ws.column_dimensions['E'].width = 30
+    ws.column_dimensions['E'].width = 38
     ws.column_dimensions['F'].width = 10
     ws.column_dimensions['G'].width = 15
     ws.column_dimensions['H'].width = 15
@@ -1300,7 +1354,8 @@ def build_invoice_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
 
     for i, item in enumerate(invoice_data["items"]):
         r = start_row + 1 + i
-        ws.row_dimensions[r].height = 45
+        # バーコードを大きくするため行高を拡大
+        ws.row_dimensions[r].height = 64
         ws[f"A{r}"] = i + 1
         ws[f"B{r}"] = item["code"]
         ws[f"C{r}"] = item["color"]
@@ -1322,9 +1377,19 @@ def build_invoice_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
                 bc_io = BytesIO()
                 ean.write(bc_io)
                 img = ExcelImage(bc_io)
-                img.width, img.height = 120, 30
-                marker = AnchorMarker(col=4, colOff=pixels_to_EMU(10), row=r-1, rowOff=pixels_to_EMU(5))
-                img.anchor = OneCellAnchor(_from=marker, ext=XDRPositiveSize2D(cx=pixels_to_EMU(120), cy=pixels_to_EMU(30)))
+                
+                # バーコードを大きくするため
+                img.width, img.height = 220, 52
+                marker = AnchorMarker(
+                    col=4, 
+                    colOff=pixels_to_EMU(6), 
+                    row=r-1, 
+                    rowOff=pixels_to_EMU(4)
+                )
+                img.anchor = OneCellAnchor(
+                    _from=marker, 
+                    ext=XDRPositiveSize2D(cx=pixels_to_EMU(220), cy=pixels_to_EMU(52))
+                )
                 ws.add_image(img)
             except:
                 pass
@@ -1342,6 +1407,10 @@ def build_invoice_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
         for cell in row:
             if cell.value is not None:
                 cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    # 印刷範囲の設定
+    last_row = ws.max_row
+    ws.print_area = f"A1:I{last_row}"
 
     out = BytesIO()
     wb.save(out)
