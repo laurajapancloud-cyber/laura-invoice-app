@@ -1822,20 +1822,10 @@ def get_invoice_generated_files(inv_id: int):
         items = [dict(r) for r in cur.fetchall()]
 
     files = {}
-    needs_generation = False
-    
-    # Storageのパスを確認し、すべて揃っていればダウンロード
-    for kind, cfg in KIND_CONFIG.items():
-        path = inv.get(cfg["path_field"])
-        if path:
-            try:
-                files[cfg["files_key"]] = storage_download(path)
-            except Exception:
-                needs_generation = True
-                break
-        else:
-            needs_generation = True
-            break
+    # 以前はStorageのキャッシュを確認していましたが、
+    # バーコードサイズなどのレイアウト変更を過去の伝票にも適用するため、
+    # 常に最新のプログラムで再生成するように変更します。
+    needs_generation = True
 
     # キャッシュが無い、または取得に失敗した場合のみ再生成
     if needs_generation:
