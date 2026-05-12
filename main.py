@@ -263,6 +263,28 @@ def db_conn():
     conn = require_db()
     try:
         yield conn
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception as e:
+            logger.warning("DB rollback failed: %s", e)
+        raise
+    finally:
+        release_db(conn)
+
+@contextmanager
+def db_transaction():
+    """書き込み処理用のトランザクション管理コンテキストマネージャ"""
+    conn = require_db()
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception as e:
+            logger.warning("DB rollback failed: %s", e)
+        raise
     finally:
         release_db(conn)
 
