@@ -1267,7 +1267,7 @@ def build_invoice_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
     """納品書 Excel (バーコード付き)"""
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.title = invoice_data.get("doc_pdf_title", "伝票") + "_v3"
+    ws.title = invoice_data.get("doc_pdf_title", "伝票")
     
     apply_a4_print_settings(ws, orientation="portrait", fit_to_width=True, fit_to_height=False)
     fill_yellow = PatternFill(start_color="FFE699", end_color="FFE699", fill_type="solid")
@@ -1304,9 +1304,9 @@ def build_invoice_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
     ws["G3"] = invoice_data['date']
 
     ws.merge_cells("E3:E4")
-    # 店舗コードバーコード用にサイズ調整
-    ws.row_dimensions[3].height = 45
-    ws.row_dimensions[4].height = 45
+    # 店舗コードバーコード用にサイズ調整（合計70）
+    ws.row_dimensions[3].height = 35
+    ws.row_dimensions[4].height = 35
 
     store_code = invoice_data.get("customer_code", "")
     if store_code and not is_preview:
@@ -1316,25 +1316,25 @@ def build_invoice_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
             # テキストを完全に消し、余白を最小化
             bc_store.write(bc_io_store, options={
                 "write_text": False, 
-                "quiet_zone": 1,
+                "quiet_zone": 2,
                 "font_size": 0,
                 "text_distance": 0,
-                "module_height": 20
+                "module_height": 18
             })
             img_store = ExcelImage(bc_io_store)
             
-            # バーコードを最大化
-            img_store.width, img_store.height = 320, 110
+            # バーコードを「ちょうど良い」サイズに
+            img_store.width, img_store.height = 280, 85
             # E column is col 5 (0-indexed col 4), E3 is row 3
             marker_store = AnchorMarker(
                 col=4, 
-                colOff=pixels_to_EMU(1), 
+                colOff=pixels_to_EMU(10), 
                 row=2, 
-                rowOff=pixels_to_EMU(1)
+                rowOff=pixels_to_EMU(5)
             )
             img_store.anchor = OneCellAnchor(
                 _from=marker_store, 
-                ext=XDRPositiveSize2D(cx=pixels_to_EMU(320), cy=pixels_to_EMU(110))
+                ext=XDRPositiveSize2D(cx=pixels_to_EMU(280), cy=pixels_to_EMU(85))
             )
             ws.add_image(img_store)
         except:
@@ -1353,7 +1353,7 @@ def build_invoice_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
     ws.column_dimensions['B'].width = 15
     ws.column_dimensions['C'].width = 10
     ws.column_dimensions['D'].width = 10
-    ws.column_dimensions['E'].width = 45
+    ws.column_dimensions['E'].width = 40
     ws.column_dimensions['F'].width = 10
     ws.column_dimensions['G'].width = 15
     ws.column_dimensions['H'].width = 15
@@ -1361,8 +1361,8 @@ def build_invoice_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
 
     for i, item in enumerate(invoice_data["items"]):
         r = start_row + 1 + i
-        # バーコードを大きくするため行高を拡大
-        ws.row_dimensions[r].height = 90
+        # バーコードをちょうど良い大きさにするため行高を調整
+        ws.row_dimensions[r].height = 70
         ws[f"A{r}"] = i + 1
         ws[f"B{r}"] = item["code"]
         ws[f"C{r}"] = item["color"]
@@ -1385,24 +1385,24 @@ def build_invoice_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
                 # テキストを完全に消し、余白を最小化
                 ean.write(bc_io, options={
                     "write_text": False, 
-                    "quiet_zone": 1,
+                    "quiet_zone": 2,
                     "font_size": 0,
                     "text_distance": 0,
-                    "module_height": 20
+                    "module_height": 18
                 })
                 img = ExcelImage(bc_io)
                 
-                # バーコードを最大化
-                img.width, img.height = 320, 115
+                # バーコードを「ちょうど良い」サイズに
+                img.width, img.height = 280, 85
                 marker = AnchorMarker(
                     col=4, 
-                    colOff=pixels_to_EMU(1), 
+                    colOff=pixels_to_EMU(10), 
                     row=r-1, 
-                    rowOff=pixels_to_EMU(1)
+                    rowOff=pixels_to_EMU(5)
                 )
                 img.anchor = OneCellAnchor(
                     _from=marker, 
-                    ext=XDRPositiveSize2D(cx=pixels_to_EMU(320), cy=pixels_to_EMU(115))
+                    ext=XDRPositiveSize2D(cx=pixels_to_EMU(280), cy=pixels_to_EMU(85))
                 )
                 ws.add_image(img)
             except:
