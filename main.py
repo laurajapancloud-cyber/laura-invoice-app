@@ -1180,67 +1180,86 @@ def apply_a4_print_settings(ws, orientation="portrait", fit_to_width=True, fit_t
     ws.print_options.horizontalCentered = True
 
 def build_detail_excel(invoice_number: str, customer_name: str, items: list, doc_type='delivery') -> bytes:
-    """商品明細表 Excel (サイズ別内訳)"""
+    """商品明細表 Excel (サイズ別内訳・モダンデザイン)"""
     wb = openpyxl.Workbook()
     ws = wb.active
     titles = DOC_TYPE_TITLES.get(doc_type, DOC_TYPE_TITLES["delivery"])
-    ws.title = titles["detail_pdf_title"] + "(新)"
+    ws.title = titles["detail_pdf_title"]
     
     apply_a4_print_settings(ws, orientation="portrait", fit_to_width=True, fit_to_height=False)
 
-    fill_header = PatternFill(start_color="F4ECD8", end_color="F4ECD8", fill_type="solid")
-    fill_meta = PatternFill(start_color="FFF8E7", end_color="FFF8E7", fill_type="solid")
+    # ===== 共通スタイル定義 =====
+    FF = "游ゴシック"
+    FONT_TITLE   = Font(name=FF, size=14, bold=True, color="FFFFFF")
+    FONT_HEADER  = Font(name=FF, size=9,  bold=True, color="1F2937")
+    FONT_BODY    = Font(name=FF, size=10, color="111827")
+    FONT_BODY_SM = Font(name=FF, size=9,  color="6B7280")
+    FONT_META    = Font(name=FF, size=10, color="374151")
+    FONT_INV_NO  = Font(name=FF, size=9,  color="6B7280")
+
+    FILL_TITLE   = PatternFill("solid", fgColor="1F2937")
+    FILL_HEADER  = PatternFill("solid", fgColor="F3F4F6")
+    FILL_ZEBRA   = PatternFill("solid", fgColor="F9FAFB")
+
     border_thin = Border(
-        left=Side(style='thin', color='888888'),
-        right=Side(style='thin', color='888888'),
-        top=Side(style='thin', color='888888'),
-        bottom=Side(style='thin', color='888888')
+        left=Side(style='thin', color='D1D5DB'),
+        right=Side(style='thin', color='D1D5DB'),
+        top=Side(style='thin', color='D1D5DB'),
+        bottom=Side(style='thin', color='D1D5DB')
+    )
+    border_header_bottom = Border(
+        left=Side(style='thin', color='D1D5DB'),
+        right=Side(style='thin', color='D1D5DB'),
+        top=Side(style='thin', color='D1D5DB'),
+        bottom=Side(style='medium', color='1F2937')
     )
 
-    # 列幅
-    widths = {'A': 4, 'B': 14, 'C': 7, 'D': 9, 'E': 7, 'F': 5, 'G': 5, 'H': 5, 'I': 5, 'J': 5, 'K': 14}
+    # ===== 列幅 =====
+    widths = {'A': 5, 'B': 15, 'C': 7, 'D': 10, 'E': 8, 'F': 5, 'G': 5, 'H': 5, 'I': 5, 'J': 5, 'K': 14}
     for col, w in widths.items():
         ws.column_dimensions[col].width = w
 
     now = get_jst_now()
     reiwa = now.year - 2018
 
-    # タイトル
+    # ===== タイトルバー (1行目) =====
+    ws.merge_cells("A1:K1")
     ws["A1"] = titles["detail"]
-    ws["A1"].font = Font(bold=True, size=14)
-    ws.merge_cells("A1:E1")
+    ws["A1"].font = FONT_TITLE
+    ws["A1"].fill = FILL_TITLE
     ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
+    ws.row_dimensions[1].height = 32
 
-    ws["G1"] = f"伝票番号: {invoice_number}"
-    ws["G1"].font = Font(size=10, color="555555")
-    ws.merge_cells("G1:K1")
-    ws["G1"].alignment = Alignment(horizontal="right", vertical="center")
-
+    # ===== メタ情報 (2-3行目) =====
     ws["A2"] = f"取引先: {customer_name}"
-    ws["A2"].font = Font(size=11)
+    ws["A2"].font = FONT_META
     ws.merge_cells("A2:E2")
 
-    # 日付ヘッダー
-    ws["I4"] = f"{reiwa}年"
-    ws["J4"] = f"{now.month}月"
-    ws["K4"] = f"{now.day}日"
-    for c in ['I','J','K']:
-        ws[f"{c}4"].alignment = Alignment(horizontal="center")
-        ws[f"{c}4"].font = Font(size=9, color="555555")
+    ws["G2"] = f"伝票番号: {invoice_number}"
+    ws["G2"].font = FONT_INV_NO
+    ws.merge_cells("G2:K2")
+    ws["G2"].alignment = Alignment(horizontal="right", vertical="center")
 
-    # テーブルヘッダー (1回のみ)
-    header_row = 5
-    ws.row_dimensions[header_row].height = 22
+    ws["I3"] = f"{reiwa}年"
+    ws["J3"] = f"{now.month}月"
+    ws["K3"] = f"{now.day}日"
+    for c in ['I','J','K']:
+        ws[f"{c}3"].alignment = Alignment(horizontal="center")
+        ws[f"{c}3"].font = FONT_BODY_SM
+
+    # ===== テーブルヘッダー (4行目) =====
+    header_row = 4
+    ws.row_dimensions[header_row].height = 24
     headers_d = {'A':'No.', 'B':'品番', 'C':'枚数', 'D':'上代', 'E':'カラー', 'F':'44', 'G':'46', 'H':'48', 'I':'50', 'J':'52', 'K':'備考'}
     for col, label in headers_d.items():
         cell = ws[f"{col}{header_row}"]
         cell.value = label
-        cell.fill = fill_header
-        cell.font = Font(bold=True, size=10)
+        cell.fill = FILL_HEADER
+        cell.font = FONT_HEADER
         cell.alignment = Alignment(horizontal="center", vertical="center")
-        cell.border = border_thin
+        cell.border = border_header_bottom
 
-    # 商品データ (5行ずつのブロック、間隔なし)
+    # ===== 商品データ (5行ずつのブロック) =====
     ROWS_PER_BLOCK = 5
     total_blocks = max(1, (len(items) + ROWS_PER_BLOCK - 1) // ROWS_PER_BLOCK)
     
@@ -1251,42 +1270,59 @@ def build_detail_excel(invoice_number: str, customer_name: str, items: list, doc
             ws.row_dimensions[r].height = 22
             
             item_idx = b * ROWS_PER_BLOCK + i
-            # No. は通し番号（1, 2, 3...）
+
+            # ゼブラ縞
+            if item_idx % 2 == 1:
+                for col in list('ABCDEFGHIJK'):
+                    ws[f"{col}{r}"].fill = FILL_ZEBRA
+
+            # No.（通し番号）
             ws[f"A{r}"] = item_idx + 1
             ws[f"A{r}"].alignment = Alignment(horizontal="center", vertical="center")
-            ws[f"A{r}"].font = Font(size=9, color="888888")
+            ws[f"A{r}"].font = FONT_BODY_SM
 
             if item_idx < len(items):
                 item = items[item_idx]
                 ws[f"B{r}"] = item.get("code", "")
+                ws[f"B{r}"].font = FONT_BODY
                 ws[f"C{r}"] = item.get("quantity", 0)
-                ws[f"D{r}"] = item.get("unit_price", 0)
-                ws[f"D{r}"].number_format = '#,##0'
+                ws[f"C{r}"].font = FONT_BODY
+                ws[f"C{r}"].number_format = '0'
+                up = item.get("unit_price", 0) or 0
+                if up:
+                    ws[f"D{r}"] = up
+                    ws[f"D{r}"].number_format = '#,##0'
+                ws[f"D{r}"].font = FONT_BODY
                 ws[f"E{r}"] = item.get("color", "")
+                ws[f"E{r}"].font = FONT_BODY
                 
                 size_val = str(item.get("size", ""))
                 for si, sc in enumerate(SIZE_COLUMNS):
                     if size_val == sc:
                         ws[f"{chr(70+si)}{r}"] = item.get("quantity", 1)
+                        ws[f"{chr(70+si)}{r}"].font = FONT_BODY
 
             for col in list('ABCDEFGHIJK'):
                 ws[f"{col}{r}"].border = border_thin
+                if col not in ['B', 'K']:  # 品番と備考以外は中央揃え
+                    ws[f"{col}{r}"].alignment = Alignment(horizontal="center", vertical="center")
+                else:
+                    ws[f"{col}{r}"].alignment = Alignment(horizontal="left", vertical="center")
+            # 上代は右揃え
+            ws[f"D{r}"].alignment = Alignment(horizontal="right", vertical="center", indent=1)
             
             current_r += 1
 
-    # 全セルを中央揃えにする
-    for row in ws.iter_rows(min_row=1, max_row=ws.max_row, min_col=1, max_col=ws.max_column):
-        for cell in row:
-            if cell.value is not None:
-                cell.alignment = Alignment(horizontal="center", vertical="center")
-
-    # 印刷範囲の設定
+    # ===== ウィンドウ枠固定 & 印刷設定 =====
+    ws.freeze_panes = f"A{header_row + 1}"
+    ws.print_title_rows = f'{header_row}:{header_row}'
     last_row = ws.max_row
     ws.print_area = f"A1:K{last_row}"
 
     out = BytesIO()
     wb.save(out)
     return out.getvalue()
+
 
 def build_detail_pdf(invoice_number: str, customer_name: str, items: list, doc_type='delivery') -> bytes:
     """明細 PDF"""
@@ -1353,152 +1389,209 @@ def build_invoice_pdf(invoice_data: dict) -> bytes:
     return HTML(string=html_str).write_pdf()
 
 def build_invoice_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
-    """納品書 Excel (バーコード付き)"""
+    """納品書 Excel (バーコード付き・モダンデザイン)"""
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = invoice_data.get("doc_pdf_title", "伝票")
     
     apply_a4_print_settings(ws, orientation="portrait", fit_to_width=True, fit_to_height=False)
-    fill_yellow = PatternFill(start_color="FFE699", end_color="FFE699", fill_type="solid")
-    fill_blue = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
-    border_thin = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
-    
-    # Header format requested by user
+
+    # ===== 共通スタイル定義 =====
+    FF = "游ゴシック"
+    FONT_TITLE   = Font(name=FF, size=16, bold=True, color="FFFFFF")
+    FONT_HEADER  = Font(name=FF, size=10, bold=True, color="1F2937")
+    FONT_LABEL   = Font(name=FF, size=9,  bold=True, color="6B7280")
+    FONT_BODY    = Font(name=FF, size=10, color="111827")
+    FONT_BODY_SM = Font(name=FF, size=9,  color="6B7280")
+    FONT_TOTAL   = Font(name=FF, size=12, bold=True, color="111827")
+    FONT_MONEY   = Font(name=FF, size=10, color="111827")
+    FONT_NO_LABEL = Font(name=FF, size=10, color="6B7280")
+    FONT_NO_VAL   = Font(name=FF, size=10, bold=True, color="111827")
+
+    FILL_TITLE     = PatternFill("solid", fgColor="1F2937")
+    FILL_HEADER    = PatternFill("solid", fgColor="F3F4F6")
+    FILL_HIGHLIGHT = PatternFill("solid", fgColor="FEF3C7")
+    FILL_ZEBRA     = PatternFill("solid", fgColor="F9FAFB")
+    FILL_TOTAL     = PatternFill("solid", fgColor="E5E7EB")
+    FILL_LABEL_BG  = PatternFill("solid", fgColor="F9FAFB")
+
+    border_thin = Border(
+        left=Side(style='thin', color='D1D5DB'),
+        right=Side(style='thin', color='D1D5DB'),
+        top=Side(style='thin', color='D1D5DB'),
+        bottom=Side(style='thin', color='D1D5DB')
+    )
+    border_header_bottom = Border(
+        left=Side(style='thin', color='D1D5DB'),
+        right=Side(style='thin', color='D1D5DB'),
+        top=Side(style='thin', color='D1D5DB'),
+        bottom=Side(style='medium', color='1F2937')
+    )
+
+    # ===== タイトルバー (1行目) =====
     doc_type = invoice_data.get("doc_type", "delivery")
     label_map = {
-        "delivery": "納品",
-        "return": "返品",
-        "prov_delivery": "仮納品",
-        "prov_return": "仮返品"
+        "delivery": "納品", "return": "返品",
+        "prov_delivery": "仮納品", "prov_return": "仮返品"
     }
+    ws.merge_cells("A1:I1")
     ws["A1"] = f"{label_map.get(doc_type, '納品')}伝票"
-    ws["A1"].font = Font(size=14, bold=True)
-    ws.merge_cells("A1:B1")
-    ws["A1"].alignment = Alignment(horizontal="left", vertical="center")
-    
-    ws["F1"] = "No."
-    ws["G1"] = invoice_data.get("invoice_number", "")
-    ws["G1"].fill = fill_yellow
-    
-    ws["B3"] = "コード"
-    ws["B4"] = invoice_data.get("customer_code", "")
-    ws["B4"].fill = fill_yellow
-    
-    ws["D3"] = "店名"
-    ws["D4"] = invoice_data['customer_name']
-    ws["D4"].fill = fill_yellow
-    
-    ws["F3"] = "日付"
-    ws["G3"] = invoice_data['date']
+    ws["A1"].font = FONT_TITLE
+    ws["A1"].fill = FILL_TITLE
+    ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
+    ws.row_dimensions[1].height = 36
+
+    # ===== 伝票番号 (2行目) =====
+    ws["G2"] = "No."
+    ws["G2"].font = FONT_NO_LABEL
+    ws["G2"].alignment = Alignment(horizontal="right", vertical="center")
+    ws["H2"] = invoice_data.get("invoice_number", "")
+    ws["H2"].font = FONT_NO_VAL
+    ws["H2"].fill = FILL_HIGHLIGHT
+    ws["H2"].alignment = Alignment(horizontal="left", vertical="center", indent=1)
+    ws.merge_cells("H2:I2")
+
+    # ===== メタ情報 (3-4行目) =====
+    meta_labels = [("B", "コード"), ("D", "店名"), ("G", "日付")]
+    for col, label in meta_labels:
+        c = ws[f"{col}3"]
+        c.value = label
+        c.font = FONT_LABEL
+        c.fill = FILL_LABEL_BG
+        c.alignment = Alignment(horizontal="left", vertical="center", indent=1)
+
+    meta_values = [
+        ("B", 4, invoice_data.get("customer_code", "")),
+        ("D", 4, invoice_data['customer_name']),
+        ("G", 3, invoice_data['date']),
+    ]
+    for col, row_n, val in meta_values:
+        c = ws[f"{col}{row_n}"]
+        c.value = val
+        c.font = FONT_BODY
+        c.fill = FILL_HIGHLIGHT
+        c.alignment = Alignment(horizontal="left", vertical="center", indent=1)
 
     ws.merge_cells("E3:E4")
-    # 店舗コードバーコード用にサイズ調整（合計60）
     ws.row_dimensions[3].height = 30
     ws.row_dimensions[4].height = 30
 
+    # ===== 店舗バーコード =====
     store_code = invoice_data.get("customer_code", "")
     if store_code and not is_preview:
         try:
             bc_store = barcode.get('code128', store_code, writer=ImageWriter())
             bc_io_store = BytesIO()
-            # テキストを完全に消し、余白を最小化
             bc_store.write(bc_io_store, options={
-                "write_text": False, 
-                "quiet_zone": 2,
-                "font_size": 0,
-                "text_distance": 0,
-                "module_height": 12
+                "write_text": False, "quiet_zone": 2,
+                "font_size": 0, "text_distance": 0, "module_height": 12
             })
             img_store = ExcelImage(bc_io_store)
-            
-            # バーコードサイズ（コンパクト）
             img_store.width, img_store.height = 200, 55
-            # E column is col 5 (0-indexed col 4), E3 is row 3
-            marker_store = AnchorMarker(
-                col=4, 
-                colOff=pixels_to_EMU(10), 
-                row=2, 
-                rowOff=pixels_to_EMU(3)
-            )
+            marker_store = AnchorMarker(col=4, colOff=pixels_to_EMU(10), row=2, rowOff=pixels_to_EMU(3))
             img_store.anchor = OneCellAnchor(
-                _from=marker_store, 
+                _from=marker_store,
                 ext=XDRPositiveSize2D(cx=pixels_to_EMU(200), cy=pixels_to_EMU(55))
             )
             ws.add_image(img_store)
         except Exception as e:
             logger.warning("Store barcode skipped (code=%s): %s", store_code, e)
 
+    # ===== 空白行 =====
+    ws.row_dimensions[5].height = 6
+    ws.row_dimensions[6].height = 6
+
+    # ===== テーブルヘッダー (7行目) =====
     headers = ["品番", "カラー", "サイズ", "バーコード", "数量", "単価", "金額", "掛率"]
     h_cols = ["B", "C", "D", "E", "F", "G", "H", "I"]
     start_row = 7
+    ws.row_dimensions[start_row].height = 28
     for col, txt in zip(h_cols, headers):
         cell = ws[f"{col}{start_row}"]
         cell.value = txt
-        cell.fill = fill_blue
-        cell.border = border_thin
+        cell.fill = FILL_HEADER
+        cell.font = FONT_HEADER
+        cell.border = border_header_bottom
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+    # No.列ヘッダー
+    ws[f"A{start_row}"] = "No."
+    ws[f"A{start_row}"].fill = FILL_HEADER
+    ws[f"A{start_row}"].font = FONT_HEADER
+    ws[f"A{start_row}"].border = border_header_bottom
+    ws[f"A{start_row}"].alignment = Alignment(horizontal="center", vertical="center")
 
-    ws.column_dimensions['A'].width = 5
-    ws.column_dimensions['B'].width = 15
-    ws.column_dimensions['C'].width = 10
-    ws.column_dimensions['D'].width = 10
-    ws.column_dimensions['E'].width = 40
-    ws.column_dimensions['F'].width = 10
-    ws.column_dimensions['G'].width = 15
-    ws.column_dimensions['H'].width = 15
-    ws.column_dimensions['I'].width = 10
+    # ===== 列幅 =====
+    col_widths = {'A': 6, 'B': 18, 'C': 8, 'D': 8, 'E': 38, 'F': 8, 'G': 14, 'H': 16, 'I': 10}
+    for col, w in col_widths.items():
+        ws.column_dimensions[col].width = w
+
+    # ===== データ行 =====
+    dr_val = invoice_data.get('discount_rate') or 0
+    rate_label = f"{dr_val}%" if dr_val > 0 else "掛率なし"
 
     for i, item in enumerate(invoice_data["items"]):
         r = start_row + 1 + i
-        # バーコードをちょうど良い大きさにするため行高を調整
-        ws.row_dimensions[r].height = 50
+        ws.row_dimensions[r].height = 42
+
+        # ゼブラ縞
+        if i % 2 == 1:
+            for col in ["A","B","C","D","E","F","G","H","I"]:
+                ws[f"{col}{r}"].fill = FILL_ZEBRA
+
         ws[f"A{r}"] = i + 1
+        ws[f"A{r}"].font = FONT_BODY_SM
         ws[f"B{r}"] = item["code"]
+        ws[f"B{r}"].font = FONT_BODY
         ws[f"C{r}"] = item["color"]
+        ws[f"C{r}"].font = FONT_BODY
         ws[f"D{r}"] = item["size"]
+        ws[f"D{r}"].font = FONT_BODY
         ws[f"F{r}"] = item["quantity"]
+        ws[f"F{r}"].font = FONT_BODY
         ws[f"F{r}"].number_format = '0'
         ws[f"G{r}"] = item["unit_price"]
-        ws[f"G{r}"].number_format = '#,##0'
+        ws[f"G{r}"].font = FONT_MONEY
+        ws[f"G{r}"].number_format = '#,##0;[Red]△#,##0'
         ws[f"H{r}"] = item["net_amount"]
-        ws[f"H{r}"].number_format = '#,##0'
-        dr_val = invoice_data.get('discount_rate') or 0
-        ws[f"I{r}"] = f"{dr_val}%" if dr_val > 0 else "掛率なし"
+        ws[f"H{r}"].font = FONT_MONEY
+        ws[f"H{r}"].number_format = '#,##0;[Red]△#,##0'
+        ws[f"I{r}"] = rate_label
+        ws[f"I{r}"].font = FONT_BODY_SM
         
+        # 罫線
         for col in ["A","B","C","D","E","F","G","H","I"]:
             ws[f"{col}{r}"].border = border_thin
+
+        # 列ごとの揃え
+        for col in ["A", "B", "C", "D", "F", "I"]:
+            ws[f"{col}{r}"].alignment = Alignment(horizontal="center", vertical="center")
+        for col in ["G", "H"]:
+            ws[f"{col}{r}"].alignment = Alignment(horizontal="right", vertical="center", indent=1)
         
+        # バーコード
         if not is_preview:
             try:
                 bc_str = f"{item['code']}{item['color']}{item['size']}".replace("-", "")
                 ean = barcode.get('code128', bc_str, writer=ImageWriter())
                 bc_io = BytesIO()
-                # テキストを完全に消し、余白を最小化
                 ean.write(bc_io, options={
-                    "write_text": False, 
-                    "quiet_zone": 2,
-                    "font_size": 0,
-                    "text_distance": 0,
-                    "module_height": 12
+                    "write_text": False, "quiet_zone": 2,
+                    "font_size": 0, "text_distance": 0, "module_height": 12
                 })
                 img = ExcelImage(bc_io)
-                
-                # バーコードサイズ（コンパクト）
                 img.width, img.height = 200, 55
-                marker = AnchorMarker(
-                    col=4, 
-                    colOff=pixels_to_EMU(10), 
-                    row=r-1, 
-                    rowOff=pixels_to_EMU(3)
-                )
+                marker = AnchorMarker(col=4, colOff=pixels_to_EMU(10), row=r-1, rowOff=pixels_to_EMU(3))
                 img.anchor = OneCellAnchor(
-                    _from=marker, 
+                    _from=marker,
                     ext=XDRPositiveSize2D(cx=pixels_to_EMU(200), cy=pixels_to_EMU(55))
                 )
                 ws.add_image(img)
             except Exception as e:
                 logger.warning("Item barcode skipped (row %d, code=%s): %s", r, item.get("code"), e)
 
+    # ===== 合計エリア =====
     last_r = start_row + len(invoice_data["items"]) + 2
+    top_thick = Side(style='medium', color='1F2937')
     for i, (label, val) in enumerate([
         ("小計", invoice_data["total_net_amount"]),
         ("消費税", invoice_data["total_tax_amount"]),
@@ -1507,25 +1600,38 @@ def build_invoice_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
         rr = last_r + i
         c_label = ws.cell(row=rr, column=7, value=label)
         c_val = ws.cell(row=rr, column=8, value=val)
-        c_val.number_format = '¥#,##0'
-        c_label.font = Font(bold=(i == 2))
-        c_val.font = Font(bold=(i == 2))
-        c_label.border = border_thin
-        c_val.border = border_thin
+        c_val.number_format = '¥#,##0;[Red]△¥#,##0'
 
-    # 全セルを中央揃えにする
-    for row in ws.iter_rows(min_row=1, max_row=ws.max_row, min_col=1, max_col=ws.max_column):
-        for cell in row:
-            if cell.value is not None:
-                cell.alignment = Alignment(horizontal="center", vertical="center")
+        if i == 2:  # 合計金額行
+            c_label.font = FONT_TOTAL
+            c_val.font = FONT_TOTAL
+            c_label.fill = FILL_TOTAL
+            c_val.fill = FILL_TOTAL
+            c_label.border = Border(top=top_thick, bottom=top_thick,
+                                    left=Side(style='thin', color='D1D5DB'),
+                                    right=Side(style='thin', color='D1D5DB'))
+            c_val.border = Border(top=top_thick, bottom=top_thick,
+                                  left=Side(style='thin', color='D1D5DB'),
+                                  right=Side(style='thin', color='D1D5DB'))
+        else:
+            c_label.font = FONT_BODY
+            c_val.font = FONT_MONEY
+            c_label.border = border_thin
+            c_val.border = border_thin
 
-    # 印刷範囲の設定
+        c_label.alignment = Alignment(horizontal="right", vertical="center", indent=1)
+        c_val.alignment = Alignment(horizontal="right", vertical="center", indent=1)
+
+    # ===== ウィンドウ枠固定 & 印刷設定 =====
+    ws.freeze_panes = f"A{start_row + 1}"
+    ws.print_title_rows = f'{start_row}:{start_row}'
     last_row = ws.max_row
     ws.print_area = f"A1:I{last_row}"
 
     out = BytesIO()
     wb.save(out)
     return out.getvalue()
+
 
 def build_all_files(invoice_data: dict, is_preview: bool = False) -> dict:
     """4ファイルまとめて生成"""
