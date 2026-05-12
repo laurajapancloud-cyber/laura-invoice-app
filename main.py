@@ -1319,7 +1319,8 @@ th{{background:#f4ecd8;}}
 </html>"""
 
     if HTML is None:
-        raise RuntimeError("WeasyPrint is not available. PDF generation is disabled.")
+        logger.error("WeasyPrint is not available. Cannot build detail PDF.")
+        return b""
     return HTML(string=html_str).write_pdf()
 
 def build_invoice_pdf(invoice_data: dict) -> bytes:
@@ -1333,7 +1334,8 @@ def build_invoice_pdf(invoice_data: dict) -> bytes:
     render_data = {**invoice_data, "font_face_css": get_pdf_font_css()}
     html_str = template.render(**render_data)
     if HTML is None:
-        raise RuntimeError("WeasyPrint is not available. PDF generation is disabled.")
+        logger.error("WeasyPrint is not available. Cannot build invoice PDF.")
+        return b""
     return HTML(string=html_str).write_pdf()
 
 def build_invoice_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
@@ -1810,31 +1812,25 @@ def serve_file(inv_id: int, kind: str, disposition: str = "attachment"):
         cur.execute("SELECT code,color,size,unit_price,quantity FROM invoice_items WHERE invoice_id=%s", (inv_id,))
         items = [dict(r) for r in cur.fetchall()]
 
-    # === ここからファイル名生成の変更 ===
     customer = safe_filename(inv.get("customer_name") or "Unknown")
-    
-    # 日付の取得（確定日 or 作成日）
+
     dt = inv.get("locked_at") or inv.get("created_at") or get_jst_now()
     if isinstance(dt, str):
         try: dt = datetime.datetime.fromisoformat(dt.replace("Z", "+00:00"))
         except: dt = get_jst_now()
     date_str = f"{dt.month}月{dt.day}日"
 
-    # 種類（納品書、商品明細表など）の取得
     doc_type = inv.get("doc_type", "delivery")
     title_map = DOC_TYPE_TITLES.get(doc_type, DOC_TYPE_TITLES["delivery"])
     if kind in ("pdf", "excel"):
-        label = title_map["pdf_title"]  # 例: 納品書
+        label = title_map["pdf_title"]
     else:
-        label = title_map["detail_pdf_title"]  # 例: 商品明細表
+        label = title_map["detail_pdf_title"]
 
     fname = f'{customer}_{date_str}_{label}.{cfg["ext"]}'
-    # === 変更ここまで ===
-
-    # 日本語ファイル名を安全にヘッダーに含めるためのエンコード
     encoded_fname = urllib.parse.quote(fname)
 
-    # inline / attachment を切り替える
+    # inline / attachment を切り替え
     content_disposition = f"{disposition}; filename*=UTF-8''{encoded_fname}"
 
     # キャッシュがあればそれを使う
@@ -1850,15 +1846,15 @@ def serve_file(inv_id: int, kind: str, disposition: str = "attachment"):
                 }
             )
         except Exception as e:
-            logger.warning("Storage download failed, regenerating file: %s", e)
+            logger.warning("Storage download failed, regenerating: %s", e)
 
     # キャッシュがない、または失敗した場合はオンデマンドで再生成
     dr = inv.get("discount_rate") or 100
     inv_data = assemble_invoice_data(dict(inv), items, dr, inv.get("doc_type", "delivery"))
     files = build_all_files(inv_data)
-    
+
     return Response(
-        content=files[cfg["files_key"]], 
+        content=files[cfg["files_key"]],
         media_type=cfg["mime"],
         headers={
             "Content-Disposition": content_disposition,
@@ -1871,10 +1867,6 @@ def serve_file(inv_id: int, kind: str, disposition: str = "attachment"):
 def dl_pdf(inv_id: int, username: Annotated[str, Depends(authenticate)]):
     return serve_file(inv_id, "pdf")
 
-@app.get("/api/history/{inv_id}/pdf-preview")
-def preview_pdf(inv_id: int, username: Annotated[str, Depends(authenticate)]):
-    return serve_file(inv_id, "pdf", disposition="inline")
-
 @app.get("/api/history/{inv_id}/excel")
 def dl_excel(inv_id: int, username: Annotated[str, Depends(authenticate)]):
     return serve_file(inv_id, "excel")
@@ -1883,13 +1875,17 @@ def dl_excel(inv_id: int, username: Annotated[str, Depends(authenticate)]):
 def dl_detail_pdf(inv_id: int, username: Annotated[str, Depends(authenticate)]):
     return serve_file(inv_id, "detail_pdf")
 
-@app.get("/api/history/{inv_id}/detail-pdf-preview")
-def preview_detail_pdf(inv_id: int, username: Annotated[str, Depends(authenticate)]):
-    return serve_file(inv_id, "detail_pdf", disposition="inline")
-
 @app.get("/api/history/{inv_id}/detail-excel")
 def dl_detail_excel(inv_id: int, username: Annotated[str, Depends(authenticate)]):
     return serve_file(inv_id, "detail_excel")
+
+@app.get("/api/history/{inv_id}/pdf-preview")
+def preview_pdf(inv_id: int, username: Annotated[str, Depends(authenticate)]):
+    return serve_file(inv_id, "pdf", disposition="inline")
+
+@app.get("/api/history/{inv_id}/detail-pdf-preview")
+def preview_detail_pdf(inv_id: int, username: Annotated[str, Depends(authenticate)]):
+    return serve_file(inv_id, "detail_pdf", disposition="inline")
 
 def get_doc_type_folder_label(doc_type: str) -> str:
     """Drive保存用のフォルダ名ラベルを返す"""
@@ -1906,7 +1902,7 @@ def safe_filename(name: str) -> str:
     return re.sub(r'[\\/:*?"<>|]+', "_", name).strip()
 
 def get_invoice_generated_files(inv_id: int):
-    """伝票の生成ファイル（4種類）を取得する。キャッシュがあればそれを使う"""
+    """伝票の生成ファイル（4種類）を取得する。確定済みでキャッシュがあればそれを優先する"""
     with db_conn() as conn, conn.cursor() as cur:
         cur.execute("SELECT * FROM invoices WHERE id=%s", (inv_id,))
         inv = cur.fetchone()
@@ -1915,12 +1911,14 @@ def get_invoice_generated_files(inv_id: int):
         cur.execute("SELECT code, color, size, unit_price, quantity FROM invoice_items WHERE invoice_id=%s", (inv_id,))
         items = [dict(r) for r in cur.fetchall()]
 
+    inv = dict(inv)
     path_map = {
         "pdf": "pdf_storage_path",
         "excel": "excel_storage_path",
         "detail_pdf": "detail_pdf_storage_path",
         "detail_excel": "detail_excel_storage_path",
     }
+
     # 確定済みかつ4ファイルのキャッシュが揃っている場合はStorageを優先
     if inv.get("status") == "locked" and all(inv.get(col) for col in path_map.values()):
         try:
@@ -1928,15 +1926,15 @@ def get_invoice_generated_files(inv_id: int):
                 key: storage_download(inv[col])
                 for key, col in path_map.items()
             }
-            return dict(inv), files
+            return inv, files
         except Exception as e:
             logger.warning("Cached files unavailable, regenerating: %s", e)
 
     # キャッシュなし・下書き・取得失敗時は再生成
     dr = inv.get("discount_rate") or 100
-    inv_data = assemble_invoice_data(dict(inv), items, dr, inv.get("doc_type", "delivery"))
+    inv_data = assemble_invoice_data(inv, items, dr, inv.get("doc_type", "delivery"))
     files = build_all_files(inv_data)
-    return dict(inv), files
+    return inv, files
 
 @app.get("/api/history/{inv_id}/zip")
 def dl_zip(inv_id: int, username: Annotated[str, Depends(authenticate)]):
@@ -2122,12 +2120,12 @@ def get_history_meta(inv_id: int, username: Annotated[str, Depends(authenticate)
         "created_at": iso_or_none(inv.get("created_at")),
         "locked_at": iso_or_none(inv.get("locked_at")),
         "items": items,
-        # 各種ドキュメントの直接URL
+        # ダウンロード用URL
         "pdf_url": f"/api/history/{inv_id}/pdf",
         "excel_url": f"/api/history/{inv_id}/excel",
         "detail_pdf_url": f"/api/history/{inv_id}/detail-pdf",
         "detail_excel_url": f"/api/history/{inv_id}/detail-excel",
-        # iframe表示専用
+        # iframe表示専用URL（Content-Disposition: inline）
         "pdf_preview_url": f"/api/history/{inv_id}/pdf-preview",
         "detail_pdf_preview_url": f"/api/history/{inv_id}/detail-pdf-preview",
     }
