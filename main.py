@@ -1267,7 +1267,7 @@ def build_invoice_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
     """納品書 Excel (バーコード付き)"""
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.title = invoice_data.get("doc_pdf_title", "伝票")
+    ws.title = invoice_data.get("doc_pdf_title", "伝票") + "_v3"
     
     apply_a4_print_settings(ws, orientation="portrait", fit_to_width=True, fit_to_height=False)
     fill_yellow = PatternFill(start_color="FFE699", end_color="FFE699", fill_type="solid")
@@ -1313,8 +1313,14 @@ def build_invoice_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
         try:
             bc_store = barcode.get('code128', store_code, writer=ImageWriter())
             bc_io_store = BytesIO()
-            # テキストを非表示にし、余白を最小化
-            bc_store.write(bc_io_store, options={"write_text": False, "quiet_zone": 1})
+            # テキストを完全に消し、余白を最小化
+            bc_store.write(bc_io_store, options={
+                "write_text": False, 
+                "quiet_zone": 1,
+                "font_size": 0,
+                "text_distance": 0,
+                "module_height": 20
+            })
             img_store = ExcelImage(bc_io_store)
             
             # バーコードを最大化
@@ -1376,8 +1382,14 @@ def build_invoice_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
                 bc_str = f"{item['code']}{item['color']}{item['size']}".replace("-", "")
                 ean = barcode.get('code128', bc_str, writer=ImageWriter())
                 bc_io = BytesIO()
-                # テキストを非表示にし、余白を最小化
-                ean.write(bc_io, options={"write_text": False, "quiet_zone": 1})
+                # テキストを完全に消し、余白を最小化
+                ean.write(bc_io, options={
+                    "write_text": False, 
+                    "quiet_zone": 1,
+                    "font_size": 0,
+                    "text_distance": 0,
+                    "module_height": 20
+                })
                 img = ExcelImage(bc_io)
                 
                 # バーコードを最大化
