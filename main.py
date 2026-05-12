@@ -930,34 +930,52 @@ def update_customer(cid: int, username: Annotated[str, Depends(authenticate)], n
     return {"status": "ok"}
 
 @app.post("/api/customers/import")
-def import_customers_api(username: Annotated[str, Depends(authenticate)], data: str = Form(...)):
+def import_customers_api(
+    username: Annotated[str, Depends(authenticate)],
+    data: str = Form(...),
+):
     count = 0
+    errors = []
+
     with db_conn() as conn, conn.cursor() as cur:
-        for line in data.strip().split("\n"):
+        for line_no, line in enumerate(data.strip().split("\n"), start=1):
             parts = line.split("\t")
-            if len(parts) >= 3:
-                name = parts[0].strip()
-                code = parts[1].strip()
+            if len(parts) < 3:
+                errors.append({"line": line_no, "error": "列数不足"})
+                continue
+
+            name = parts[0].strip()
+            code = parts[1].strip()
+
+            try:
+                rate = int(parts[2].strip())
+            except ValueError:
+                rate = 35
+
+            if not name:
+                continue
+
+            try:
+                cur.execute("SAVEPOINT sp_import_customer")
+                cur.execute("""
+                    INSERT INTO customers (name, code, discount_rate)
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT (name) DO UPDATE SET
+                        code = EXCLUDED.code,
+                        discount_rate = EXCLUDED.discount_rate
+                """, (name, code, rate))
+                cur.execute("RELEASE SAVEPOINT sp_import_customer")
+                count += 1
+            except Exception as e:
                 try:
-                    rate = int(parts[2].strip())
-                except ValueError:
-                    rate = 35
-                if not name:
-                    continue
-                try:
-                    cur.execute("""
-                        INSERT INTO customers (name, code, discount_rate)
-                        VALUES (%s, %s, %s)
-                        ON CONFLICT (name) DO UPDATE SET
-                            code = EXCLUDED.code,
-                            discount_rate = EXCLUDED.discount_rate;
-                    """, (name, code, rate))
-                    count += 1
-                except Exception as e:
-                    conn.rollback()
-                    continue
+                    cur.execute("ROLLBACK TO SAVEPOINT sp_import_customer")
+                except:
+                    pass
+                errors.append({"line": line_no, "error": str(e)})
+
         conn.commit()
-    return {"status": "ok", "count": count}
+
+    return {"status": "ok", "count": count, "errors": errors}
 
 @app.delete("/api/customers/{cid}")
 def delete_customer(cid: int, username: Annotated[str, Depends(authenticate)]):
