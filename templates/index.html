@@ -2003,7 +2003,7 @@
       /* History list as proper data table (操作は詳細ペイン側に集約) */
       .hist-table-header {
         display: grid !important;
-        grid-template-columns: 108px 52px minmax(160px, 1fr) 120px 64px !important;
+        grid-template-columns: 110px 52px minmax(140px, 1fr) 110px 84px !important;
         gap: 8px !important;
         padding: 10px 12px;
         font-size: 10px;
@@ -2030,6 +2030,9 @@
         color: var(--gold-bright);
       }
 
+      .hist-table-header span:nth-child(2) { text-align: center; }
+      .hist-table-header span:nth-child(5) { text-align: center; }
+
       .hist-table-header span.sort-asc::after {
         content: ' ▲';
         opacity: 0.7;
@@ -2042,7 +2045,7 @@
 
       .hist-item {
         display: grid !important;
-        grid-template-columns: 108px 52px minmax(160px, 1fr) 120px 64px !important;
+        grid-template-columns: 110px 52px minmax(140px, 1fr) 110px 84px !important;
         gap: 8px !important;
         align-items: center;
         padding: 12px !important;
@@ -2081,6 +2084,13 @@
         min-width: 0;
       }
 
+      .hist-item > div:nth-child(2),
+      .hist-item > div:nth-child(5) {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+
       .hist-customer-cell {
         min-width: 0;
       }
@@ -2102,9 +2112,10 @@
       }
 
       .hist-item .status-badge {
-        min-width: 52px;
+        min-width: 60px;
         padding: 3px 7px;
         font-size: 10px;
+        white-space: nowrap;
       }
 
       .hist-item .hist-actions-row {
