@@ -1313,7 +1313,8 @@ def build_invoice_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
         try:
             bc_store = barcode.get('code128', store_code, writer=ImageWriter())
             bc_io_store = BytesIO()
-            bc_store.write(bc_io_store)
+            # テキストを非表示にし、余白を最小化
+            bc_store.write(bc_io_store, options={"write_text": False, "quiet_zone": 1})
             img_store = ExcelImage(bc_io_store)
             
             # バーコードを大きくする
@@ -1355,7 +1356,7 @@ def build_invoice_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
     for i, item in enumerate(invoice_data["items"]):
         r = start_row + 1 + i
         # バーコードを大きくするため行高を拡大
-        ws.row_dimensions[r].height = 75
+        ws.row_dimensions[r].height = 80
         ws[f"A{r}"] = i + 1
         ws[f"B{r}"] = item["code"]
         ws[f"C{r}"] = item["color"]
@@ -1375,20 +1376,21 @@ def build_invoice_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
                 bc_str = f"{item['code']}{item['color']}{item['size']}".replace("-", "")
                 ean = barcode.get('code128', bc_str, writer=ImageWriter())
                 bc_io = BytesIO()
-                ean.write(bc_io)
+                # テキストを非表示にし、余白を最小化
+                ean.write(bc_io, options={"write_text": False, "quiet_zone": 1})
                 img = ExcelImage(bc_io)
                 
                 # バーコードを大きくするため
-                img.width, img.height = 280, 95
+                img.width, img.height = 280, 100
                 marker = AnchorMarker(
                     col=4, 
-                    colOff=pixels_to_EMU(4), 
+                    colOff=pixels_to_EMU(2), 
                     row=r-1, 
-                    rowOff=pixels_to_EMU(4)
+                    rowOff=pixels_to_EMU(2)
                 )
                 img.anchor = OneCellAnchor(
                     _from=marker, 
-                    ext=XDRPositiveSize2D(cx=pixels_to_EMU(280), cy=pixels_to_EMU(95))
+                    ext=XDRPositiveSize2D(cx=pixels_to_EMU(280), cy=pixels_to_EMU(100))
                 )
                 ws.add_image(img)
             except:
