@@ -77,6 +77,22 @@ from pydantic import BaseModel
 def get_jst_now():
     return datetime.datetime.now(ZoneInfo("Asia/Tokyo"))
 
+def to_jst(dt):
+    """DBから来たdatetimeをJSTへ正規化"""
+    if not dt:
+        return get_jst_now()
+    if isinstance(dt, str):
+        try:
+            dt = datetime.datetime.fromisoformat(dt.replace("Z", "+00:00"))
+        except Exception:
+            return get_jst_now()
+    if isinstance(dt, datetime.datetime):
+        JST = ZoneInfo("Asia/Tokyo")
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=JST)
+        return dt.astimezone(JST)
+    return get_jst_now()
+
 def h(value) -> str:
     """HTMLエスケープヘルパー"""
     return escape(str(value or ""), quote=True)
@@ -1319,8 +1335,7 @@ th{{background:#f4ecd8;}}
 </html>"""
 
     if HTML is None:
-        logger.error("WeasyPrint is not available. Cannot build detail PDF.")
-        return b""
+        raise RuntimeError("WeasyPrint is not available. PDF generation is disabled.")
     return HTML(string=html_str).write_pdf()
 
 def build_invoice_pdf(invoice_data: dict) -> bytes:
@@ -1334,8 +1349,7 @@ def build_invoice_pdf(invoice_data: dict) -> bytes:
     render_data = {**invoice_data, "font_face_css": get_pdf_font_css()}
     html_str = template.render(**render_data)
     if HTML is None:
-        logger.error("WeasyPrint is not available. Cannot build invoice PDF.")
-        return b""
+        raise RuntimeError("WeasyPrint is not available. PDF generation is disabled.")
     return HTML(string=html_str).write_pdf()
 
 def build_invoice_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
@@ -1357,14 +1371,13 @@ def build_invoice_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
         "prov_delivery": "仮納品",
         "prov_return": "仮返品"
     }
-    ws["A1"] = label_map.get(doc_type, "納品")
-    ws["B1"] = "伝票"
+    ws["A1"] = f"{label_map.get(doc_type, '納品')}伝票"
     ws["A1"].font = Font(size=14, bold=True)
-    ws["B1"].font = Font(size=14, bold=True)
+    ws.merge_cells("A1:B1")
+    ws["A1"].alignment = Alignment(horizontal="left", vertical="center")
     
     ws["F1"] = "No."
-    # No. の隣（伝票番号）は空欄にする
-    ws["G1"] = ""
+    ws["G1"] = invoice_data.get("invoice_number", "")
     ws["G1"].fill = fill_yellow
     
     ws["B3"] = "コード"
@@ -1412,8 +1425,8 @@ def build_invoice_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
                 ext=XDRPositiveSize2D(cx=pixels_to_EMU(200), cy=pixels_to_EMU(55))
             )
             ws.add_image(img_store)
-        except:
-            pass
+        except Exception as e:
+            logger.warning("Store barcode skipped (code=%s): %s", store_code, e)
 
     headers = ["品番", "カラー", "サイズ", "バーコード", "数量", "単価", "金額", "掛率"]
     h_cols = ["B", "C", "D", "E", "F", "G", "H", "I"]
@@ -1443,11 +1456,13 @@ def build_invoice_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
         ws[f"C{r}"] = item["color"]
         ws[f"D{r}"] = item["size"]
         ws[f"F{r}"] = item["quantity"]
+        ws[f"F{r}"].number_format = '0'
         ws[f"G{r}"] = item["unit_price"]
         ws[f"G{r}"].number_format = '#,##0'
         ws[f"H{r}"] = item["net_amount"]
         ws[f"H{r}"].number_format = '#,##0'
-        ws[f"I{r}"] = f"{invoice_data['discount_rate']}%"
+        dr_val = invoice_data.get('discount_rate') or 0
+        ws[f"I{r}"] = f"{dr_val}%" if dr_val > 0 else "掛率なし"
         
         for col in ["A","B","C","D","E","F","G","H","I"]:
             ws[f"{col}{r}"].border = border_thin
@@ -1480,16 +1495,23 @@ def build_invoice_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
                     ext=XDRPositiveSize2D(cx=pixels_to_EMU(200), cy=pixels_to_EMU(55))
                 )
                 ws.add_image(img)
-            except:
-                pass
+            except Exception as e:
+                logger.warning("Item barcode skipped (row %d, code=%s): %s", r, item.get("code"), e)
 
     last_r = start_row + len(invoice_data["items"]) + 2
-    ws.cell(row=last_r, column=7, value="小計")
-    ws.cell(row=last_r, column=8, value=invoice_data["total_net_amount"])
-    ws.cell(row=last_r+1, column=7, value="消費税")
-    ws.cell(row=last_r+1, column=8, value=invoice_data["total_tax_amount"])
-    ws.cell(row=last_r+2, column=7, value="合計金額")
-    ws.cell(row=last_r+2, column=8, value=invoice_data["total_grand_total"])
+    for i, (label, val) in enumerate([
+        ("小計", invoice_data["total_net_amount"]),
+        ("消費税", invoice_data["total_tax_amount"]),
+        ("合計金額", invoice_data["total_grand_total"]),
+    ]):
+        rr = last_r + i
+        c_label = ws.cell(row=rr, column=7, value=label)
+        c_val = ws.cell(row=rr, column=8, value=val)
+        c_val.number_format = '¥#,##0'
+        c_label.font = Font(bold=(i == 2))
+        c_val.font = Font(bold=(i == 2))
+        c_label.border = border_thin
+        c_val.border = border_thin
 
     # 全セルを中央揃えにする
     for row in ws.iter_rows(min_row=1, max_row=ws.max_row, min_col=1, max_col=ws.max_column):
@@ -1544,10 +1566,7 @@ def assemble_invoice_data(inv_info: dict, items_input: list, discount_rate: int,
         })
         total_net += net; total_tax += tax; total_grand += grand
     
-    dt = inv_info.get("locked_at") or inv_info.get("created_at") or get_jst_now()
-    if isinstance(dt, str):
-        try: dt = datetime.datetime.fromisoformat(dt.replace("Z", "+00:00"))
-        except: dt = get_jst_now()
+    dt = to_jst(inv_info.get("locked_at") or inv_info.get("created_at"))
 
     titles = DOC_TYPE_TITLES.get(doc_type, DOC_TYPE_TITLES["delivery"])
 
@@ -1814,10 +1833,7 @@ def serve_file(inv_id: int, kind: str, disposition: str = "attachment"):
 
     customer = safe_filename(inv.get("customer_name") or "Unknown")
 
-    dt = inv.get("locked_at") or inv.get("created_at") or get_jst_now()
-    if isinstance(dt, str):
-        try: dt = datetime.datetime.fromisoformat(dt.replace("Z", "+00:00"))
-        except: dt = get_jst_now()
+    dt = to_jst(inv.get("locked_at") or inv.get("created_at"))
     date_str = f"{dt.month}月{dt.day}日"
 
     doc_type = inv.get("doc_type", "delivery")
@@ -1956,10 +1972,7 @@ def dl_zip(inv_id: int, username: Annotated[str, Depends(authenticate)]):
         zip_buffer.seek(0)
         
         # === ここからZIPファイル名の変更 ===
-        dt = inv.get("locked_at") or inv.get("created_at") or get_jst_now()
-        if isinstance(dt, str):
-            try: dt = datetime.datetime.fromisoformat(dt.replace("Z", "+00:00"))
-            except: dt = get_jst_now()
+        dt = to_jst(inv.get("locked_at") or inv.get("created_at"))
         date_str = f"{dt.month}月{dt.day}日"
         
         zip_name = f"{customer}_{date_str}.zip"
@@ -2022,10 +2035,7 @@ def upload_drive_internal(jid: str, inv_id: int):
         inv, files = get_invoice_generated_files(inv_id)
 
         doc_type = inv.get("doc_type", "delivery")
-        dt = inv.get("locked_at") or inv.get("created_at") or get_jst_now()
-        if isinstance(dt, str):
-            try: dt = datetime.datetime.fromisoformat(dt.replace("Z", "+00:00"))
-            except: dt = get_jst_now()
+        dt = to_jst(inv.get("locked_at") or inv.get("created_at"))
 
         folder_path = [
             str(dt.year),
