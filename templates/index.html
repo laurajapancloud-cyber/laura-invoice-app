@@ -2558,24 +2558,10 @@
     }
 
     @media (min-width: 1440px) {
-      body {
-        grid-template-columns: 240px 1fr;
+      #page-history.active {
+        grid-template-columns: minmax(680px, 44vw) minmax(0, 1fr);
       }
-
-      .page {
-        padding: 32px 48px 80px;
-      }
-
-      #page-create.active {
-        grid-template-columns: 400px 1fr 340px;
-      }
-
-      #preview-summary-wrap {
-        grid-column: 3;
-        grid-row: 1 / -1;
-        position: sticky;
-        top: 16px;
-      }
+    }
 
       .item-cards {
         grid-template-columns: 1fr 1fr 1fr;
@@ -5111,8 +5097,10 @@
       $('modal-title').textContent = `📄 ${d.invoice_number || 'PREVIEW'} - プレビュー`;
       $('modal-preview').style.display = 'flex';
 
-      if (d.pdf_url) {
-        $('modal-pdf-frame').src = d.pdf_url;
+      const modalPdfSrc = d.pdf_preview_url || d.pdf_url;
+      if (modalPdfSrc) {
+        // キャッシュ回避のためタイムスタンプを付与
+        $('modal-pdf-frame').src = modalPdfSrc + (modalPdfSrc.includes('?') ? '&' : '?') + 't=' + Date.now();
       } else if (d.pdf_base64) {
         $('modal-pdf-frame').src = b64ToBlobUrl(d.pdf_base64, 'application/pdf');
       } else if (d.invoice_number && d.invoice_number.startsWith('PREVIEW')) {
@@ -5126,8 +5114,9 @@
         $('modal-pdf-frame').src = 'about:blank';
       }
 
-      if (d.detail_pdf_url) {
-        $('modal-detail-frame').src = d.detail_pdf_url;
+      const modalDetailPdfSrc = d.detail_pdf_preview_url || d.detail_pdf_url;
+      if (modalDetailPdfSrc) {
+        $('modal-detail-frame').src = modalDetailPdfSrc + (modalDetailPdfSrc.includes('?') ? '&' : '?') + 't=' + Date.now();
       } else if (d.detail_pdf_base64) {
         $('modal-detail-frame').src = b64ToBlobUrl(d.detail_pdf_base64, 'application/pdf');
       } else {
@@ -5135,16 +5124,11 @@
       }
 
       if (d.excel_url) {
-        // Excelはグリッド表示のため一旦Base64が必要だが、URLから取得するようにしても良い。
-        // ここでは一旦 meta に excel_base64 は入っていないので、
-        // もし必要なら renderExcelGridFromUrl を作るか、タブ切り替え時にロードする。
-        // 今回はとりあえずプレビュー用グリッド表示（Local）をデフォルトにする。
-        renderExcelGridLocal(payload);
-        if (!d.excel_base64) {
-          // 遅延ロードの仕組み（後述）
-          loadExcelForPreview(d.excel_url);
-        } else {
+        // Excel本体は重いので、モーダル表示時には生成しない（プレビュー用にはローカル簡易表だけ表示する）
+        if (d.excel_base64) {
           renderExcelGrid(d.excel_base64);
+        } else {
+          renderExcelGridLocal(payload);
         }
       } else if (d.excel_base64) {
         renderExcelGrid(d.excel_base64);
@@ -5155,8 +5139,13 @@
       renderSummaryView(payload, d, 'modal-summary-content');
 
       // iPhone向けスケーリング適用
-      adjustIframeScale('modal-pdf-frame');
-      adjustIframeScale('modal-detail-frame');
+      setTimeout(() => {
+        adjustIframeScale('modal-pdf-frame');
+        adjustIframeScale('modal-detail-frame');
+      }, 100);
+
+      $('modal-pdf-frame').onload = () => adjustIframeScale('modal-pdf-frame');
+      $('modal-detail-frame').onload = () => adjustIframeScale('modal-detail-frame');
 
       // ファイル名を動的に生成
       const customer = (payload && payload.customer_name) ? payload.customer_name : (d.customer_name || "Unknown");
@@ -5530,7 +5519,8 @@
       }
 
       try {
-        const r = await fetch(`/api/history/${inv.id}/data`);
+        // 軽量なメタデータAPIを使用（高速化）
+        const r = await fetch(`/api/history/${inv.id}/meta`);
         if (!r.ok) throw new Error('読込失敗');
         const d = await r.json();
         const titles = TYPE_TITLES[d.doc_type] || TYPE_TITLES.delivery;
@@ -5572,14 +5562,14 @@
 							<div class="preview-tab" data-ptab="summary">⚜ 概要</div>
 						</div>
 						<div class="preview-pane active" id="dpane-pdf">
-							<iframe class="pdf-preview-frame" src="${b64ToBlobUrl(d.pdf_base64, 'application/pdf')}"></iframe>
+							<iframe class="pdf-preview-frame" src="${d.pdf_preview_url || d.pdf_url}"></iframe>
 							<div class="preview-actions">
 								<button class="btn btn-red" onclick="dlFromServer('/api/history/${d.invoice_id}/pdf','${fPdf}')">📄 PDF保存</button>
 								<button class="btn btn-green" onclick="dlFromServer('/api/history/${d.invoice_id}/excel','${fXl}')">📊 Excel保存</button>
 							</div>
 						</div>
 						<div class="preview-pane" id="dpane-detail">
-							<iframe class="pdf-preview-frame" src="${b64ToBlobUrl(d.detail_pdf_base64, 'application/pdf')}"></iframe>
+							<iframe class="pdf-preview-frame" src="${d.detail_pdf_preview_url || d.detail_pdf_url}"></iframe>
 							<div class="preview-actions">
 								<button class="btn btn-red" onclick="dlFromServer('/api/history/${d.invoice_id}/detail-pdf','${fDpdf}')">📄 PDF保存</button>
 								<button class="btn btn-green" onclick="dlFromServer('/api/history/${d.invoice_id}/detail-excel','${fDxl}')">📊 Excel保存</button>
@@ -5589,18 +5579,30 @@
 							<div id="hist-summary-content"></div>
 						</div>`;
           initTabSwitchers();
-          const payload = { customer_name: d.customer_name, discount_rate: d.discount_rate, items: d.items };
+          const payload = {
+            customer_name: d.customer_name,
+            customer_code: d.customer_code,
+            discount_rate: d.discount_rate,
+            items: d.items,
+            doc_type: d.doc_type
+          };
           renderSummaryView(payload, d, 'hist-summary-content');
           // 重要操作の長押し化
           const lockEl = document.querySelector(`[data-lock-id="${d.invoice_id}"]`);
           if (lockEl) bindLongPress(lockEl, () => lockHist(d.invoice_id));
         } else {
-          pdfData = d.pdf_base64; excelData = d.excel_base64;
-          detailPdfData = d.detail_pdf_base64; detailExcelData = d.detail_excel_base64;
+          pdfData = d.pdf_base64 || null; excelData = d.excel_base64 || null;
+          detailPdfData = d.detail_pdf_base64 || null; detailExcelData = d.detail_excel_base64 || null;
           currentInvNum = d.invoice_number;
           currentDocType = d.doc_type;
           d.id = d.invoice_id;
-          const payload = { customer_name: d.customer_name, customer_code: d.customer_code, discount_rate: d.discount_rate, items: d.items };
+          const payload = {
+            customer_name: d.customer_name,
+            customer_code: d.customer_code,
+            discount_rate: d.discount_rate,
+            items: d.items,
+            doc_type: d.doc_type
+          };
           openPreviewModal(d, payload);
         }
       } catch (e) {

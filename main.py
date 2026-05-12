@@ -1319,8 +1319,7 @@ th{{background:#f4ecd8;}}
 </html>"""
 
     if HTML is None:
-        logger.error("WeasyPrint is not available. Cannot build detail PDF.")
-        return b""
+        raise RuntimeError("WeasyPrint is not available. PDF generation is disabled.")
     return HTML(string=html_str).write_pdf()
 
 def build_invoice_pdf(invoice_data: dict) -> bytes:
@@ -1334,8 +1333,7 @@ def build_invoice_pdf(invoice_data: dict) -> bytes:
     render_data = {**invoice_data, "font_face_css": get_pdf_font_css()}
     html_str = template.render(**render_data)
     if HTML is None:
-        logger.error("WeasyPrint is not available. Cannot build invoice PDF.")
-        return b""
+        raise RuntimeError("WeasyPrint is not available. PDF generation is disabled.")
     return HTML(string=html_str).write_pdf()
 
 def build_invoice_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
@@ -1802,7 +1800,7 @@ KIND_CONFIG = {
     "detail_excel": {"path_field": "detail_excel_storage_path", "mime": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",         "ext": "xlsx", "files_key": "detail_excel"},
 }
 
-def serve_file(inv_id: int, kind: str):
+def serve_file(inv_id: int, kind: str, disposition: str = "attachment"):
     cfg = KIND_CONFIG[kind]
     with db_conn() as conn, conn.cursor() as cur:
         cur.execute("SELECT * FROM invoices WHERE id=%s", (inv_id,))
@@ -1836,6 +1834,9 @@ def serve_file(inv_id: int, kind: str):
     # 日本語ファイル名を安全にヘッダーに含めるためのエンコード
     encoded_fname = urllib.parse.quote(fname)
 
+    # inline / attachment を切り替える
+    content_disposition = f"{disposition}; filename*=UTF-8''{encoded_fname}"
+
     # キャッシュがあればそれを使う
     if inv.get(cfg["path_field"]):
         try:
@@ -1843,9 +1844,13 @@ def serve_file(inv_id: int, kind: str):
             return Response(
                 content=content,
                 media_type=cfg["mime"],
-                headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded_fname}"}
+                headers={
+                    "Content-Disposition": content_disposition,
+                    "Cache-Control": "private, max-age=300",
+                }
             )
-        except: pass # 取得失敗時は再生成へ
+        except Exception as e:
+            logger.warning("Storage download failed, regenerating file: %s", e)
 
     # キャッシュがない、または失敗した場合はオンデマンドで再生成
     dr = inv.get("discount_rate") or 100
@@ -1855,13 +1860,20 @@ def serve_file(inv_id: int, kind: str):
     return Response(
         content=files[cfg["files_key"]], 
         media_type=cfg["mime"],
-        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded_fname}"}
+        headers={
+            "Content-Disposition": content_disposition,
+            "Cache-Control": "private, max-age=60",
+        }
     )
 
 
 @app.get("/api/history/{inv_id}/pdf")
 def dl_pdf(inv_id: int, username: Annotated[str, Depends(authenticate)]):
     return serve_file(inv_id, "pdf")
+
+@app.get("/api/history/{inv_id}/pdf-preview")
+def preview_pdf(inv_id: int, username: Annotated[str, Depends(authenticate)]):
+    return serve_file(inv_id, "pdf", disposition="inline")
 
 @app.get("/api/history/{inv_id}/excel")
 def dl_excel(inv_id: int, username: Annotated[str, Depends(authenticate)]):
@@ -1870,6 +1882,10 @@ def dl_excel(inv_id: int, username: Annotated[str, Depends(authenticate)]):
 @app.get("/api/history/{inv_id}/detail-pdf")
 def dl_detail_pdf(inv_id: int, username: Annotated[str, Depends(authenticate)]):
     return serve_file(inv_id, "detail_pdf")
+
+@app.get("/api/history/{inv_id}/detail-pdf-preview")
+def preview_detail_pdf(inv_id: int, username: Annotated[str, Depends(authenticate)]):
+    return serve_file(inv_id, "detail_pdf", disposition="inline")
 
 @app.get("/api/history/{inv_id}/detail-excel")
 def dl_detail_excel(inv_id: int, username: Annotated[str, Depends(authenticate)]):
@@ -1899,18 +1915,27 @@ def get_invoice_generated_files(inv_id: int):
         cur.execute("SELECT code, color, size, unit_price, quantity FROM invoice_items WHERE invoice_id=%s", (inv_id,))
         items = [dict(r) for r in cur.fetchall()]
 
-    files = {}
-    # 以前はStorageのキャッシュを確認していましたが、
-    # バーコードサイズなどのレイアウト変更を過去の伝票にも適用するため、
-    # 常に最新のプログラムで再生成するように変更します。
-    needs_generation = True
+    path_map = {
+        "pdf": "pdf_storage_path",
+        "excel": "excel_storage_path",
+        "detail_pdf": "detail_pdf_storage_path",
+        "detail_excel": "detail_excel_storage_path",
+    }
+    # 確定済みかつ4ファイルのキャッシュが揃っている場合はStorageを優先
+    if inv.get("status") == "locked" and all(inv.get(col) for col in path_map.values()):
+        try:
+            files = {
+                key: storage_download(inv[col])
+                for key, col in path_map.items()
+            }
+            return dict(inv), files
+        except Exception as e:
+            logger.warning("Cached files unavailable, regenerating: %s", e)
 
-    # キャッシュが無い、または取得に失敗した場合のみ再生成
-    if needs_generation:
-        dr = inv.get("discount_rate") or 100
-        inv_data = assemble_invoice_data(dict(inv), items, dr, inv.get("doc_type", "delivery"))
-        files = build_all_files(inv_data)
-        
+    # キャッシュなし・下書き・取得失敗時は再生成
+    dr = inv.get("discount_rate") or 100
+    inv_data = assemble_invoice_data(dict(inv), items, dr, inv.get("doc_type", "delivery"))
+    files = build_all_files(inv_data)
     return dict(inv), files
 
 @app.get("/api/history/{inv_id}/zip")
@@ -2102,6 +2127,9 @@ def get_history_meta(inv_id: int, username: Annotated[str, Depends(authenticate)
         "excel_url": f"/api/history/{inv_id}/excel",
         "detail_pdf_url": f"/api/history/{inv_id}/detail-pdf",
         "detail_excel_url": f"/api/history/{inv_id}/detail-excel",
+        # iframe表示専用
+        "pdf_preview_url": f"/api/history/{inv_id}/pdf-preview",
+        "detail_pdf_preview_url": f"/api/history/{inv_id}/detail-pdf-preview",
     }
 
 @app.get("/api/history/{inv_id}/data")
