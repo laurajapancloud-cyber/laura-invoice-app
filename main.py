@@ -11,6 +11,7 @@ import time
 import re
 import requests
 import uuid
+from html import escape
 
 # psycopg2 / supabase はオプション (ローカル UI プレビューでは不要)
 try:
@@ -75,6 +76,10 @@ from pydantic import BaseModel
 
 def get_jst_now():
     return datetime.datetime.now(ZoneInfo("Asia/Tokyo"))
+
+def h(value) -> str:
+    """HTMLエスケープヘルパー"""
+    return escape(str(value or ""), quote=True)
 
 # Conditional imports
 try:
@@ -1268,33 +1273,63 @@ def build_detail_excel(invoice_number: str, customer_name: str, items: list, doc
     return out.getvalue()
 
 def build_detail_pdf(invoice_number: str, customer_name: str, items: list, doc_type='delivery') -> bytes:
-    """商品明細表 PDF"""
+    """明細 PDF"""
     titles = DOC_TYPE_TITLES.get(doc_type, DOC_TYPE_TITLES["delivery"])
     font_css = get_pdf_font_css()
     rows_html = ""
     for i, item in enumerate(items):
-        rows_html += f"<tr><td>{i+1}</td><td>{item.get('code','')}</td><td>{item.get('color','')}</td><td>{item.get('size','')}</td><td>{item.get('quantity',0)}</td><td>¥{item.get('unit_price',0):,}</td></tr>"
-    html_str = f"""<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8">
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
-    <style>{font_css}
-    body{{font-family:'Noto Sans JP', -apple-system, BlinkMacSystemFont, sans-serif; font-size:12px;}}
-    .title{{font-size:20px;font-weight:bold;text-align:center;margin-bottom:10px;}}
-    .meta{{margin-bottom:15px;}}
-    table{{width:100%;border-collapse:collapse;}} th,td{{border:1px solid #ccc;padding:6px;text-align:center;}}
-    th{{background:#f4ecd8;}}</style></head><body>
-    <div class="title">{titles['detail']}</div>
-    <div class="meta"><span>伝票番号: {invoice_number}</span><br><span>取引先: {customer_name}</span></div>
-    <table><thead><tr><th>No.</th><th>品番</th><th>カラー</th><th>サイズ</th><th>枚数</th><th>上代</th></tr></thead>
-    <tbody>{rows_html}</tbody></table></body></html>"""
+        rows_html += (
+            "<tr>"
+            f"<td>{i + 1}</td>"
+            f"<td>{h(item.get('code'))}</td>"
+            f"<td>{h(item.get('color'))}</td>"
+            f"<td>{h(item.get('size'))}</td>"
+            f"<td>{h(item.get('quantity', 0))}</td>"
+            f"<td>¥{int(item.get('unit_price') or 0):,}</td>"
+            "</tr>"
+        )
+
+    html_str = f"""<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
+<style>{font_css}
+body{{font-family:'Noto Sans JP', -apple-system, BlinkMacSystemFont, sans-serif; font-size:12px;}}
+.title{{font-size:20px; font-weight:bold; text-align:center; margin-bottom:10px;}}
+.meta{{margin-bottom:15px;}}
+table{{width:100%; border-collapse:collapse;}}
+th,td{{border:1px solid #ccc; padding:6px; text-align:center;}}
+th{{background:#f4ecd8;}}
+</style>
+</head>
+<body>
+<div class="title">{h(titles['detail'])}</div>
+<div class="meta">
+  <span>伝票番号: {h(invoice_number)}</span><br>
+  <span>取引先: {h(customer_name)}</span>
+</div>
+<table>
+<thead>
+<tr><th>No.</th><th>品番</th><th>カラー</th><th>サイズ</th><th>枚数</th><th>上代</th></tr>
+</thead>
+<tbody>{rows_html}</tbody>
+</table>
+</body>
+</html>"""
+
     if HTML is None:
         logger.error("WeasyPrint is not available. Cannot build detail PDF.")
         return b""
     return HTML(string=html_str).write_pdf()
 
 def build_invoice_pdf(invoice_data: dict) -> bytes:
-    """納品書 PDF (HTMLテンプレートから生成)"""
-    from jinja2 import Environment, FileSystemLoader
-    env = Environment(loader=FileSystemLoader("templates"))
+    """納品書 PDF (HTMLテンプレート経由)"""
+    from jinja2 import Environment, FileSystemLoader, select_autoescape
+    env = Environment(
+        loader=FileSystemLoader("templates"),
+        autoescape=select_autoescape(["html", "xml"])
+    )
     template = env.get_template("invoice_template.html")
     render_data = {**invoice_data, "font_face_css": get_pdf_font_css()}
     html_str = template.render(**render_data)
@@ -1547,8 +1582,11 @@ def preview_documents(username: Annotated[str, Depends(authenticate)], payload: 
     )
     
     # WeasyPrintでPDF化せず、Jinja2のHTML文字列をそのまま返す
-    from jinja2 import Environment, FileSystemLoader
-    env = Environment(loader=FileSystemLoader("templates"))
+    from jinja2 import Environment, FileSystemLoader, select_autoescape
+    env = Environment(
+        loader=FileSystemLoader("templates"),
+        autoescape=select_autoescape(["html", "xml"])
+    )
     template = env.get_template("invoice_template.html")
     # preview用にはフォントCSSを空にする（ブラウザがGoogle Fontsを読むため）
     render_data = {**inv_data, "font_face_css": ""}
