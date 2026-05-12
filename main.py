@@ -2000,13 +2000,30 @@ def get_history_data(inv_id: int, username: Annotated[str, Depends(authenticate)
 
     inv_data = assemble_invoice_data(inv, items, inv["discount_rate"], inv.get("doc_type", "delivery"))
     files = build_all_files(inv_data)
+
+    def iso_or_none(v):
+        if not v:
+            return None
+        if hasattr(v, "isoformat"):
+            return v.isoformat()
+        return str(v)
+
     return {
         "invoice_id": inv["id"],
         "invoice_number": inv["invoice_number"],
         "customer_name": inv["customer_name"],
+        "customer_code": inv.get("customer_code"),
         "discount_rate": inv["discount_rate"],
         "status": inv["status"],
         "doc_type": inv.get("doc_type", "delivery"),
+
+        "total_net_amount": inv.get("total_net_amount", 0),
+        "total_tax_amount": inv.get("total_tax_amount", 0),
+        "total_grand_total": inv.get("total_grand_total", 0),
+        "item_count": inv.get("item_count", len(items)),
+        "created_at": iso_or_none(inv.get("created_at")),
+        "locked_at": iso_or_none(inv.get("locked_at")),
+
         "items": items,
         "pdf_base64": base64.b64encode(files["pdf"]).decode(),
         "excel_base64": base64.b64encode(files["excel"]).decode(),
