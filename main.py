@@ -2065,8 +2065,48 @@ def get_job_status(job_id: str, username: Annotated[str, Depends(authenticate)])
     if not job: raise HTTPException(404, "Job not found")
     return job
 
+@app.get("/api/history/{inv_id}/meta")
+def get_history_meta(inv_id: int, username: Annotated[str, Depends(authenticate)]):
+    """軽量な履歴詳細（メタデータのみ）取得API"""
+    with db_conn() as conn, conn.cursor() as cur:
+        cur.execute("SELECT * FROM invoices WHERE id=%s", (inv_id,))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(404, "Not found")
+        inv = dict(row)
+        cur.execute("SELECT code, color, size, unit_price, quantity FROM invoice_items WHERE invoice_id=%s", (inv_id,))
+        items = [dict(r) for r in cur.fetchall()]
+
+    def iso_or_none(v):
+        if not v: return None
+        if hasattr(v, "isoformat"): return v.isoformat()
+        return str(v)
+
+    return {
+        "invoice_id": inv["id"],
+        "invoice_number": inv["invoice_number"],
+        "customer_name": inv["customer_name"],
+        "customer_code": inv.get("customer_code"),
+        "discount_rate": inv["discount_rate"],
+        "status": inv["status"],
+        "doc_type": inv.get("doc_type", "delivery"),
+        "total_net_amount": inv.get("total_net_amount", 0),
+        "total_tax_amount": inv.get("total_tax_amount", 0),
+        "total_grand_total": inv.get("total_grand_total", 0),
+        "item_count": inv.get("item_count", len(items)),
+        "created_at": iso_or_none(inv.get("created_at")),
+        "locked_at": iso_or_none(inv.get("locked_at")),
+        "items": items,
+        # 各種ドキュメントの直接URL
+        "pdf_url": f"/api/history/{inv_id}/pdf",
+        "excel_url": f"/api/history/{inv_id}/excel",
+        "detail_pdf_url": f"/api/history/{inv_id}/detail-pdf",
+        "detail_excel_url": f"/api/history/{inv_id}/detail-excel",
+    }
+
 @app.get("/api/history/{inv_id}/data")
 def get_history_data(inv_id: int, username: Annotated[str, Depends(authenticate)]):
+    """(互換性維持) 全ドキュメントをBase64で含む詳細API"""
     with db_conn() as conn, conn.cursor() as cur:
         cur.execute("SELECT * FROM invoices WHERE id=%s", (inv_id,))
         row = cur.fetchone()
@@ -2080,10 +2120,8 @@ def get_history_data(inv_id: int, username: Annotated[str, Depends(authenticate)
     files = build_all_files(inv_data)
 
     def iso_or_none(v):
-        if not v:
-            return None
-        if hasattr(v, "isoformat"):
-            return v.isoformat()
+        if not v: return None
+        if hasattr(v, "isoformat"): return v.isoformat()
         return str(v)
 
     return {
@@ -2094,14 +2132,12 @@ def get_history_data(inv_id: int, username: Annotated[str, Depends(authenticate)
         "discount_rate": inv["discount_rate"],
         "status": inv["status"],
         "doc_type": inv.get("doc_type", "delivery"),
-
         "total_net_amount": inv.get("total_net_amount", 0),
         "total_tax_amount": inv.get("total_tax_amount", 0),
         "total_grand_total": inv.get("total_grand_total", 0),
         "item_count": inv.get("item_count", len(items)),
         "created_at": iso_or_none(inv.get("created_at")),
         "locked_at": iso_or_none(inv.get("locked_at")),
-
         "items": items,
         "pdf_base64": base64.b64encode(files["pdf"]).decode(),
         "excel_base64": base64.b64encode(files["excel"]).decode(),

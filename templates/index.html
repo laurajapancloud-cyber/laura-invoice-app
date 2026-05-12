@@ -5111,7 +5111,9 @@
       $('modal-title').textContent = `📄 ${d.invoice_number || 'PREVIEW'} - プレビュー`;
       $('modal-preview').style.display = 'flex';
 
-      if (d.pdf_base64) {
+      if (d.pdf_url) {
+        $('modal-pdf-frame').src = d.pdf_url;
+      } else if (d.pdf_base64) {
         $('modal-pdf-frame').src = b64ToBlobUrl(d.pdf_base64, 'application/pdf');
       } else if (d.invoice_number && d.invoice_number.startsWith('PREVIEW')) {
         // プレビュー生成待ちの間、ローディングを表示してチラつきを抑える
@@ -5124,13 +5126,27 @@
         $('modal-pdf-frame').src = 'about:blank';
       }
 
-      if (d.detail_pdf_base64) {
+      if (d.detail_pdf_url) {
+        $('modal-detail-frame').src = d.detail_pdf_url;
+      } else if (d.detail_pdf_base64) {
         $('modal-detail-frame').src = b64ToBlobUrl(d.detail_pdf_base64, 'application/pdf');
       } else {
         $('modal-detail-frame').src = 'about:blank';
       }
 
-      if (d.excel_base64) {
+      if (d.excel_url) {
+        // Excelはグリッド表示のため一旦Base64が必要だが、URLから取得するようにしても良い。
+        // ここでは一旦 meta に excel_base64 は入っていないので、
+        // もし必要なら renderExcelGridFromUrl を作るか、タブ切り替え時にロードする。
+        // 今回はとりあえずプレビュー用グリッド表示（Local）をデフォルトにする。
+        renderExcelGridLocal(payload);
+        if (!d.excel_base64) {
+          // 遅延ロードの仕組み（後述）
+          loadExcelForPreview(d.excel_url);
+        } else {
+          renderExcelGrid(d.excel_base64);
+        }
+      } else if (d.excel_base64) {
         renderExcelGrid(d.excel_base64);
       } else {
         renderExcelGridLocal(payload);
@@ -5151,17 +5167,24 @@
       const fDpdf = getFileName(d.doc_type, customer, dateISO, 'detail-pdf');
       const fDxl = getFileName(d.doc_type, customer, dateISO, 'detail-excel');
 
-      // ★ iOSアプリ環境ならサーバーURLから直接取得、ブラウザならBase64から
+      // ★ iOSアプリ環境ならサーバーURLから直接取得、ブラウザならBase64またはURLから
       if (isNativeApp && d.id) {
         document.querySelector('.btn-dl-pdf').onclick = () => dlFromServer(`/api/history/${d.id}/pdf`, fPdf);
         document.querySelector('.btn-dl-xl').onclick = () => dlFromServer(`/api/history/${d.id}/excel`, fXl);
         document.querySelector('.btn-dl-dpdf').onclick = () => dlFromServer(`/api/history/${d.id}/detail-pdf`, fDpdf);
         document.querySelector('.btn-dl-dxl').onclick = () => dlFromServer(`/api/history/${d.id}/detail-excel`, fDxl);
       } else {
-        if (d.pdf_base64) document.querySelector('.btn-dl-pdf').onclick = () => dl64(d.pdf_base64, fPdf, 'application/pdf');
-        if (d.excel_base64) document.querySelector('.btn-dl-xl').onclick = () => dl64(d.excel_base64, fXl, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        if (d.detail_pdf_base64) document.querySelector('.btn-dl-dpdf').onclick = () => dl64(d.detail_pdf_base64, fDpdf, 'application/pdf');
-        if (d.detail_excel_base64) document.querySelector('.btn-dl-dxl').onclick = () => dl64(d.detail_excel_base64, fDxl, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        if (d.pdf_url) document.querySelector('.btn-dl-pdf').onclick = () => dlFromServer(d.pdf_url, fPdf);
+        else if (d.pdf_base64) document.querySelector('.btn-dl-pdf').onclick = () => dl64(d.pdf_base64, fPdf, 'application/pdf');
+
+        if (d.excel_url) document.querySelector('.btn-dl-xl').onclick = () => dlFromServer(d.excel_url, fXl);
+        else if (d.excel_base64) document.querySelector('.btn-dl-xl').onclick = () => dl64(d.excel_base64, fXl, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+
+        if (d.detail_pdf_url) document.querySelector('.btn-dl-dpdf').onclick = () => dlFromServer(d.detail_pdf_url, fDpdf);
+        else if (d.detail_pdf_base64) document.querySelector('.btn-dl-dpdf').onclick = () => dl64(d.detail_pdf_base64, fDpdf, 'application/pdf');
+
+        if (d.detail_excel_url) document.querySelector('.btn-dl-dxl').onclick = () => dlFromServer(d.detail_excel_url, fDxl);
+        else if (d.detail_excel_base64) document.querySelector('.btn-dl-dxl').onclick = () => dl64(d.detail_excel_base64, fDxl, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       }
 
       const driveBtn = $('modal-btn-drive');
@@ -5171,6 +5194,20 @@
       } else {
         driveBtn.style.display = 'none';
       }
+    }
+
+    async function loadExcelForPreview(url) {
+      try {
+        const r = await fetch(url);
+        if (!r.ok) return;
+        const blob = await r.blob();
+        const reader = new FileReader();
+        reader.onload = e => {
+          const b64 = e.target.result.split(',')[1];
+          renderExcelGrid(b64);
+        };
+        reader.readAsDataURL(blob);
+      } catch (e) { console.error('Excel lazy load failed', e); }
     }
 
     function closePreviewModal() {
@@ -5575,13 +5612,14 @@
     async function quickPreview(id) {
       try {
         showGenProgress(3);
-        const r = await fetch(`/api/history/${id}/data`);
+        // 軽量なメタデータAPIを使用（高速化）
+        const r = await fetch(`/api/history/${id}/meta`);
         if (!r.ok) throw new Error('データ取得に失敗しました');
         const d = await r.json();
         d.id = id;
-        const payload = { customer_name: d.customer_name, customer_code: d.customer_code, discount_rate: d.discount_rate, items: d.items };
+        const payload = { customer_name: d.customer_name, customer_code: d.customer_code, discount_rate: d.discount_rate, items: d.items, doc_type: d.doc_type };
         hideGenProgress();
-        setTimeout(() => openPreviewModal(d, payload), 500);
+        setTimeout(() => openPreviewModal(d, payload), 50); // 通信が早いので待機時間も短縮
       } catch (e) {
         hideGenProgress();
         toast('エラー: ' + e.message, 'err');
