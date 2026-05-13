@@ -729,8 +729,14 @@
 
     .item-card-body {
       display: grid;
-      grid-template-columns: 1.2fr 0.8fr;
-      gap: 12px;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px 10px;
+    }
+
+    @media (max-width: 400px) {
+      .item-card-body {
+        grid-template-columns: 1fr;
+      }
     }
 
     .item-field {
@@ -1997,7 +2003,8 @@
       }
     }
 
-    /* History list as proper data table (操作は詳細ペイン側に集約) */
+    @media (min-width: 1024px) {
+      /* History list as proper data table (操作は詳細ペイン側に集約) */
     .hist-table-header {
       display: grid !important;
         grid-template-columns: 110px 52px minmax(140px, 1fr) 110px 84px !important;
@@ -2461,6 +2468,7 @@
         opacity: 1;
         transform: translateX(-50%) translateY(0);
       }
+    }
 
       @media (min-width: 1024px) {
       .modal-content {
@@ -2636,18 +2644,23 @@
     @media (max-width: 768px) {
       .mobile-action-bar {
         position: fixed;
-        left: 0;
-        right: 0;
-        bottom: calc(64px + env(safe-area-inset-bottom));
+        bottom: calc(72px + env(safe-area-inset-bottom));
+        left: 50%;
+        transform: translateX(-50%);
+        width: 90%;
+        max-width: 360px;
         z-index: 9000;
         display: none;
         gap: 8px;
-        padding: 10px 14px;
-        background: rgba(17, 17, 17, 0.94);
-        border-top: 1px solid var(--border);
-        backdrop-filter: blur(16px);
-        -webkit-backdrop-filter: blur(16px);
-        box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.4);
+        padding: 8px 12px;
+        background: rgba(22, 22, 22, 0.95);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        justify-content: space-around;
+        align-items: center;
       }
 
       .mobile-action-bar.visible {
@@ -2656,9 +2669,11 @@
 
       .mobile-action-bar .btn {
         margin: 0;
-        padding: 12px 10px;
+        border-radius: 999px;
+        min-height: 40px;
+        padding: 8px 16px;
         font-size: 13px;
-        min-height: 44px;
+        flex: 1;
       }
 
       body.has-mobile-action-bar {
@@ -2670,15 +2685,22 @@
         display: none !important;
       }
 
-      /* タップ領域拡大などは維持 */
-      .item-field input,
-      .qty-stepper input {
-        min-height: 44px;
-        font-size: 16px;
+      .qty-stepper {
+        width: 100%;
+        justify-content: space-between;
       }
 
       .qty-btn {
-        width: 44px;
+        width: 40px;
+        height: 40px;
+        flex-shrink: 0;
+      }
+
+      .qty-stepper input {
+        flex: 1;
+        min-width: 0;
+        min-height: 40px;
+        font-size: 16px;
       }
     }
 
