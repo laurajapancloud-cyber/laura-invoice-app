@@ -1925,15 +1925,8 @@
       }
 
       @keyframes pulse-dot {
-
-        0%,
-        100% {
-          opacity: 1;
-        }
-
-        50% {
-          opacity: 0.4;
-        }
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.4; }
       }
 
       .statusbar-spacer {
@@ -1949,13 +1942,15 @@
           radial-gradient(ellipse 60% 30% at 50% 0%, rgba(201, 169, 97, 0.04), transparent 60%),
           var(--bg-base);
       }
+    } /* end layout @media */
 
-      .page {
-        max-width: 1400px;
-        padding: 28px 36px 60px;
-      }
+    .page {
+      max-width: 1400px;
+      padding: 28px 36px 60px;
+    }
 
-      /* ===== History as Master-Detail Split ===== */
+    /* ===== History as Master-Detail Split ===== */
+    @media (min-width: 1024px) {
       #page-history.active {
         display: grid !important;
         grid-template-columns: minmax(620px, 46vw) minmax(0, 1fr);
@@ -1999,10 +1994,11 @@
         text-align: center;
         letter-spacing: 0.03em;
       }
+    }
 
-      /* History list as proper data table (操作は詳細ペイン側に集約) */
-      .hist-table-header {
-        display: grid !important;
+    /* History list as proper data table (操作は詳細ペイン側に集約) */
+    .hist-table-header {
+      display: grid !important;
         grid-template-columns: 110px 52px minmax(140px, 1fr) 110px 84px !important;
         gap: 8px !important;
         padding: 10px 12px;
@@ -2464,9 +2460,8 @@
         opacity: 1;
         transform: translateX(-50%) translateY(0);
       }
-    } /* end @media (min-width: 1024px) desktop layout */
 
-    @media (min-width: 1024px) {
+      @media (min-width: 1024px) {
       .modal-content {
         max-width: 1100px !important;
       }
