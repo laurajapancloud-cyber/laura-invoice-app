@@ -2815,6 +2815,51 @@
       font-size: 16px;
     }
 
+    /* ===== Active Job Strip ===== */
+    .active-job-strip {
+      position: fixed;
+      left: 12px;
+      right: 12px;
+      bottom: calc(72px + env(safe-area-inset-bottom));
+      z-index: 9500;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: rgba(24,24,24,0.96);
+      border: 1px solid var(--border-strong);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+      color: var(--text-secondary);
+      font-size: 12px;
+    }
+
+    .active-job-bar {
+      margin-top: 6px;
+      height: 3px;
+      background: rgba(255,255,255,0.08);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    #active-job-fill {
+      width: 35%;
+      height: 100%;
+      background: linear-gradient(90deg, var(--gold-deep), var(--gold-bright));
+      animation: activeJobPulse 1.4s ease-in-out infinite;
+    }
+
+    @keyframes activeJobPulse {
+      0% { transform: translateX(-120%); }
+      100% { transform: translateX(320%); }
+    }
+
+    @media (min-width: 1024px) {
+      .active-job-strip {
+        left: auto;
+        right: 24px;
+        bottom: 42px;
+        width: 320px;
+      }
+    }
+
     #hist-type-filter {
       width: 140px;
       padding: 12px;
@@ -3745,6 +3790,14 @@
 
   <!-- ===== Toast Stack ===== -->
   <div id="toast-stack" class="toast-stack"></div>
+
+  <!-- ===== Active Job Strip ===== -->
+  <div id="active-job-strip" class="active-job-strip" style="display:none">
+    <div id="active-job-text">処理中...</div>
+    <div class="active-job-bar">
+      <div id="active-job-fill"></div>
+    </div>
+  </div>
 
   <div class="app-header">
     <!-- モバイル用 -->
@@ -4979,35 +5032,55 @@
     }
 
     const JobUI = {
-      show() { $('job-panel').style.display = 'flex'; },
+      show() {
+        const panel = $('job-panel');
+        if (panel) panel.style.display = 'flex';
+        const strip = $('active-job-strip');
+        if (strip) strip.style.display = 'block';
+      },
       updateItem(job) {
+        const strip = $('active-job-strip');
+        const stripText = $('active-job-text');
+        if (strip && stripText) {
+          if (job.status === 'pending' || job.status === 'processing') {
+            strip.style.display = 'block';
+            stripText.textContent = `${this.getJobLabel(job.type)}中...`;
+          } else if (job.status === 'done') {
+            stripText.textContent = `${this.getJobLabel(job.type)}が完了しました`;
+            setTimeout(() => strip.style.display = 'none', 1800);
+          } else if (job.status === 'failed') {
+            stripText.textContent = `${this.getJobLabel(job.type)}に失敗しました`;
+            setTimeout(() => strip.style.display = 'none', 2500);
+          }
+        }
+        const list = $('job-list');
+        if (!list) return;
         let el = $(`job-item-${job.id}`);
         if (!el) {
           el = document.createElement('div');
           el.id = `job-item-${job.id}`;
           el.className = 'job-item';
-          $('job-list').prepend(el);
+          list.prepend(el);
         }
-
-        const icon = job.type === 'analyze' ? '🤖' : '☁️';
-        const progress = job.status === 'done' ? 100 : (job.status === 'processing' ? 60 : 10);
-
+        const iconMap = { analyze: '🤖', generate: '💾', lock: '🔒', drive_upload: '☁️' };
+        const icon = iconMap[job.type] || '⚙️';
+        const progress = job.status === 'done' ? 100 : job.status === 'processing' ? 60 : 10;
         el.className = `job-item job-${job.status}`;
         el.innerHTML = `
-			<div class="job-icon">${icon}</div>
-			<div class="job-info">
-				<div class="job-name">${this.getJobLabel(job.type)}</div>
-				<div class="job-status-text">${this.getStatusLabel(job.status)}</div>
-				<div class="job-progress-mini"><div class="job-progress-mini-fill" style="width:${progress}%"></div></div>
-			</div>
-		`;
+          <div class="job-icon">${icon}</div>
+          <div class="job-info">
+            <div class="job-name">${this.getJobLabel(job.type)}</div>
+            <div class="job-status-text">${this.getStatusLabel(job.status)}</div>
+            <div class="job-progress-mini"><div class="job-progress-mini-fill" style="width:${progress}%"></div></div>
+          </div>
+        `;
       },
       getJobLabel(type) {
-        const labels = { 'analyze': '画像解析', 'drive_upload': 'Drive保存' };
+        const labels = { analyze: '画像解析', generate: '保存', lock: '伝票確定', drive_upload: 'Drive保存' };
         return labels[type] || type;
       },
       getStatusLabel(status) {
-        const labels = { 'pending': '待機中...', 'processing': '実行中...', 'done': '完了', 'failed': 'エラー' };
+        const labels = { pending: '待機中...', processing: '実行中...', done: '完了', failed: 'エラー' };
         return labels[status] || status;
       }
     };
@@ -5101,8 +5174,14 @@
     }
 
     function setupPreviews(payload, d) {
-      $('pdf-frame').src = b64ToBlobUrl(pdfData, 'application/pdf');
-      $('detail-frame').src = b64ToBlobUrl(detailPdfData, 'application/pdf');
+      const invoiceId = d.id || d.invoice_id || lastInvoiceId;
+      if (invoiceId) {
+        $('pdf-frame').src = `/api/history/${invoiceId}/pdf-preview?t=${Date.now()}`;
+        $('detail-frame').src = `/api/history/${invoiceId}/detail-pdf-preview?t=${Date.now()}`;
+      } else {
+        $('pdf-frame').src = 'about:blank';
+        $('detail-frame').src = 'about:blank';
+      }
       renderSummaryView(payload, d, 'summary-content');
     }
 
@@ -5226,7 +5305,9 @@
 
     function closePreviewModal() {
       $('modal-preview').style.display = 'none';
+      $('modal-pdf-frame').srcdoc = '';
       $('modal-pdf-frame').src = 'about:blank';
+      $('modal-detail-frame').srcdoc = '';
       $('modal-detail-frame').src = 'about:blank';
     }
 
@@ -5473,12 +5554,10 @@
     }
 
     async function downloadZip(invId) {
-      showGenProgress(3, 'gen');
       try {
+        toast('ZIPを準備しています...', 'info', 1500);
         await dlFromServer(`/api/history/${invId}/zip`, `invoice_${invId}.zip`);
-        hideGenProgress();
       } catch (e) {
-        hideGenProgress();
         toast('ZIPダウンロード失敗: ' + e.message, 'err');
       }
     }
@@ -5638,17 +5717,14 @@
 
     async function quickPreview(id) {
       try {
-        showGenProgress(3);
-        // 軽量なメタデータAPIを使用（高速化）
+        toast('データを読み込み中...', 'info', 1500);
         const r = await fetch(`/api/history/${id}/meta`);
         if (!r.ok) throw new Error('データ取得に失敗しました');
         const d = await r.json();
         d.id = id;
         const payload = { customer_name: d.customer_name, customer_code: d.customer_code, discount_rate: d.discount_rate, items: d.items, doc_type: d.doc_type };
-        hideGenProgress();
-        setTimeout(() => openPreviewModal(d, payload), 50); // 通信が早いので待機時間も短縮
+        openPreviewModal(d, payload);
       } catch (e) {
-        hideGenProgress();
         toast('エラー: ' + e.message, 'err');
       }
     }
@@ -5656,7 +5732,7 @@
     async function editHist(id) {
       try {
         toast('データを読み込み中...', 'info');
-        const r = await fetch(`/api/history/${id}/data`);
+        const r = await fetch(`/api/history/${id}/meta`);
         if (!r.ok) throw new Error('読込失敗');
         const d = await r.json();
         currentEditingInvId = id;
@@ -5865,6 +5941,19 @@
 
     const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+    function normalizeAnalyzedItems(items) {
+      return (items || []).map((it, index) => ({
+        code: (it.code || '').trim().toUpperCase(),
+        color: (it.color || '').trim(),
+        size: (it.size || '').trim(),
+        unit_price: Number(it.unit_price || 0),
+        quantity: Number(it.quantity || 1),
+        source_image_no: it.source_image_no ?? index,
+        source_image_index: it.source_image_no ?? index,
+        source_image_thumb: selectedFileThumbs[it.source_image_no ?? index],
+      }));
+    }
+
     // ===== AI Analyze =====
     $('btn-analyze').addEventListener('click', async () => {
       if (!selectedFiles.length) return;
@@ -5872,9 +5961,7 @@
       const total = selectedFiles.length;
 
       $('btn-analyze').disabled = true;
-
-      // ★ ここで中央のプログレスバーを呼び出す（目安8秒）
-      showGenProgress(8, 'analyze');
+      toast(`${total}枚の画像をAI解析中...`, 'info', 2000);
 
       try {
         const fd = new FormData();
@@ -5883,12 +5970,6 @@
         // 画像の圧縮
         const compressedFiles = [];
         for (let i = 0; i < total; i++) {
-          // 進捗表示
-          const pct = Math.round((i / total) * 15); // 0-15%
-          $('gen-fill').style.width = pct + '%';
-          $('gen-pct').textContent = pct + '%';
-          $('gen-status').textContent = `画像を最適化中... (${i+1}/${total})`;
-
           const compressed = await compressImageFile(selectedFiles[i]);
           compressedFiles.push(compressed);
         }
@@ -5897,24 +5978,15 @@
 
         jobManager.enqueue('analyze', '/api/jobs/analyze', fd, {
           onSuccess: (data) => {
-            hideGenProgress(); // ★ 解析完了！100%にして閉じる
-
-            const allItems = (data.items || []).map(item => ({
-              ...item,
-              source_image_index: item.source_image_no ?? 0,
-              source_image_thumb: selectedFileThumbs[item.source_image_no ?? 0]
-            }));
+            const allItems = normalizeAnalyzedItems(data.items || []);
 
             const merged = {};
             allItems.forEach(it => {
-              const code = (it.code || '-').trim().toUpperCase();
-              const color = (it.color || '-').trim();
-              const size = (it.size || '-').trim();
               let up = it.unit_price;
               if (typeof up === 'string') up = parseInt(up.replace(/[¥,]/g, '').trim()) || 0;
               else up = parseInt(up) || 0;
               const qty = parseInt(it.quantity) || 1;
-              const key = `${code}|${color}|${size}|${up}`;
+              const key = `${it.code}|${it.color}|${it.size}|${up}`;
 
               const sourceImage = { index: it.source_image_index, thumb: it.source_image_thumb };
 
@@ -5926,7 +5998,7 @@
                 }
               } else {
                 merged[key] = {
-                  code, color, size, unit_price: up, quantity: qty,
+                  code: it.code, color: it.color, size: it.size, unit_price: up, quantity: qty,
                   source_count: 1, source_images: [sourceImage]
                 };
               }
@@ -5935,20 +6007,18 @@
 
             renderPreview();
             $('btn-analyze').disabled = false;
+            toast('AI解析が完了しました', 'ok');
 
-            // オーバーレイが閉じるのを待ってからスクロール
             setTimeout(() => {
               window.scrollTo({ top: $('preview-card').offsetTop - 20, behavior: 'smooth' });
-            }, 800);
+            }, 300);
           },
           onError: (err) => {
-            hideGenProgress(); // ★ 失敗時も閉じる
             toast('解析に失敗しました: ' + err, 'err');
             $('btn-analyze').disabled = false;
           }
         });
       } catch (e) {
-        hideGenProgress(); // ★ 準備段階の例外でも閉じる
         console.error(e);
         toast('準備エラー: ' + e.message, 'err');
         $('btn-analyze').disabled = false;
@@ -6099,9 +6169,6 @@
 
       $('btn-generate').disabled = true;
 
-      // ★ 保存時も中央のプログレスバーを呼び出す
-      showGenProgress(5, 'gen');
-
       const cn = getCustomerName();
       const payload = {
         invoice_id: currentEditingInvId,
@@ -6142,17 +6209,16 @@
           $('preview-card').style.display = 'none';
           $('dl-section').style.display = 'block';
 
-          hideGenProgress();
+          setupPreviews(payload, d);
           openPreviewModal(d, payload);
 
           localStorage.removeItem('laura-draft');
-          toast('✦ 保存完了（下書き）', 'ok');
+          toast('保存しました', 'ok');
           haptic('success');
           updateMobileActionBar();
           await loadHistory();
         },
         onError: (err) => {
-          hideGenProgress();
           toast('保存に失敗しました: ' + err, 'err');
           $('btn-generate').disabled = false;
         }
@@ -6308,22 +6374,16 @@
     async function uploadDrive(invId, btnEl) {
       if (btnEl) btnEl.disabled = true;
 
-      // ★ ここでDrive保存用のカッコいいプログレスバーを呼び出す（目安4秒）
-      showGenProgress(4, 'drive');
-
       const fd = new FormData();
       fd.append('inv_id', invId);
 
       jobManager.enqueue('drive_upload', '/api/jobs/drive-upload', fd, {
         onSuccess: (res) => {
-          hideGenProgress(); // ★ 処理が完了したらオーバーレイを閉じる
-
           const links = res.uploaded.map(u => `<a href="${u.url}" target="_blank" style="color:var(--gold-bright);text-decoration:underline">${u.type.toUpperCase()}</a>`).join(' / ');
           toast(`✦ Driveに保存しました: ${links}`, 'ok', 0);
           if (btnEl) btnEl.disabled = false;
         },
         onError: (err) => {
-          hideGenProgress(); // ★ エラー時も確実に閉じる
           toast('Drive保存に失敗しました: ' + err, 'err');
           if (btnEl) btnEl.disabled = false;
         }

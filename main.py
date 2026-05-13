@@ -1860,49 +1860,8 @@ def lock_invoice_internal(jid: str, inv_id: int, bt: Optional[BackgroundTasks] =
                 db_update_job(jid, 'done', result={"status": "already_locked"})
                 return
             conn.commit()
-        
-        # 【重要】確定時にファイルを生成して Storage にキャッシュする (CPU/メモリ節約)
-        try:
-            inv, files = get_invoice_generated_files(inv_id)
-            inv_num = safe_filename(inv["invoice_number"])
-            # パスを生成
-            paths = {
-                "pdf": f"cache/{inv_num}_main.pdf",
-                "excel": f"cache/{inv_num}_main.xlsx",
-                "detail_pdf": f"cache/{inv_num}_detail.pdf",
-                "detail_excel": f"cache/{inv_num}_detail.xlsx"
-            }
-            # ストレージに保存
-            storage_upload(paths["pdf"], files["pdf"], "application/pdf")
-            storage_upload(paths["excel"], files["excel"], "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-            storage_upload(paths["detail_pdf"], files["detail_pdf"], "application/pdf")
-            storage_upload(paths["detail_excel"], files["detail_excel"], "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-            
-            # DBにパスを記録
-            with db_conn() as conn, conn.cursor() as cur:
-                cur.execute("""
-                    UPDATE invoices SET 
-                    pdf_storage_path=%s, excel_storage_path=%s,
-                    detail_pdf_storage_path=%s, detail_excel_storage_path=%s
-                    WHERE id=%s
-                """, (paths["pdf"], paths["excel"], paths["detail_pdf"], paths["detail_excel"], inv_id))
-                conn.commit()
-        except Exception as e:
-            logger.warning("Storage cache failed (lock 処理は継続): %s", e)
 
         db_update_job(jid, 'done', result={"status": "locked"})
-
-        # 【自動Drive同期】確定後、Drive 同期を開始する
-        # - 呼び出し側が BackgroundTasks を渡してくれた場合 → そちらに登録
-        # - そうでない場合（同期API/threadpool 経由）→ この場で同期実行（fire-and-forget は廃止）
-        drive_jid = db_create_job('drive_upload', {"invoice_id": inv_id})
-        if bt is not None:
-            bt.add_task(upload_drive_internal, drive_jid, inv_id)
-        else:
-            try:
-                upload_drive_internal(drive_jid, inv_id)
-            except Exception as e:
-                logger.warning("Drive auto-sync after lock failed: %s", e)
 
     except Exception as e:
         db_update_job(jid, 'failed', error=str(e))
