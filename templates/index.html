@@ -4032,10 +4032,7 @@
           <button class="btn btn-blue" id="btn-drive" style="margin-top:10px; width:100%">
             <div class="spinner" id="sp3"></div> ☁️ Google Driveに4ファイル保存
           </button>
-          <div class="share-btns" style="display:flex; gap:10px; margin-top:10px;">
-            <button class="btn btn-sm btn-outline" id="btn-line" style="flex:1">LINE</button>
-            <button class="btn btn-sm btn-outline" id="btn-email" style="flex:1">メール</button>
-          </div>
+
           <button class="btn btn-dark" id="btn-new" style="margin-top:10px; width:100%">＋ 新しい伝票を作成する</button>
         </div>
       </div>
@@ -5108,42 +5105,49 @@
     }
 
     function openPreviewModal(d, payload) {
+      const isPreviewOnly = !!d.preview_only || !!d.html_preview || !d.id;
+      
       $('modal-title').textContent = `📄 ${d.invoice_number || 'PREVIEW'} - プレビュー`;
       $('modal-preview').style.display = 'flex';
 
-      const modalPdfSrc = d.pdf_preview_url || d.pdf_url;
-      if (modalPdfSrc) {
-        // キャッシュ回避のためタイムスタンプを付与
-        $('modal-pdf-frame').src = modalPdfSrc + (modalPdfSrc.includes('?') ? '&' : '?') + 't=' + Date.now();
-      } else if (d.pdf_base64) {
-        $('modal-pdf-frame').src = b64ToBlobUrl(d.pdf_base64, 'application/pdf');
-      } else if (d.invoice_number && d.invoice_number.startsWith('PREVIEW')) {
-        // プレビュー生成待ちの間、ローディングを表示してチラつきを抑える
-        const frame = $('modal-pdf-frame');
-        const doc = frame.contentWindow.document;
-        doc.open();
-        doc.write('<div style="display:flex; justify-content:center; align-items:center; height:100vh; font-family:sans-serif; color:#888;">描画中...</div>');
-        doc.close();
+      // HTMLプレビュー対応 (srcdoc)
+      if (d.html_preview) {
+        $('modal-pdf-frame').removeAttribute('src');
+        $('modal-pdf-frame').srcdoc = d.html_preview;
       } else {
-        $('modal-pdf-frame').src = 'about:blank';
+        $('modal-pdf-frame').srcdoc = '';
+        const modalPdfSrc = d.pdf_preview_url || d.pdf_url;
+        if (modalPdfSrc) {
+          $('modal-pdf-frame').src = modalPdfSrc + (modalPdfSrc.includes('?') ? '&' : '?') + 't=' + Date.now();
+        } else if (d.pdf_base64) {
+          $('modal-pdf-frame').src = b64ToBlobUrl(d.pdf_base64, 'application/pdf');
+        } else {
+          $('modal-pdf-frame').src = 'about:blank';
+        }
       }
 
-      const modalDetailPdfSrc = d.detail_pdf_preview_url || d.detail_pdf_url;
-      if (modalDetailPdfSrc) {
-        $('modal-detail-frame').src = modalDetailPdfSrc + (modalDetailPdfSrc.includes('?') ? '&' : '?') + 't=' + Date.now();
-      } else if (d.detail_pdf_base64) {
-        $('modal-detail-frame').src = b64ToBlobUrl(d.detail_pdf_base64, 'application/pdf');
+      // 明細PDF iframeもプレビュー時は空にする
+      if (isPreviewOnly) {
+        $('modal-detail-frame').srcdoc = `
+          <div style="padding:40px; font-family:sans-serif; color:#777; text-align:center;">
+            明細PDFは保存後に生成されます
+          </div>
+        `;
       } else {
-        $('modal-detail-frame').src = 'about:blank';
+        $('modal-detail-frame').srcdoc = '';
+        const modalDetailPdfSrc = d.detail_pdf_preview_url || d.detail_pdf_url;
+        if (modalDetailPdfSrc) {
+          $('modal-detail-frame').src = modalDetailPdfSrc + (modalDetailPdfSrc.includes('?') ? '&' : '?') + 't=' + Date.now();
+        } else if (d.detail_pdf_base64) {
+          $('modal-detail-frame').src = b64ToBlobUrl(d.detail_pdf_base64, 'application/pdf');
+        } else {
+          $('modal-detail-frame').src = 'about:blank';
+        }
       }
 
       if (d.excel_url) {
-        // Excel本体は重いので、モーダル表示時には生成しない（プレビュー用にはローカル簡易表だけ表示する）
-        if (d.excel_base64) {
-          renderExcelGrid(d.excel_base64);
-        } else {
-          renderExcelGridLocal(payload);
-        }
+        if (d.excel_base64) renderExcelGrid(d.excel_base64);
+        else renderExcelGridLocal(payload);
       } else if (d.excel_base64) {
         renderExcelGrid(d.excel_base64);
       } else {
@@ -5152,51 +5156,56 @@
 
       renderSummaryView(payload, d, 'modal-summary-content');
 
-      // iPhone向けスケーリング適用
+      // プレビュー時の案内文
+      if (isPreviewOnly) {
+        const notice = `
+          <div style="margin-bottom:14px; padding:12px 14px; border-radius:10px; background:rgba(201,169,97,0.12); border:1px solid rgba(201,169,97,0.35); color:var(--gold-bright); font-size:13px; line-height:1.6;">
+            これは確認用プレビューです。PDF / Excel保存は、伝票を保存後に利用できます。
+          </div>
+        `;
+        $('modal-summary-content').insertAdjacentHTML('afterbegin', notice);
+      }
+
+      // ダウンロードボタンの表示制御
+      const dlBtns = ['.btn-dl-pdf', '.btn-dl-xl', '.btn-dl-dpdf', '.btn-dl-dxl'].map(s => document.querySelector(s));
+      dlBtns.forEach(btn => { if(btn) btn.style.display = isPreviewOnly ? 'none' : 'flex'; });
+
       setTimeout(() => {
         adjustIframeScale('modal-pdf-frame');
         adjustIframeScale('modal-detail-frame');
       }, 100);
 
-      $('modal-pdf-frame').onload = () => adjustIframeScale('modal-pdf-frame');
-      $('modal-detail-frame').onload = () => adjustIframeScale('modal-detail-frame');
-
-      // ファイル名を動的に生成
       const customer = (payload && payload.customer_name) ? payload.customer_name : (d.customer_name || "Unknown");
       const dateISO = d.locked_at || d.created_at;
-
       const fPdf = getFileName(d.doc_type, customer, dateISO, 'pdf');
       const fXl = getFileName(d.doc_type, customer, dateISO, 'excel');
       const fDpdf = getFileName(d.doc_type, customer, dateISO, 'detail-pdf');
       const fDxl = getFileName(d.doc_type, customer, dateISO, 'detail-excel');
 
-      // ★ iOSアプリ環境ならサーバーURLから直接取得、ブラウザならBase64またはURLから
-      if (isNativeApp && d.id) {
-        document.querySelector('.btn-dl-pdf').onclick = () => dlFromServer(`/api/history/${d.id}/pdf`, fPdf);
-        document.querySelector('.btn-dl-xl').onclick = () => dlFromServer(`/api/history/${d.id}/excel`, fXl);
-        document.querySelector('.btn-dl-dpdf').onclick = () => dlFromServer(`/api/history/${d.id}/detail-pdf`, fDpdf);
-        document.querySelector('.btn-dl-dxl').onclick = () => dlFromServer(`/api/history/${d.id}/detail-excel`, fDxl);
-      } else {
-        if (d.pdf_url) document.querySelector('.btn-dl-pdf').onclick = () => dlFromServer(d.pdf_url, fPdf);
-        else if (d.pdf_base64) document.querySelector('.btn-dl-pdf').onclick = () => dl64(d.pdf_base64, fPdf, 'application/pdf');
+      if (!isPreviewOnly) {
+        if (isNativeApp && d.id) {
+          document.querySelector('.btn-dl-pdf').onclick = () => dlFromServer(`/api/history/${d.id}/pdf`, fPdf);
+          document.querySelector('.btn-dl-xl').onclick = () => dlFromServer(`/api/history/${d.id}/excel`, fXl);
+          document.querySelector('.btn-dl-dpdf').onclick = () => dlFromServer(`/api/history/${d.id}/detail-pdf`, fDpdf);
+          document.querySelector('.btn-dl-dxl').onclick = () => dlFromServer(`/api/history/${d.id}/detail-excel`, fDxl);
+        } else {
+          if (d.pdf_url) document.querySelector('.btn-dl-pdf').onclick = () => dlFromServer(d.pdf_url, fPdf);
+          else if (d.pdf_base64) document.querySelector('.btn-dl-pdf').onclick = () => dl64(d.pdf_base64, fPdf, 'application/pdf');
 
-        if (d.excel_url) document.querySelector('.btn-dl-xl').onclick = () => dlFromServer(d.excel_url, fXl);
-        else if (d.excel_base64) document.querySelector('.btn-dl-xl').onclick = () => dl64(d.excel_base64, fXl, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+          if (d.excel_url) document.querySelector('.btn-dl-xl').onclick = () => dlFromServer(d.excel_url, fXl);
+          else if (d.excel_base64) document.querySelector('.btn-dl-xl').onclick = () => dl64(d.excel_base64, fXl, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
 
-        if (d.detail_pdf_url) document.querySelector('.btn-dl-dpdf').onclick = () => dlFromServer(d.detail_pdf_url, fDpdf);
-        else if (d.detail_pdf_base64) document.querySelector('.btn-dl-dpdf').onclick = () => dl64(d.detail_pdf_base64, fDpdf, 'application/pdf');
+          if (d.detail_pdf_url) document.querySelector('.btn-dl-dpdf').onclick = () => dlFromServer(d.detail_pdf_url, fDpdf);
+          else if (d.detail_pdf_base64) document.querySelector('.btn-dl-dpdf').onclick = () => dl64(d.detail_pdf_base64, fDpdf, 'application/pdf');
 
-        if (d.detail_excel_url) document.querySelector('.btn-dl-dxl').onclick = () => dlFromServer(d.detail_excel_url, fDxl);
-        else if (d.detail_excel_base64) document.querySelector('.btn-dl-dxl').onclick = () => dl64(d.detail_excel_base64, fDxl, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+          if (d.detail_excel_url) document.querySelector('.btn-dl-dxl').onclick = () => dlFromServer(d.detail_excel_url, fDxl);
+          else if (d.detail_excel_base64) document.querySelector('.btn-dl-dxl').onclick = () => dl64(d.detail_excel_base64, fDxl, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        }
       }
 
       const driveBtn = $('modal-btn-drive');
-      if (d.id) {
-        driveBtn.style.display = 'inline-flex';
-        driveBtn.onclick = () => uploadDrive(d.id, driveBtn);
-      } else {
-        driveBtn.style.display = 'none';
-      }
+      driveBtn.style.display = (d.id && !isPreviewOnly) ? 'inline-flex' : 'none';
+      if (d.id) driveBtn.onclick = () => uploadDrive(d.id, driveBtn);
     }
 
     async function loadExcelForPreview(url) {
@@ -5708,7 +5717,6 @@
       renderSummaryView(payload, dummyData, 'modal-summary-content');
       renderExcelGridLocal(payload);
 
-      // バックエンドからHTMLテンプレートを取得して描画 (高速プレビュー)
       try {
         const r = await fetch('/api/preview', {
           method: 'POST',
@@ -5718,21 +5726,14 @@
         if (!r.ok) throw new Error('プレビュー取得失敗');
         const d = await r.json();
 
-        // iframeにHTMLを直接流し込む
-        const frame = $('modal-pdf-frame');
-        adjustIframeScale('modal-pdf-frame');
-        adjustIframeScale('modal-detail-frame');
-
-        const doc = frame.contentWindow.document;
-        doc.open();
-        doc.write(d.html_preview);
-        doc.close();
-
-        // ダウンロードボタンの設定 (プレビュー時は保存前のため案内を出す)
-        document.querySelector('.btn-dl-pdf').onclick = () => toast('PDFは「保存・発行」後にダウンロード可能です', 'info');
-        document.querySelector('.btn-dl-xl').onclick = () => toast('Excelは「保存・発行」後にダウンロード可能です', 'info');
-        document.querySelector('.btn-dl-dpdf').onclick = () => toast('明細PDFは「保存・発行」後にダウンロード可能です', 'info');
-        document.querySelector('.btn-dl-dxl').onclick = () => toast('明細Excelは「保存・発行」後にダウンロード可能です', 'info');
+        const p2 = {
+          customer_name: d.customer_name,
+          customer_code: d.customer_code,
+          discount_rate: d.discount_rate,
+          items: d.items,
+          doc_type: d.doc_type,
+        };
+        openPreviewModal(d, p2);
       } catch (e) {
         console.error(e);
         toast('プレビューの取得に失敗しました', 'err');
@@ -5828,24 +5829,38 @@
       $('image-preview-img').src = '';
     }
 
-    const compress = (file, mw = 1200) => new Promise((res, rej) => {
-      const r = new FileReader();
-      r.readAsDataURL(file);
-      r.onload = e => {
-        const img = new Image();
-        img.src = e.target.result;
-        img.onload = () => {
-          let w = img.width, h = img.height;
-          if (w > mw) { h = Math.round(h * mw / w); w = mw; }
-          const cv = document.createElement('canvas');
-          cv.width = w; cv.height = h;
-          cv.getContext('2d').drawImage(img, 0, 0, w, h);
-          cv.toBlob(b => b ? res(b) : rej('blob err'), 'image/jpeg', .8);
-        };
-        img.onerror = rej;
-      };
-      r.onerror = rej;
-    });
+    async function compressImageFile(file, maxSize = 1600, quality = 0.75) {
+      if (!file.type.startsWith('image/')) return file;
+      if (file.size <= 600 * 1024) return file; // すでに十分小さい画像はそのまま返す
+
+      const imageBitmap = await createImageBitmap(file);
+      let width = imageBitmap.width;
+      let height = imageBitmap.height;
+
+      const scale = Math.min(1, maxSize / Math.max(width, height));
+      width = Math.round(width * scale);
+      height = Math.round(height * scale);
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(imageBitmap, 0, 0, width, height);
+
+      const blob = await new Promise(resolve => {
+        canvas.toBlob(resolve, 'image/jpeg', quality);
+      });
+
+      if (!blob) return file;
+      const compressedName = file.name.replace(/\.(png|jpg|jpeg|webp|heic)$/i, '') + '.jpg';
+
+      return new File([blob], compressedName, {
+        type: 'image/jpeg',
+        lastModified: Date.now(),
+      });
+    }
+
     const sleep = ms => new Promise(r => setTimeout(r, ms));
 
     // ===== AI Analyze =====
@@ -5862,12 +5877,21 @@
       try {
         const fd = new FormData();
         fd.append('ai_model', ai);
+
+        // 画像の圧縮
+        const compressedFiles = [];
         for (let i = 0; i < total; i++) {
-          const blob = await compress(selectedFiles[i]);
-          fd.append('files', blob, `img_${i}.jpg`);
-          // メインスレッドを解放してUIの更新（プログレスバーなど）を許可する
-          await new Promise(r => setTimeout(r, 0));
+          // 進捗表示
+          const pct = Math.round((i / total) * 15); // 0-15%
+          $('gen-fill').style.width = pct + '%';
+          $('gen-pct').textContent = pct + '%';
+          $('gen-status').textContent = `画像を最適化中... (${i+1}/${total})`;
+
+          const compressed = await compressImageFile(selectedFiles[i]);
+          compressedFiles.push(compressed);
         }
+
+        compressedFiles.forEach((f, i) => fd.append('files', f, `img_${i}.jpg`));
 
         jobManager.enqueue('analyze', '/api/jobs/analyze', fd, {
           onSuccess: (data) => {
@@ -6088,33 +6112,42 @@
       };
 
       jobManager.enqueue('generate', '/api/jobs/generate', payload, {
-        onSuccess: async (d) => {
-          try {
-            const res = await fetch(`/api/history/${d.invoice_id}/data`);
-            const fullData = await res.json();
+        onSuccess: async (result) => {
+          lastInvoiceId = result.invoice_id;
+          currentInvNum = result.invoice_number;
+          currentDocType = result.doc_type;
 
-            pdfData = fullData.pdf_base64;
-            excelData = fullData.excel_base64;
-            detailPdfData = fullData.detail_pdf_base64;
-            detailExcelData = fullData.detail_excel_base64;
-            currentInvNum = d.invoice_number;
-            lastInvoiceId = d.invoice_id;
+          const d = {
+            id: result.invoice_id,
+            invoice_id: result.invoice_id,
+            invoice_number: result.invoice_number,
+            status: result.status,
+            doc_type: result.doc_type,
+            customer_name: payload.customer_name,
+            customer_code: payload.customer_code,
+            discount_rate: payload.discount_rate,
+            items: payload.items,
 
-            $('inv-num-display').textContent = `伝票番号: ${d.invoice_number}`;
-            $('preview-card').style.display = 'none';
-            $('dl-section').style.display = 'block';
+            pdf_url: `/api/history/${result.invoice_id}/pdf`,
+            excel_url: `/api/history/${result.invoice_id}/excel`,
+            detail_pdf_url: `/api/history/${result.invoice_id}/detail-pdf`,
+            detail_excel_url: `/api/history/${result.invoice_id}/detail-excel`,
+            pdf_preview_url: `/api/history/${result.invoice_id}/pdf-preview`,
+            detail_pdf_preview_url: `/api/history/${result.invoice_id}/detail-pdf-preview`,
+          };
 
-            hideGenProgress(); // ★ データの準備ができたら閉じる
-            setupPreviews(payload, fullData);
+          $('inv-num-display').textContent = `伝票番号: ${result.invoice_number}`;
+          $('preview-card').style.display = 'none';
+          $('dl-section').style.display = 'block';
 
-            localStorage.removeItem('laura-draft');
-            toast('✦ 保存完了（下書き）', 'ok');
-            updateMobileActionBar();
-          } catch (err) {
-            hideGenProgress();
-            toast('データの取得に失敗しました', 'err');
-            $('btn-generate').disabled = false;
-          }
+          hideGenProgress();
+          openPreviewModal(d, payload);
+
+          localStorage.removeItem('laura-draft');
+          toast('✦ 保存完了（下書き）', 'ok');
+          haptic('success');
+          updateMobileActionBar();
+          await loadHistory();
         },
         onError: (err) => {
           hideGenProgress();
@@ -6132,12 +6165,27 @@
       document.querySelectorAll('.tab')[1].click();
     });
 
-    function downloadBlob(type) {
-      const fName = getFileName(currentDocType, getCustomerName(), null, type);
-      if (type === 'pdf') dl64(pdfData, fName, 'application/pdf');
-      if (type === 'excel') dl64(excelData, fName, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      if (type === 'detail-pdf') dl64(detailPdfData, fName, 'application/pdf');
-      if (type === 'detail-excel') dl64(detailExcelData, fName, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    function downloadBlob(kind) {
+      if (!lastInvoiceId) {
+        toast('保存後にダウンロードできます', 'err');
+        return;
+      }
+
+      const urlMap = {
+        'pdf': `/api/history/${lastInvoiceId}/pdf`,
+        'excel': `/api/history/${lastInvoiceId}/excel`,
+        'detail-pdf': `/api/history/${lastInvoiceId}/detail-pdf`,
+        'detail-excel': `/api/history/${lastInvoiceId}/detail-excel`,
+      };
+
+      const filenameMap = {
+        'pdf': getFileName(currentDocType, getCustomerName(), null, 'pdf'),
+        'excel': getFileName(currentDocType, getCustomerName(), null, 'excel'),
+        'detail-pdf': getFileName(currentDocType, getCustomerName(), null, 'detail-pdf'),
+        'detail-excel': getFileName(currentDocType, getCustomerName(), null, 'detail-excel'),
+      };
+
+      dlFromServer(urlMap[kind], filenameMap[kind]);
     }
 
     $('btn-new').addEventListener('click', () => {
@@ -6165,15 +6213,7 @@
       updateMobileActionBar();
     });
 
-    $('btn-line').addEventListener('click', () => {
-      const msg = `【LAURA JAPAN 納品書】\n伝票番号: ${currentInvNum}\n※ PDFはアプリからダウンロードしてください`;
-      window.open(`https://line.me/R/share?text=${encodeURIComponent(msg)}`);
-    });
-    $('btn-email').addEventListener('click', () => {
-      const subj = `LAURA JAPAN 納品書 [${currentInvNum}]`;
-      const body = `伝票番号: ${currentInvNum}\n\n※ PDF/Excelはアプリからダウンロードしてください。`;
-      window.location.href = `mailto:?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(body)}`;
-    });
+
 
     // ===== Dashboard =====
     async function loadDashboard() {

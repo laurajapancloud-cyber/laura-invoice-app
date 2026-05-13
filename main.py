@@ -1639,6 +1639,41 @@ def build_all_files(invoice_data: dict, is_preview: bool = False) -> dict:
         "detail_excel": build_detail_excel(invoice_data["invoice_number"], invoice_data["customer_name"], invoice_data["items"], doc_type),
     }
 
+def build_single_file(kind: str, invoice_data: dict) -> bytes:
+    """
+    指定された1種類のファイルだけを生成する。
+    kind:
+      - pdf
+      - excel
+      - detail_pdf
+      - detail_excel
+    """
+    doc_type = invoice_data.get("doc_type", "delivery")
+
+    if kind == "pdf":
+        return build_invoice_pdf(invoice_data)
+
+    if kind == "excel":
+        return build_invoice_excel(invoice_data)
+
+    if kind == "detail_pdf":
+        return build_detail_pdf(
+            invoice_data["invoice_number"],
+            invoice_data["customer_name"],
+            invoice_data["items"],
+            doc_type,
+        )
+
+    if kind == "detail_excel":
+        return build_detail_excel(
+            invoice_data["invoice_number"],
+            invoice_data["customer_name"],
+            invoice_data["items"],
+            doc_type,
+        )
+
+    raise ValueError(f"Unsupported file kind: {kind}")
+
 def assemble_invoice_data(inv_info: dict, items_input: list, discount_rate: int, doc_type='delivery') -> dict:
     """生成用データ準備"""
     processed = []
@@ -1714,8 +1749,13 @@ def preview_documents(username: Annotated[str, Depends(authenticate)], payload: 
     html_str = template.render(**render_data)
     
     return {
+        "preview_only": True,
         "invoice_number": inv_data["invoice_number"],
         "doc_type": inv_data["doc_type"],
+        "customer_name": inv_data["customer_name"],
+        "customer_code": inv_data.get("customer_code"),
+        "discount_rate": inv_data["discount_rate"],
+        "items": inv_data["items"],
         "html_preview": html_str,
     }
 
@@ -1779,7 +1819,6 @@ def generate_documents(request: Request, username: Annotated[str, Depends(authen
     jid = db_create_job('generate', payload.model_dump())
     try:
         inv_id, invoice_number, inv_data = _save_invoice_record(payload)
-        files = build_all_files(inv_data)
         result = {
             "invoice_id": inv_id, "invoice_number": invoice_number, "status": "draft",
             "doc_type": payload.doc_type or "delivery",
@@ -1788,10 +1827,12 @@ def generate_documents(request: Request, username: Annotated[str, Depends(authen
 
         return JSONResponse({
             **result,
-            "pdf_base64": base64.b64encode(files["pdf"]).decode(),
-            "excel_base64": base64.b64encode(files["excel"]).decode(),
-            "detail_pdf_base64": base64.b64encode(files["detail_pdf"]).decode(),
-            "detail_excel_base64": base64.b64encode(files["detail_excel"]).decode(),
+            "pdf_url": f"/api/history/{inv_id}/pdf",
+            "excel_url": f"/api/history/{inv_id}/excel",
+            "detail_pdf_url": f"/api/history/{inv_id}/detail-pdf",
+            "detail_excel_url": f"/api/history/{inv_id}/detail-excel",
+            "pdf_preview_url": f"/api/history/{inv_id}/pdf-preview",
+            "detail_pdf_preview_url": f"/api/history/{inv_id}/detail-pdf-preview",
         })
     except Exception as e:
         db_update_job(jid, 'failed', error=str(e))
@@ -1969,10 +2010,10 @@ def serve_file(inv_id: int, kind: str, disposition: str = "attachment"):
     # キャッシュがない、または失敗した場合はオンデマンドで再生成
     dr = inv.get("discount_rate") or 100
     inv_data = assemble_invoice_data(dict(inv), items, dr, inv.get("doc_type", "delivery"))
-    files = build_all_files(inv_data)
+    content = build_single_file(cfg["files_key"], inv_data)
 
     return Response(
-        content=files[cfg["files_key"]],
+        content=content,
         media_type=cfg["mime"],
         headers={
             "Content-Disposition": content_disposition,
