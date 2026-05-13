@@ -2275,7 +2275,7 @@ def get_job_status(job_id: str, username: Annotated[str, Depends(authenticate)])
 
 @app.get("/api/history/{inv_id}/meta")
 def get_history_meta(inv_id: int, username: Annotated[str, Depends(authenticate)]):
-    """軽量な履歴詳細（メタデータのみ）取得API"""
+    """軽量な履歴詳細と、スマホ表示用のHTMLプレビューを返すAPI"""
     with db_conn() as conn, conn.cursor() as cur:
         cur.execute("SELECT * FROM invoices WHERE id=%s", (inv_id,))
         row = cur.fetchone()
@@ -2284,6 +2284,62 @@ def get_history_meta(inv_id: int, username: Annotated[str, Depends(authenticate)
         inv = dict(row)
         cur.execute("SELECT code, color, size, unit_price, quantity FROM invoice_items WHERE invoice_id=%s", (inv_id,))
         items = [dict(r) for r in cur.fetchall()]
+
+    dr = inv.get("discount_rate") or 100
+    doc_type = inv.get("doc_type", "delivery")
+    
+    # プレビュー用のデータを組み立て
+    inv_data = assemble_invoice_data(inv, items, dr, doc_type)
+    
+    # 1. 納品書（メイン）のHTMLプレビューを生成
+    from jinja2 import Environment, FileSystemLoader, select_autoescape
+    env = Environment(loader=FileSystemLoader("templates"), autoescape=select_autoescape(["html", "xml"]))
+    template = env.get_template("invoice_template.html")
+    main_html = template.render(**{**inv_data, "font_face_css": ""})
+
+    # 2. 明細表のHTMLプレビューを生成
+    titles = DOC_TYPE_TITLES.get(doc_type, DOC_TYPE_TITLES["delivery"])
+    rows_html = ""
+    for i, item in enumerate(items):
+        rows_html += (
+            "<tr>"
+            f"<td>{i + 1}</td>"
+            f"<td>{h(item.get('code'))}</td>"
+            f"<td>{h(item.get('color'))}</td>"
+            f"<td>{h(item.get('size'))}</td>"
+            f"<td>{h(item.get('quantity', 0))}</td>"
+            f"<td>¥{int(item.get('unit_price') or 0):,}</td>"
+            "</tr>"
+        )
+    detail_html = f"""<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
+<style>
+body{{font-family:'Noto Sans JP', -apple-system, BlinkMacSystemFont, sans-serif; font-size:12px;}}
+.title{{font-size:20px; font-weight:bold; text-align:center; margin-bottom:10px;}}
+.meta{{margin-bottom:15px;}}
+table{{width:100%; border-collapse:collapse;}}
+th,td{{border:1px solid #ccc; padding:6px; text-align:center;}}
+th{{background:#f4ecd8;}}
+</style>
+</head>
+<body>
+<div class="title">{h(titles['detail'])}</div>
+<div class="meta">
+  <span>伝票番号: {h(inv['invoice_number'])}</span><br>
+  <span>取引先: {h(inv['customer_name'])}</span>
+</div>
+<table>
+<thead>
+<tr><th>No.</th><th>品番</th><th>カラー</th><th>サイズ</th><th>枚数</th><th>上代</th></tr>
+</thead>
+<tbody>{rows_html}</tbody>
+</table>
+</body>
+</html>"""
 
     def iso_or_none(v):
         if not v: return None
@@ -2297,7 +2353,7 @@ def get_history_meta(inv_id: int, username: Annotated[str, Depends(authenticate)
         "customer_code": inv.get("customer_code"),
         "discount_rate": inv["discount_rate"],
         "status": inv["status"],
-        "doc_type": inv.get("doc_type", "delivery"),
+        "doc_type": doc_type,
         "total_net_amount": inv.get("total_net_amount", 0),
         "total_tax_amount": inv.get("total_tax_amount", 0),
         "total_grand_total": inv.get("total_grand_total", 0),
@@ -2313,6 +2369,9 @@ def get_history_meta(inv_id: int, username: Annotated[str, Depends(authenticate)
         # iframe表示専用URL（Content-Disposition: inline）
         "pdf_preview_url": f"/api/history/{inv_id}/pdf-preview",
         "detail_pdf_preview_url": f"/api/history/{inv_id}/detail-pdf-preview",
+        # ★追加: スマホで確実に表示させるためのHTML文字列
+        "html_preview": main_html,
+        "detail_html_preview": detail_html,
     }
 
 @app.get("/api/history/{inv_id}/data")

@@ -5210,41 +5210,33 @@
       $('modal-title').textContent = `📄 ${d.invoice_number || 'PREVIEW'} - プレビュー`;
       $('modal-preview').style.display = 'flex';
 
-      // HTMLプレビュー対応 (srcdoc)
+      // ==========================================
+      // ★修正箇所: メイン（納品書）の表示
+      // ==========================================
+      $('modal-pdf-frame').removeAttribute('src'); // srcは使わない
       if (d.html_preview) {
-        $('modal-pdf-frame').removeAttribute('src');
-        $('modal-pdf-frame').srcdoc = d.html_preview;
+        $('modal-pdf-frame').srcdoc = d.html_preview; // HTML文字列を直接流し込む
       } else {
-        $('modal-pdf-frame').srcdoc = '';
-        const modalPdfSrc = d.pdf_preview_url || d.pdf_url;
-        if (modalPdfSrc) {
-          $('modal-pdf-frame').src = modalPdfSrc + (modalPdfSrc.includes('?') ? '&' : '?') + 't=' + Date.now();
-        } else if (d.pdf_base64) {
-          $('modal-pdf-frame').src = b64ToBlobUrl(d.pdf_base64, 'application/pdf');
-        } else {
-          $('modal-pdf-frame').src = 'about:blank';
-        }
+        $('modal-pdf-frame').srcdoc = '<div style="padding:20px;text-align:center;">プレビューデータを取得できませんでした</div>';
       }
 
-      // 明細PDF iframeもプレビュー時は空にする
-      if (isPreviewOnly) {
+      // ==========================================
+      // ★修正箇所: 明細表の表示
+      // ==========================================
+      $('modal-detail-frame').removeAttribute('src'); // srcは使わない
+      if (d.detail_html_preview) {
+        $('modal-detail-frame').srcdoc = d.detail_html_preview; // HTML文字列を直接流し込む
+      } else if (isPreviewOnly) {
         $('modal-detail-frame').srcdoc = `
           <div style="padding:40px; font-family:sans-serif; color:#777; text-align:center;">
             明細PDFは保存後に生成されます
           </div>
         `;
       } else {
-        $('modal-detail-frame').srcdoc = '';
-        const modalDetailPdfSrc = d.detail_pdf_preview_url || d.detail_pdf_url;
-        if (modalDetailPdfSrc) {
-          $('modal-detail-frame').src = modalDetailPdfSrc + (modalDetailPdfSrc.includes('?') ? '&' : '?') + 't=' + Date.now();
-        } else if (d.detail_pdf_base64) {
-          $('modal-detail-frame').src = b64ToBlobUrl(d.detail_pdf_base64, 'application/pdf');
-        } else {
-          $('modal-detail-frame').src = 'about:blank';
-        }
+        $('modal-detail-frame').srcdoc = '<div style="padding:20px;text-align:center;">プレビューデータを取得できませんでした</div>';
       }
 
+      // Excelや概要タブの描画（既存のまま）
       if (d.excel_url) {
         if (d.excel_base64) renderExcelGrid(d.excel_base64);
         else renderExcelGridLocal(payload);
@@ -5256,8 +5248,8 @@
 
       renderSummaryView(payload, d, 'modal-summary-content');
 
-      // プレビュー時の案内文
-      if (isPreviewOnly) {
+      // プレビュー時の案内文（既存のまま）
+      if (isPreviewOnly && !d.id) {
         const notice = `
           <div style="margin-bottom:14px; padding:12px 14px; border-radius:10px; background:rgba(201,169,97,0.12); border:1px solid rgba(201,169,97,0.35); color:var(--gold-bright); font-size:13px; line-height:1.6;">
             これは確認用プレビューです。PDF / Excel保存は、伝票を保存後に利用できます。
@@ -5268,7 +5260,7 @@
 
       // ダウンロードボタンの表示制御
       const dlBtns = ['.btn-dl-pdf', '.btn-dl-xl', '.btn-dl-dpdf', '.btn-dl-dxl'].map(s => document.querySelector(s));
-      dlBtns.forEach(btn => { if(btn) btn.style.display = isPreviewOnly ? 'none' : 'flex'; });
+      dlBtns.forEach(btn => { if(btn) btn.style.display = (isPreviewOnly && !d.id) ? 'none' : 'flex'; });
 
       setTimeout(() => {
         adjustIframeScale('modal-pdf-frame');
@@ -5282,29 +5274,22 @@
       const fDpdf = getFileName(d.doc_type, customer, dateISO, 'detail-pdf');
       const fDxl = getFileName(d.doc_type, customer, dateISO, 'detail-excel');
 
-      if (!isPreviewOnly) {
-        if (isNativeApp && d.id) {
+      if (d.id) {
+        if (isNativeApp) {
           document.querySelector('.btn-dl-pdf').onclick = () => dlFromServer(`/api/history/${d.id}/pdf`, fPdf);
           document.querySelector('.btn-dl-xl').onclick = () => dlFromServer(`/api/history/${d.id}/excel`, fXl);
           document.querySelector('.btn-dl-dpdf').onclick = () => dlFromServer(`/api/history/${d.id}/detail-pdf`, fDpdf);
           document.querySelector('.btn-dl-dxl').onclick = () => dlFromServer(`/api/history/${d.id}/detail-excel`, fDxl);
         } else {
-          if (d.pdf_url) document.querySelector('.btn-dl-pdf').onclick = () => dlFromServer(d.pdf_url, fPdf);
-          else if (d.pdf_base64) document.querySelector('.btn-dl-pdf').onclick = () => dl64(d.pdf_base64, fPdf, 'application/pdf');
-
-          if (d.excel_url) document.querySelector('.btn-dl-xl').onclick = () => dlFromServer(d.excel_url, fXl);
-          else if (d.excel_base64) document.querySelector('.btn-dl-xl').onclick = () => dl64(d.excel_base64, fXl, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-
-          if (d.detail_pdf_url) document.querySelector('.btn-dl-dpdf').onclick = () => dlFromServer(d.detail_pdf_url, fDpdf);
-          else if (d.detail_pdf_base64) document.querySelector('.btn-dl-dpdf').onclick = () => dl64(d.detail_pdf_base64, fDpdf, 'application/pdf');
-
-          if (d.detail_excel_url) document.querySelector('.btn-dl-dxl').onclick = () => dlFromServer(d.detail_excel_url, fDxl);
-          else if (d.detail_excel_base64) document.querySelector('.btn-dl-dxl').onclick = () => dl64(d.detail_excel_base64, fDxl, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+          document.querySelector('.btn-dl-pdf').onclick = () => dlFromServer(`/api/history/${d.id}/pdf`, fPdf);
+          document.querySelector('.btn-dl-xl').onclick = () => dlFromServer(`/api/history/${d.id}/excel`, fXl);
+          document.querySelector('.btn-dl-dpdf').onclick = () => dlFromServer(`/api/history/${d.id}/detail-pdf`, fDpdf);
+          document.querySelector('.btn-dl-dxl').onclick = () => dlFromServer(`/api/history/${d.id}/detail-excel`, fDxl);
         }
       }
 
       const driveBtn = $('modal-btn-drive');
-      driveBtn.style.display = (d.id && !isPreviewOnly) ? 'inline-flex' : 'none';
+      driveBtn.style.display = d.id ? 'inline-flex' : 'none';
       if (d.id) driveBtn.onclick = () => uploadDrive(d.id, driveBtn);
     }
 
