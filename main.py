@@ -1997,13 +1997,86 @@ def dl_detail_pdf(inv_id: int, username: Annotated[str, Depends(authenticate)]):
 def dl_detail_excel(inv_id: int, username: Annotated[str, Depends(authenticate)]):
     return serve_file(inv_id, "detail_excel")
 
-@app.get("/api/history/{inv_id}/pdf-preview")
+@app.get("/api/history/{inv_id}/pdf-preview", response_class=HTMLResponse)
 def preview_pdf(inv_id: int, username: Annotated[str, Depends(authenticate)]):
-    return serve_file(inv_id, "pdf", disposition="inline")
+    """保存済みの伝票のPDFプレビューの代わりに、HTMLテンプレートをレンダリングして返す"""
+    with db_conn() as conn, conn.cursor() as cur:
+        cur.execute("SELECT * FROM invoices WHERE id=%s", (inv_id,))
+        inv = cur.fetchone()
+        if not inv:
+            raise HTTPException(404, "Not found")
+        cur.execute("SELECT code, color, size, unit_price, quantity FROM invoice_items WHERE invoice_id=%s", (inv_id,))
+        items = [dict(r) for r in cur.fetchall()]
 
-@app.get("/api/history/{inv_id}/detail-pdf-preview")
+    dr = inv.get("discount_rate") or 100
+    inv_data = assemble_invoice_data(dict(inv), items, dr, inv.get("doc_type", "delivery"))
+
+    from jinja2 import Environment, FileSystemLoader, select_autoescape
+    env = Environment(loader=FileSystemLoader("templates"), autoescape=select_autoescape(["html", "xml"]))
+    template = env.get_template("invoice_template.html")
+    
+    # プレビュー表示用なのでWebフォント(Google Fonts)を読み込ませるため font_face_css は空にする
+    render_data = {**inv_data, "font_face_css": ""}
+    return template.render(**render_data)
+
+@app.get("/api/history/{inv_id}/detail-pdf-preview", response_class=HTMLResponse)
 def preview_detail_pdf(inv_id: int, username: Annotated[str, Depends(authenticate)]):
-    return serve_file(inv_id, "detail_pdf", disposition="inline")
+    """保存済みの明細表PDFプレビューの代わりに、動的にHTMLを生成して返す"""
+    with db_conn() as conn, conn.cursor() as cur:
+        cur.execute("SELECT * FROM invoices WHERE id=%s", (inv_id,))
+        inv = cur.fetchone()
+        if not inv:
+            raise HTTPException(404, "Not found")
+        cur.execute("SELECT code, color, size, unit_price, quantity FROM invoice_items WHERE invoice_id=%s", (inv_id,))
+        items = [dict(r) for r in cur.fetchall()]
+
+    doc_type = inv.get("doc_type", "delivery")
+    titles = DOC_TYPE_TITLES.get(doc_type, DOC_TYPE_TITLES["delivery"])
+    
+    rows_html = ""
+    for i, item in enumerate(items):
+        rows_html += (
+            "<tr>"
+            f"<td>{i + 1}</td>"
+            f"<td>{h(item.get('code'))}</td>"
+            f"<td>{h(item.get('color'))}</td>"
+            f"<td>{h(item.get('size'))}</td>"
+            f"<td>{h(item.get('quantity', 0))}</td>"
+            f"<td>¥{int(item.get('unit_price') or 0):,}</td>"
+            "</tr>"
+        )
+
+    html_str = f"""<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
+<style>
+body{{font-family:'Noto Sans JP', -apple-system, BlinkMacSystemFont, sans-serif; font-size:12px;}}
+.title{{font-size:20px; font-weight:bold; text-align:center; margin-bottom:10px;}}
+.meta{{margin-bottom:15px;}}
+table{{width:100%; border-collapse:collapse;}}
+th,td{{border:1px solid #ccc; padding:6px; text-align:center;}}
+th{{background:#f4ecd8;}}
+</style>
+</head>
+<body>
+<div class="title">{h(titles['detail'])}</div>
+<div class="meta">
+  <span>伝票番号: {h(inv['invoice_number'])}</span><br>
+  <span>取引先: {h(inv['customer_name'])}</span>
+</div>
+<table>
+<thead>
+<tr><th>No.</th><th>品番</th><th>カラー</th><th>サイズ</th><th>枚数</th><th>上代</th></tr>
+</thead>
+<tbody>{rows_html}</tbody>
+</table>
+</body>
+</html>"""
+
+    return html_str
 
 def get_doc_type_folder_label(doc_type: str) -> str:
     """Drive保存用のフォルダ名ラベルを返す"""

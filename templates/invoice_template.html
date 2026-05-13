@@ -1,24 +1,80 @@
 <!DOCTYPE html>
 <html lang="ja">
+
 <head>
     <meta charset="UTF-8">
     <title>納品書</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
     <style>
         {{ font_face_css|safe }}
-        body { font-family: 'Noto Sans JP', -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif; font-size: 12px; }
-        .invoice-box { max-width: 800px; margin: auto; padding: 30px; }
-        .header { display: flex; justify-content: space-between; margin-bottom: 40px; }
-        .title { font-size: 24px; font-weight: bold; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px;}
-        .customer { font-size: 18px; font-weight: bold; }
-        .issuer { text-align: right; }
-        .invoice-table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
-        .invoice-table th, .invoice-table td { border: 1px solid #ccc; padding: 10px; text-align: center; }
-        .invoice-table th { background-color: #f0f0f0; }
-        .total-section { text-align: right; font-size: 14px; }
-        .grand-total { font-size: 18px; font-weight: bold; margin-top: 10px; border-top: 2px solid #000; padding-top: 10px; }
+
+        body {
+            font-family: 'Noto Sans JP', -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif;
+            font-size: 12px;
+        }
+
+        .invoice-box {
+            max-width: 800px;
+            margin: auto;
+            padding: 30px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 40px;
+        }
+
+        .title {
+            font-size: 24px;
+            font-weight: bold;
+            border-bottom: 2px solid #000;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+
+        .customer {
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        .issuer {
+            text-align: right;
+        }
+
+        .invoice-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 30px;
+        }
+
+        .invoice-table th,
+        .invoice-table td {
+            border: 1px solid #ccc;
+            padding: 10px;
+            text-align: center;
+        }
+
+        .invoice-table th {
+            background-color: #f0f0f0;
+        }
+
+        .total-section {
+            text-align: right;
+            font-size: 14px;
+        }
+
+        .grand-total {
+            font-size: 18px;
+            font-weight: bold;
+            margin-top: 10px;
+            border-top: 2px solid #000;
+            padding-top: 10px;
+        }
     </style>
 </head>
+
 <body>
     <div class="invoice-box">
         <div class="title">{{ doc_title_main }}</div>
@@ -64,4 +120,5 @@
         </div>
     </div>
 </body>
+
 </html>
