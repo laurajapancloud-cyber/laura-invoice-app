@@ -572,6 +572,7 @@
       position: relative;
       transition: all 0.25s;
       animation: cardIn 0.3s ease-out;
+      overflow: hidden;
     }
 
     .item-card:hover {
@@ -1942,12 +1943,12 @@
           radial-gradient(ellipse 60% 30% at 50% 0%, rgba(201, 169, 97, 0.04), transparent 60%),
           var(--bg-base);
       }
-    } /* end layout @media */
 
-    .page {
-      max-width: 1400px;
-      padding: 28px 36px 60px;
-    }
+      .page {
+        max-width: 1400px;
+        padding: 28px 36px 60px;
+      }
+    } /* end layout @media */
 
     /* ===== History as Master-Detail Split ===== */
     @media (min-width: 1024px) {
@@ -3906,8 +3907,8 @@
         <div class="toast" id="toast"></div>
       </div>
 
-      <div class="card" id="preview-card" style="display:none" x-data="{ isDesktop: window.innerWidth >= 1200 }"
-        @resize.window.debounce.100ms="isDesktop = window.innerWidth >= 1200">
+      <div class="card" id="preview-card" style="display:none" x-data="{ isDesktop: window.innerWidth >= 1024 }"
+        @resize.window.debounce.100ms="isDesktop = window.innerWidth >= 1024">
         <div class="card-title" id="preview-title">✎ 読み取り結果（タップで修正可能）</div>
 
         <!-- デスクトップ表示 (Table) -->
