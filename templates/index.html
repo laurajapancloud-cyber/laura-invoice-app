@@ -3613,6 +3613,29 @@
       color: var(--gold-bright);
       border-color: var(--gold);
     }
+    /* スマホ向け：ヘッダーをスリムなバーに変身させる */
+    @media (max-width: 1023px) {
+      .app-header {
+        padding: 10px 16px;
+        display: flex !important;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 52px;
+      }
+      .app-header .logo {
+        font-size: 16px;
+        margin: 0;
+        letter-spacing: 0.15em;
+        text-indent: 0;
+      }
+      .app-header .logo-sub,
+      .app-header .divider-gold {
+        display: none !important; /* スマホでは不要な装飾を消す */
+      }
+      #mobile-user-chip {
+        margin: 0 !important;
+      }
+    }
   </style>
 </head>
 
