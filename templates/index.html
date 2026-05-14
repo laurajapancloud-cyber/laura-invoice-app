@@ -3636,6 +3636,69 @@
         margin: 0 !important;
       }
     }
+    /* ===== Custom Searchable Dropdown ===== */
+    .custom-select-wrap {
+      position: relative;
+    }
+    .custom-select-input {
+      width: 100%;
+      padding: 12px 14px;
+      padding-right: 36px;
+      background: #121212;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      border-radius: 10px;
+      font-size: 15px;
+      color: #fffaf0;
+      font-family: inherit;
+      transition: all 0.2s;
+      cursor: text;
+    }
+    .custom-select-input:focus {
+      border-color: var(--gold-bright);
+      box-shadow: 0 0 0 3px rgba(232, 196, 104, 0.16);
+      outline: none;
+    }
+    .custom-select-dropdown {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      margin-top: 4px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-strong);
+      border-radius: 10px;
+      max-height: 250px;
+      overflow-y: auto;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+    }
+    .custom-select-item {
+      padding: 12px 14px;
+      font-size: 14px;
+      cursor: pointer;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      color: var(--text-primary);
+      transition: background 0.1s;
+    }
+    .custom-select-item:hover {
+      background: rgba(201, 169, 97, 0.12);
+      color: var(--gold-bright);
+    }
+    .custom-select-item:last-child {
+      border-bottom: none;
+    }
+    .custom-select-meta {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-left: 8px;
+    }
+    /* ライトモード用の上書き */
+    [data-theme="light"] .custom-select-dropdown {
+      background: #ffffff; border-color: var(--border-strong); box-shadow: var(--shadow-md);
+    }
+    [data-theme="light"] .custom-select-item { border-bottom-color: var(--border-subtle); color: var(--text-primary); }
+    [data-theme="light"] .custom-select-input { background: #ffffff; color: var(--text-primary); border-color: var(--border-strong); }
+    [data-theme="light"] .custom-select-item:hover { background: var(--bg-card-hover); color: var(--gold-deep); }
   </style>
 </head>
 
@@ -3891,27 +3954,88 @@
             <label>店舗コード</label>
             <input type="text" id="inp-customer-code" placeholder="例: 1001" oninput="handleCustomerCodeInput(this.value)">
           </div>
-          <div class="form-group"><label>店名 (取引先)</label>
-            <select id="sel-customer" x-data @change="
-              const val = $el.value;
-              if (val === 'manual') {
-                $('manual-customer-group').style.display = 'block';
+          <div class="form-group custom-select-wrap" x-data="{
+            open: false,
+            search: '',
+            get filteredCustomers() {
+              if (!this.search || this.search.trim() === '') return $store.app.customers;
+              const q = this.search.toLowerCase();
+              return $store.app.customers.filter(c => 
+                c.name.toLowerCase().includes(q) || 
+                (c.code && c.code.toLowerCase().includes(q))
+              );
+            },
+            selectCustomer(c) {
+              const sel = document.getElementById('sel-customer');
+              if (c === 'manual') {
+                this.search = '';
+                sel.value = 'manual';
+                document.getElementById('manual-customer-group').style.display = 'block';
                 $store.app.rate = 0;
-                $('inp-customer-code').value = '';
+                document.getElementById('inp-customer-code').value = '';
               } else {
-                $('manual-customer-group').style.display = 'none';
+                this.search = c.name;
+                sel.value = JSON.stringify(c);
+                document.getElementById('manual-customer-group').style.display = 'none';
+                $store.app.rate = c.discount_rate;
+                if (c.code) document.getElementById('inp-customer-code').value = c.code;
+              }
+              this.open = false;
+            },
+            syncFromSelect() {
+              const sel = document.getElementById('sel-customer');
+              if (!sel) return;
+              if (sel.value === 'manual' || !sel.value) {
+                this.search = '';
+                document.getElementById('manual-customer-group').style.display = 'block';
+              } else {
                 try {
-                  const c = JSON.parse(val);
-                  $store.app.rate = c.discount_rate;
-                  if (c.code) $('inp-customer-code').value = c.code;
+                  const c = JSON.parse(sel.value);
+                  this.search = c.name;
+                  document.getElementById('manual-customer-group').style.display = 'none';
                 } catch(e) {}
               }
-            ">
+            }
+          }" @click.outside="open = false" x-init="
+            syncFromSelect();
+            document.getElementById('sel-customer').addEventListener('change', () => syncFromSelect());
+          ">
+            <label>店名 (取引先)</label>
+            
+            <select id="sel-customer" style="display:none;">
               <option value="manual" selected>-- 手動入力 --</option>
               <template x-for="c in $store.app.customers" :key="c.id">
-                <option :value="JSON.stringify(c)" x-text="c.name + ' (' + c.discount_rate + '%)'"></option>
+                <option :value="JSON.stringify(c)" x-text="c.name"></option>
               </template>
             </select>
+      
+            <div style="position: relative;">
+              <input type="text" class="custom-select-input"
+                x-model="search" 
+                @focus="open = true; $el.select()" 
+                placeholder="🔍 検索または選択..." 
+                autocomplete="off">
+              <button type="button" x-show="search !== ''" @click.stop="selectCustomer('manual')" 
+                style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 16px;">
+                ✕
+              </button>
+            </div>
+      
+            <div x-show="open" class="custom-select-dropdown" x-transition style="display: none;">
+              <div class="custom-select-item" @click="selectCustomer('manual')" style="color: var(--gold); font-weight: bold;">
+                -- 手動入力 --
+              </div>
+              <template x-for="c in filteredCustomers" :key="c.id">
+                <div class="custom-select-item" @click="selectCustomer(c)">
+                  <span x-text="c.name"></span>
+                  <span class="custom-select-meta" x-text="c.code ? `(${c.code})` : ''"></span>
+                  <span class="custom-select-meta" x-show="c.discount_rate" x-text="`${c.discount_rate}%`" style="float: right;"></span>
+                </div>
+              </template>
+              <div x-show="filteredCustomers.length === 0" style="padding: 12px; color: var(--text-muted); text-align: center;">
+                見つかりません
+              </div>
+            </div>
           </div>
           <div class="form-group" id="manual-customer-group">
             <label>取引先名（手動入力）</label>
@@ -5784,6 +5908,8 @@
           $('manual-customer-group').style.display = 'none';
         }
 
+        $('sel-customer').dispatchEvent(new Event('change'));
+
         $('drop-area').style.display = 'none';
         $('thumbs').style.display = 'none';
         $('btn-analyze').style.display = 'none';
@@ -6169,6 +6295,8 @@
       document.querySelectorAll('.doctype-btn').forEach(b => b.classList.toggle('active', b.dataset.type === currentDocType));
       if ($('sel-customer')) $('sel-customer').value = draft.customer_select_value || 'manual';
       if ($('inp-manual-customer')) $('inp-manual-customer').value = draft.manual_customer || draft.customer_name || '';
+
+      $('sel-customer').dispatchEvent(new Event('change'));
 
       if ($('inp-rate')) {
         const r = draft.rate || 35;
