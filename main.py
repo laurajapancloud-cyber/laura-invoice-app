@@ -365,6 +365,7 @@ def init_db():
         cur.execute("ALTER TABLE invoices ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;")
         cur.execute("ALTER TABLE invoices ADD COLUMN IF NOT EXISTS doc_type TEXT NOT NULL DEFAULT 'delivery';")
         cur.execute("ALTER TABLE invoices ADD COLUMN IF NOT EXISTS customer_code TEXT;")
+        cur.execute("ALTER TABLE invoices ADD COLUMN IF NOT EXISTS issue_date DATE;")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_invoices_doc_type ON invoices(doc_type);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_invoices_user ON invoices(user_id);")
 
@@ -1703,7 +1704,18 @@ def assemble_invoice_data(inv_info: dict, items_input: list, discount_rate: int,
         })
         total_net += net; total_tax += tax; total_grand += grand
     
-    dt = to_jst(inv_info.get("locked_at") or inv_info.get("created_at"))
+    issue_date_str = inv_info.get("issue_date")
+    if issue_date_str:
+        try:
+            # フロントから来た 'YYYY-MM-DD' を変換
+            dt = datetime.datetime.strptime(str(issue_date_str), "%Y-%m-%d")
+            date_formatted = f"{dt.year}年{dt.month}月{dt.day}日"
+        except:
+            date_formatted = str(issue_date_str)
+    else:
+        # 従来通り、指定がなければ作成日・ロック日を使用
+        dt = to_jst(inv_info.get("locked_at") or inv_info.get("created_at"))
+        date_formatted = dt.strftime("%Y年%m月%d日")
 
     titles = DOC_TYPE_TITLES.get(doc_type, DOC_TYPE_TITLES["delivery"])
 
@@ -1711,7 +1723,7 @@ def assemble_invoice_data(inv_info: dict, items_input: list, discount_rate: int,
         "invoice_number": inv_info["invoice_number"], "customer_name": inv_info["customer_name"], "customer_code": inv_info.get("customer_code", ""),
         "discount_rate": discount_rate, "items": processed,
         "total_net_amount": total_net, "total_tax_amount": total_tax, "total_grand_total": total_grand,
-        "issuer": "株式会社 ラウラジャパン", "date": dt.strftime("%Y年%m月%d日"),
+        "issuer": "株式会社 ラウラジャパン", "date": date_formatted,
         "doc_type": doc_type,
         "doc_title_main": titles["main"],
         "doc_title_detail": titles["detail"],
@@ -1725,6 +1737,7 @@ class DocumentRequest(BaseModel):
     customer_code: Optional[str] = None
     customer_name: str
     discount_rate: int
+    issue_date: Optional[str] = None
     items: List[Dict[str, Any]]
     doc_type: Optional[str] = "delivery"
     user_id: Optional[int] = None
@@ -1774,24 +1787,24 @@ def _save_invoice_record(payload: "DocumentRequest"):
             invoice_number = generate_invoice_number_safe(cur, doc_type)
 
         inv_data = assemble_invoice_data(
-            {"invoice_number": invoice_number, "customer_name": payload.customer_name, "customer_code": payload.customer_code},
+            {"invoice_number": invoice_number, "customer_name": payload.customer_name, "customer_code": payload.customer_code, "issue_date": payload.issue_date},
             payload.items, payload.discount_rate, doc_type,
         )
 
         if payload.invoice_id:
             cur.execute("""
                 UPDATE invoices SET customer_name=%s, customer_code=%s, discount_rate=%s, total_net_amount=%s, total_tax_amount=%s, total_grand_total=%s,
-                item_count=%s, status='draft', locked_at=NULL, doc_type=%s, user_id=%s,
+                item_count=%s, status='draft', locked_at=NULL, doc_type=%s, user_id=%s, issue_date=%s,
                 pdf_storage_path=NULL, excel_storage_path=NULL, detail_pdf_storage_path=NULL, detail_excel_storage_path=NULL
                 WHERE id=%s
-            """, (payload.customer_name, payload.customer_code, payload.discount_rate, inv_data["total_net_amount"], inv_data["total_tax_amount"], inv_data["total_grand_total"], len(inv_data["items"]), doc_type, payload.user_id, payload.invoice_id))
+            """, (payload.customer_name, payload.customer_code, payload.discount_rate, inv_data["total_net_amount"], inv_data["total_tax_amount"], inv_data["total_grand_total"], len(inv_data["items"]), doc_type, payload.user_id, payload.issue_date, payload.invoice_id))
             cur.execute("DELETE FROM invoice_items WHERE invoice_id=%s", (payload.invoice_id,))
             inv_id = payload.invoice_id
         else:
             cur.execute("""
-                INSERT INTO invoices (invoice_number, customer_name, customer_code, discount_rate, total_net_amount, total_tax_amount, total_grand_total, item_count, status, doc_type, user_id)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,'draft',%s,%s) RETURNING id
-            """, (invoice_number, payload.customer_name, payload.customer_code, payload.discount_rate, inv_data["total_net_amount"], inv_data["total_tax_amount"], inv_data["total_grand_total"], len(inv_data["items"]), doc_type, payload.user_id))
+                INSERT INTO invoices (invoice_number, customer_name, customer_code, discount_rate, total_net_amount, total_tax_amount, total_grand_total, item_count, status, doc_type, user_id, issue_date)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,'draft',%s,%s,%s) RETURNING id
+            """, (invoice_number, payload.customer_name, payload.customer_code, payload.discount_rate, inv_data["total_net_amount"], inv_data["total_tax_amount"], inv_data["total_grand_total"], len(inv_data["items"]), doc_type, payload.user_id, payload.issue_date))
             inv_id = cur.fetchone()['id']
 
         for item in inv_data["items"]:
@@ -1860,6 +1873,16 @@ def lock_invoice_internal(jid: str, inv_id: int, bt: Optional[BackgroundTasks] =
                 db_update_job(jid, 'done', result={"status": "already_locked"})
                 return
             conn.commit()
+
+        # --------------------------------------------------------
+        # 確定成功時、自動でDriveアップロードジョブを起動する
+        # --------------------------------------------------------
+        if bt is not None:
+            # Drive保存用の新しいジョブIDを発行
+            drive_jid = db_create_job('drive_upload', {"invoice_id": inv_id})
+            # バックグラウンドタスクにアップロード処理を追加
+            bt.add_task(upload_drive_internal, drive_jid, inv_id)
+        # --------------------------------------------------------
 
         db_update_job(jid, 'done', result={"status": "locked"})
 

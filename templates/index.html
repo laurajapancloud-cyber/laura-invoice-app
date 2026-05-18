@@ -3951,6 +3951,10 @@
         </div>
         <div class="form-row">
           <div class="form-group" style="max-width:140px;">
+            <label>伝票日付</label>
+            <input type="date" id="inp-issue-date">
+          </div>
+          <div class="form-group" style="max-width:140px;">
             <label>店舗コード</label>
             <input type="text" id="inp-customer-code" placeholder="例: 1001" oninput="handleCustomerCodeInput(this.value)">
           </div>
@@ -4670,6 +4674,14 @@
       document.querySelectorAll('.theme-toggle').forEach(btn => { btn.textContent = icon; });
     };
     applyTheme();
+
+    // アプリ起動時に今日の日付をセット
+    document.addEventListener("DOMContentLoaded", () => {
+      const today = new Date();
+      // JSTで今日の日付を取得して 'YYYY-MM-DD' の形にする
+      today.setMinutes(today.getMinutes() - today.getTimezoneOffset());
+      if ($('inp-issue-date')) $('inp-issue-date').value = today.toISOString().split('T')[0];
+    });
 
     // --- Alpine.js Store ---
     document.addEventListener('alpine:init', () => {
@@ -5892,6 +5904,7 @@
         document.querySelectorAll('.doctype-btn').forEach(b => b.classList.toggle('active', b.dataset.type === currentDocType));
 
         $('inp-rate').value = d.discount_rate;
+        if ($('inp-issue-date')) $('inp-issue-date').value = d.issue_date || new Date().toISOString().split('T')[0];
         const sel = $('sel-customer');
         let found = false;
         for (let i = 0; i < sel.options.length; i++) {
@@ -5930,6 +5943,7 @@
         customer_name: cn,
         customer_code: $('inp-customer-code') ? $('inp-customer-code').value.trim() : "",
         discount_rate: parseInt($('inp-rate').value) || 0,
+        issue_date: $('inp-issue-date') ? $('inp-issue-date').value : "",
         items: extractedItems,
         doc_type: currentDocType,
         user_id: currentUser?.id
@@ -6265,6 +6279,7 @@
         const draft = {
           customer_name: getCustomerName(),
           customer_code: $('inp-customer-code')?.value || '',
+          issue_date: $('inp-issue-date')?.value || '',
           manual_customer: $('inp-manual-customer')?.value || '',
           customer_select_value: $('sel-customer')?.value || 'manual',
           rate: $('inp-rate')?.value || '',
@@ -6304,6 +6319,7 @@
         Alpine.store('app').rate = r;
       }
       if ($('inp-customer-code')) $('inp-customer-code').value = draft.customer_code || '';
+      if ($('inp-issue-date')) $('inp-issue-date').value = draft.issue_date || new Date().toISOString().split('T')[0];
       $('manual-customer-group').style.display = ($('sel-customer').value === 'manual' ? 'block' : 'none');
 
       renderPreview();
@@ -6330,6 +6346,7 @@
         customer_name: cn,
         customer_code: $('inp-customer-code') ? $('inp-customer-code').value.trim() : "",
         discount_rate: getRate(),
+        issue_date: $('inp-issue-date') ? $('inp-issue-date').value : "",
         items: extractedItems,
         doc_type: currentDocType,
         user_id: currentUser?.id
@@ -6412,6 +6429,7 @@
     }
 
     $('btn-new').addEventListener('click', () => {
+      if ($('inp-issue-date')) $('inp-issue-date').value = new Date().toISOString().split('T')[0];
       currentEditingInvId = null;
       lastInvoiceId = null;
       selectedFiles = [];
