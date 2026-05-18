@@ -339,6 +339,7 @@ def init_db():
             );
         """)
         cur.execute("ALTER TABLE customers ADD COLUMN IF NOT EXISTS code TEXT UNIQUE;")
+        cur.execute("ALTER TABLE customers ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;")
         
         # Invoices table
         cur.execute("""
@@ -760,7 +761,7 @@ async def health():
 
 # ==================== Dashboard API ====================
 @app.get("/api/dashboard")
-def get_dashboard(username: Annotated[str, Depends(authenticate)]):
+def get_dashboard(username: Annotated[str, Depends(authenticate)], user_id: Optional[int] = None):
     with db_conn() as conn, conn.cursor() as cur:
         # DBセッションをJSTに設定
         try:
@@ -821,6 +822,15 @@ def get_dashboard(username: Annotated[str, Depends(authenticate)]):
         
         this_month = aggregate(this_month_rows)
         last_month = aggregate(last_month_rows)
+        
+        my_month = None
+        if user_id:
+            cur.execute(
+                """SELECT doc_type, COUNT(*) as cnt, COALESCE(SUM(total_grand_total),0) as total
+                   FROM invoices WHERE created_at >= %s AND user_id = %s GROUP BY doc_type""",
+                (month_start, user_id)
+            )
+            my_month = aggregate(cur.fetchall())
         
         # 月別推移 (過去12ヶ月, 納品/返品を分離)
         cur.execute(
@@ -893,6 +903,7 @@ def get_dashboard(username: Annotated[str, Depends(authenticate)]):
     return {
         "this_month": this_month,
         "last_month": last_month,
+        "my_this_month": my_month,
         "monthly": monthly,
         "top_customers": [dict(c) if not isinstance(c, dict) else c for c in top_customers],
         "top_items": [dict(i) for i in top_items],
@@ -925,15 +936,21 @@ def delete_user(uid: int, username: Annotated[str, Depends(authenticate)]):
 @app.get("/api/customers")
 def get_customers(username: Annotated[str, Depends(authenticate)]):
     with db_conn() as conn, conn.cursor() as cur:
-        cur.execute("SELECT id, name, code, discount_rate FROM customers ORDER BY id")
+        cur.execute("""
+            SELECT c.id, c.name, c.code, c.discount_rate, c.user_id, u.name as user_name 
+            FROM customers c 
+            LEFT JOIN users u ON c.user_id = u.id 
+            ORDER BY c.id
+        """)
         rows = cur.fetchall()
     return [dict(r) for r in rows]
 
 @app.post("/api/customers")
-def add_customer(username: Annotated[str, Depends(authenticate)], name: str = Form(...), discount_rate: int = Form(35), code: Optional[str] = Form(None)):
+def add_customer(username: Annotated[str, Depends(authenticate)], name: str = Form(...), discount_rate: int = Form(35), code: Optional[str] = Form(None), user_id: Optional[int] = Form(None)):
     with db_conn() as conn, conn.cursor() as cur:
         try:
-            cur.execute("INSERT INTO customers (name, code, discount_rate) VALUES (%s, %s, %s)", (name, code, discount_rate))
+            cur.execute("INSERT INTO customers (name, code, discount_rate, user_id) VALUES (%s, %s, %s, %s)", 
+                        (name, code, discount_rate, user_id))
             conn.commit()
         except Exception as e:
             conn.rollback()
@@ -941,10 +958,11 @@ def add_customer(username: Annotated[str, Depends(authenticate)], name: str = Fo
     return {"status": "ok"}
 
 @app.put("/api/customers/{cid}")
-def update_customer(cid: int, username: Annotated[str, Depends(authenticate)], name: str = Form(...), discount_rate: int = Form(35), code: Optional[str] = Form(None)):
+def update_customer(cid: int, username: Annotated[str, Depends(authenticate)], name: str = Form(...), discount_rate: int = Form(35), code: Optional[str] = Form(None), user_id: Optional[int] = Form(None)):
     with db_conn() as conn, conn.cursor() as cur:
         try:
-            cur.execute("UPDATE customers SET name=%s, code=%s, discount_rate=%s WHERE id=%s", (name, code, discount_rate, cid))
+            cur.execute("UPDATE customers SET name=%s, code=%s, discount_rate=%s, user_id=%s WHERE id=%s", 
+                        (name, code, discount_rate, user_id, cid))
             conn.commit()
         except Exception as e:
             conn.rollback()
@@ -1180,7 +1198,7 @@ def apply_a4_print_settings(ws, orientation="portrait", fit_to_width=True, fit_t
 
     ws.print_options.horizontalCentered = True
 
-def build_detail_excel(invoice_number: str, customer_name: str, items: list, doc_type='delivery') -> bytes:
+def build_detail_excel(invoice_number: str, customer_name: str, items: list, doc_type='delivery', user_name: str = '') -> bytes:
     """商品明細表 Excel (サイズ別内訳・モダンデザイン)"""
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -1235,6 +1253,10 @@ def build_detail_excel(invoice_number: str, customer_name: str, items: list, doc
     ws["A2"] = f"取引先: {customer_name}"
     ws["A2"].font = FONT_META
     ws.merge_cells("A2:E2")
+    if user_name:
+        ws["F2"] = f"担当: {user_name}"
+        ws["F2"].font = FONT_META
+        ws.merge_cells("F2:G2")
 
     ws["G2"] = f"伝票番号: {invoice_number}"
     ws["G2"].font = FONT_INV_NO
@@ -1325,7 +1347,7 @@ def build_detail_excel(invoice_number: str, customer_name: str, items: list, doc
     return out.getvalue()
 
 
-def build_detail_pdf(invoice_number: str, customer_name: str, items: list, doc_type='delivery') -> bytes:
+def build_detail_pdf(invoice_number: str, customer_name: str, items: list, doc_type='delivery', user_name='') -> bytes:
     """明細 PDF"""
     titles = DOC_TYPE_TITLES.get(doc_type, DOC_TYPE_TITLES["delivery"])
     font_css = get_pdf_font_css()
@@ -1360,7 +1382,8 @@ th{{background:#f4ecd8;}}
 <div class="title">{h(titles['detail'])}</div>
 <div class="meta">
   <span>伝票番号: {h(invoice_number)}</span><br>
-  <span>取引先: {h(customer_name)}</span>
+  <span>取引先: {h(customer_name)}</span><br>
+  <span>担当: {h(user_name)}</span>
 </div>
 <table>
 <thead>
@@ -1508,6 +1531,12 @@ def build_invoice_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
         except Exception as e:
             logger.warning("Store barcode skipped (code=%s): %s", store_code, e)
 
+    if invoice_data.get("user_name"):
+        ws["G5"] = f"担当: {invoice_data['user_name']}"
+        ws["G5"].font = FONT_BODY
+        ws["G5"].alignment = Alignment(horizontal="right", vertical="center")
+        ws.merge_cells("G5:I5")
+
     # ===== 空白行 (6行目) =====
     ws.row_dimensions[6].height = 6
 
@@ -1636,8 +1665,8 @@ def build_all_files(invoice_data: dict, is_preview: bool = False) -> dict:
     return {
         "pdf": build_invoice_pdf(invoice_data),
         "excel": build_invoice_excel(invoice_data, is_preview=is_preview),
-        "detail_pdf": build_detail_pdf(invoice_data["invoice_number"], invoice_data["customer_name"], invoice_data["items"], doc_type),
-        "detail_excel": build_detail_excel(invoice_data["invoice_number"], invoice_data["customer_name"], invoice_data["items"], doc_type),
+        "detail_pdf": build_detail_pdf(invoice_data["invoice_number"], invoice_data["customer_name"], invoice_data["items"], doc_type, invoice_data.get("user_name", "")),
+        "detail_excel": build_detail_excel(invoice_data["invoice_number"], invoice_data["customer_name"], invoice_data["items"], doc_type, invoice_data.get("user_name", "")),
     }
 
 def build_single_file(kind: str, invoice_data: dict) -> bytes:
@@ -1663,6 +1692,7 @@ def build_single_file(kind: str, invoice_data: dict) -> bytes:
             invoice_data["customer_name"],
             invoice_data["items"],
             doc_type,
+            invoice_data.get("user_name", ""),
         )
 
     if kind == "detail_excel":
@@ -1671,6 +1701,7 @@ def build_single_file(kind: str, invoice_data: dict) -> bytes:
             invoice_data["customer_name"],
             invoice_data["items"],
             doc_type,
+            invoice_data.get("user_name", ""),
         )
 
     raise ValueError(f"Unsupported file kind: {kind}")
@@ -1723,6 +1754,7 @@ def assemble_invoice_data(inv_info: dict, items_input: list, discount_rate: int,
         "invoice_number": inv_info["invoice_number"], "customer_name": inv_info["customer_name"], "customer_code": inv_info.get("customer_code", ""),
         "discount_rate": discount_rate, "items": processed,
         "total_net_amount": total_net, "total_tax_amount": total_tax, "total_grand_total": total_grand,
+        "user_name": inv_info.get("user_name", ""),
         "issuer": "株式会社 ラウラジャパン", "date": date_formatted,
         "doc_type": doc_type,
         "doc_title_main": titles["main"],
@@ -1786,8 +1818,14 @@ def _save_invoice_record(payload: "DocumentRequest"):
         else:
             invoice_number = generate_invoice_number_safe(cur, doc_type)
 
+        user_name = ""
+        if payload.user_id:
+            cur.execute("SELECT name FROM users WHERE id=%s", (payload.user_id,))
+            u_row = cur.fetchone()
+            if u_row: user_name = u_row["name"]
+
         inv_data = assemble_invoice_data(
-            {"invoice_number": invoice_number, "customer_name": payload.customer_name, "customer_code": payload.customer_code, "issue_date": payload.issue_date},
+            {"invoice_number": invoice_number, "customer_name": payload.customer_name, "customer_code": payload.customer_code, "issue_date": payload.issue_date, "user_name": user_name},
             payload.items, payload.discount_rate, doc_type,
         )
 
@@ -2052,6 +2090,12 @@ def preview_detail_pdf(inv_id: int, username: Annotated[str, Depends(authenticat
             raise HTTPException(404, "Not found")
         cur.execute("SELECT code, color, size, unit_price, quantity FROM invoice_items WHERE invoice_id=%s", (inv_id,))
         items = [dict(r) for r in cur.fetchall()]
+        
+        user_name = ""
+        if inv.get('user_id'):
+            cur.execute("SELECT name FROM users WHERE id=%s", (inv['user_id'],))
+            u_row = cur.fetchone()
+            if u_row: user_name = u_row['name']
 
     doc_type = inv.get("doc_type", "delivery")
     titles = DOC_TYPE_TITLES.get(doc_type, DOC_TYPE_TITLES["delivery"])
@@ -2307,6 +2351,12 @@ def get_history_meta(inv_id: int, username: Annotated[str, Depends(authenticate)
         inv = dict(row)
         cur.execute("SELECT code, color, size, unit_price, quantity FROM invoice_items WHERE invoice_id=%s", (inv_id,))
         items = [dict(r) for r in cur.fetchall()]
+        
+        user_name = ""
+        if inv.get('user_id'):
+            cur.execute("SELECT name FROM users WHERE id=%s", (inv['user_id'],))
+            u_row = cur.fetchone()
+            if u_row: user_name = u_row['name']
 
     dr = inv.get("discount_rate") or 100
     doc_type = inv.get("doc_type", "delivery")
@@ -2353,7 +2403,8 @@ th{{background:#f4ecd8;}}
 <div class="title">{h(titles['detail'])}</div>
 <div class="meta">
   <span>伝票番号: {h(inv['invoice_number'])}</span><br>
-  <span>取引先: {h(inv['customer_name'])}</span>
+  <span>取引先: {h(inv['customer_name'])}</span><br>
+  <span>担当: {h(user_name)}</span>
 </div>
 <table>
 <thead>

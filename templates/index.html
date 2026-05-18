@@ -3962,7 +3962,19 @@
             open: false,
             search: '',
             get filteredCustomers() {
-              if (!this.search || this.search.trim() === '') return $store.app.customers;
+              if (!this.search || this.search.trim() === '') {
+                 // 検索が空の時は自分の担当を上に
+                 let list = [...$store.app.customers];
+                 const myId = currentUser ? currentUser.id : null;
+                 if (myId) {
+                     list.sort((a, b) => {
+                         if (a.user_id === myId && b.user_id !== myId) return -1;
+                         if (a.user_id !== myId && b.user_id === myId) return 1;
+                         return 0;
+                     });
+                 }
+                 return list;
+              }
               const q = this.search.toLowerCase();
               return $store.app.customers.filter(c => 
                 c.name.toLowerCase().includes(q) || 
@@ -4030,9 +4042,10 @@
                 -- 手動入力 --
               </div>
               <template x-for="c in filteredCustomers" :key="c.id">
-                <div class="custom-select-item" @click="selectCustomer(c)">
+                <div class="custom-select-item" @click="selectCustomer(c)" :style="c.user_id === currentUser?.id ? 'background: rgba(201, 169, 97, 0.05);' : ''">
                   <span x-text="c.name"></span>
                   <span class="custom-select-meta" x-text="c.code ? `(${c.code})` : ''"></span>
+                  <span x-show="c.user_id === currentUser?.id" style="font-size:10px; background:var(--gold-deep); color:#111; padding:1px 4px; border-radius:3px; margin-left:4px;">担当</span>
                   <span class="custom-select-meta" x-show="c.discount_rate" x-text="`${c.discount_rate}%`" style="float: right;"></span>
                 </div>
               </template>
@@ -4458,6 +4471,7 @@
                 <div>
                   <span x-text="c.name" style="font-weight:600"></span>
                   <span x-show="c.code" x-text="` (${c.code})`" style="font-size:11px; color:var(--text-muted)"></span>
+                  <span x-show="c.user_name" x-text="`担当: ${c.user_name}`" style="font-size:10px; background:var(--gold-soft); color:var(--gold-bright); padding:2px 6px; border-radius:4px; margin-left:8px;"></span>
                 </div>
                 <div style="display:flex; align-items:center; gap:10px">
                   <span style="font-size:12px; color:var(--text-muted)" x-text="c.discount_rate + '%'"></span>
@@ -4485,7 +4499,14 @@
                       <label style="display:block; font-size:11px; color:var(--gold); margin-bottom:4px; font-weight:600;">掛率(%)</label>
                       <input type="number" class="edit-rate" style="width:100%; padding:10px; font-size:14px; background:#1a1a1a; border:1px solid #444; border-radius:6px; color:#fff;" inputmode="numeric">
                     </div>
-                    <div style="display:flex; gap:8px;">
+                    <div style="flex: 0 0 120px;">
+                      <label style="display:block; font-size:11px; color:var(--gold); margin-bottom:4px; font-weight:600;">担当者</label>
+                      <select class="edit-user" style="width:100%; padding:10px; font-size:14px; background:#1a1a1a; border:1px solid #444; border-radius:6px; color:#fff;">
+                        <option value="">なし</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div style="display:flex; gap:8px;">
                       <button class="btn btn-sm" @click="cancelEditCust($el.closest('.cust-row'))" style="padding:10px 16px; background:#333; border:1px solid #444; color:#ccc;">取消</button>
                       <button class="btn btn-gold btn-sm" @click="saveEditCust(c.id, $el.closest('.cust-row'))" style="padding:10px 24px; font-weight:700;">保存する</button>
                     </div>
@@ -4500,12 +4521,12 @@
         </div>
         <div style="margin-top:18px;border-top:1px solid var(--border);padding-top:18px">
           <div class="form-row">
-            <div class="form-group" style="max-width:120px"><label>店舗コード</label><input type="text" id="new-cust-code"
-                placeholder="例: 1001"></div>
-            <div class="form-group"><label>取引先名(店名)</label><input type="text" id="new-cust-name"
-                placeholder="例: 株式会社 〇〇 御中"></div>
-            <div class="form-group" style="max-width:90px"><label>掛率(%)</label><input type="number" id="new-cust-rate"
-                inputmode="numeric" value="35"></div>
+            <div class="form-group" style="max-width:120px"><label>店舗コード</label><input type="text" id="new-cust-code" placeholder="例: 1001"></div>
+            <div class="form-group"><label>取引先名(店名)</label><input type="text" id="new-cust-name" placeholder="例: 株式会社 〇〇 御中"></div>
+            <div class="form-group" style="max-width:90px"><label>掛率(%)</label><input type="number" id="new-cust-rate" inputmode="numeric" value="35"></div>
+            <div class="form-group" style="max-width:120px"><label>担当者</label>
+              <select id="new-cust-user" style="width:100%; padding:12px 14px; background:#121212; border:1px solid rgba(255,255,255,0.16); border-radius:10px; color:#fffaf0;"></select>
+            </div>
           </div>
           <button class="btn btn-gold btn-sm" id="btn-add-cust" style="width:100%;margin-top:6px">＋
             取引先を追加</button>
@@ -4864,6 +4885,13 @@
           } else {
             filter.value = current;
           }
+        }
+
+        // マスタの新規追加用プルダウンを更新
+        const newCustUser = $('new-cust-user');
+        if (newCustUser) {
+            newCustUser.innerHTML = '<option value="">なし</option>' + 
+                allUsers.map(u => `<option value="${u.id}">${u.name}</option>`).join('');
         }
       } catch (e) { console.error(e); }
     }
@@ -5565,11 +5593,13 @@
       const n = $('new-cust-name').value.trim();
       const r = $('new-cust-rate').value;
       const c = $('new-cust-code') ? $('new-cust-code').value.trim() : "";
+      const u = $('new-cust-user') ? $('new-cust-user').value : "";
       if (!n) return;
       const fd = new FormData();
       fd.append('name', n);
       fd.append('discount_rate', r);
       if (c) fd.append('code', c);
+      if (u) fd.append('user_id', u);
       const res = await fetch('/api/customers', { method: 'POST', body: fd });
       if (res.ok) {
         $('new-cust-name').value = '';
@@ -5596,6 +5626,10 @@
       editDiv.querySelector('.edit-code').value = c.code || '';
       editDiv.querySelector('.edit-name').value = c.name || '';
       editDiv.querySelector('.edit-rate').value = c.discount_rate || 35;
+      
+      const userSelect = editDiv.querySelector('.edit-user');
+      userSelect.innerHTML = '<option value="">なし</option>' + 
+          allUsers.map(u => `<option value="${u.id}" ${u.id === c.user_id ? 'selected' : ''}>${u.name}</option>`).join('');
     }
 
     function cancelEditCust(row) {
@@ -5607,11 +5641,13 @@
       const name = row.querySelector('.edit-name').value.trim();
       const code = row.querySelector('.edit-code').value.trim();
       const rate = row.querySelector('.edit-rate').value;
+      const userId = row.querySelector('.edit-user').value;
       if (!name) return toast('店名を入力してください', 'err');
       const fd = new FormData();
       fd.append('name', name);
       fd.append('discount_rate', rate);
       if (code) fd.append('code', code);
+      if (userId) fd.append('user_id', userId);
       const res = await fetch(`/api/customers/${id}`, { method: 'PUT', body: fd });
       if (res.ok) {
         toast('更新しました');
@@ -6459,8 +6495,38 @@
     // ===== Dashboard =====
     async function loadDashboard() {
       try {
-        const r = await fetch('/api/dashboard');
+        const uid = currentUser ? currentUser.id : '';
+        const r = await fetch('/api/dashboard?user_id=' + uid);
         const d = await r.json();
+
+        // ★追加: 個人成績の描画
+        let myStatsHtml = '';
+        if (d.my_this_month && currentUser) {
+            myStatsHtml = `
+              <div class="card" style="border-color: var(--gold); background: linear-gradient(180deg, rgba(201,169,97,0.05) 0%, transparent 100%);">
+                <div class="card-title">👤 ${currentUser.name} さんの今月の実績</div>
+                <div style="display:flex; justify-content:space-around; text-align:center;">
+                  <div>
+                    <div style="font-size:12px; color:var(--text-secondary)">純売上</div>
+                    <div style="font-size:24px; font-weight:700; color:var(--gold-bright); font-family:'Cormorant Garamond'">¥${d.my_this_month.total_amount.toLocaleString()}</div>
+                  </div>
+                  <div>
+                    <div style="font-size:12px; color:var(--text-secondary)">処理件数</div>
+                    <div style="font-size:24px; font-weight:700; color:var(--text-primary); font-family:'Cormorant Garamond'">${d.my_this_month.invoices}件</div>
+                  </div>
+                </div>
+              </div>
+            `;
+        }
+        
+        // 個人成績を一番上に挿入（id="dash-personal" 用の空divを作っておきそこに挿入するなど）
+        if (!$('dash-personal')) {
+            const pdiv = document.createElement('div');
+            pdiv.id = 'dash-personal';
+            $('page-dashboard').prepend(pdiv);
+        }
+        $('dash-personal').innerHTML = myStatsHtml;
+
         $('dash-inv-cnt').textContent = d.this_month.invoices;
         $('dash-inv-amt').textContent = '¥' + d.this_month.total_amount.toLocaleString();
 
