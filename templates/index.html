@@ -5941,6 +5941,10 @@
 
         $('inp-rate').value = d.discount_rate;
         if ($('inp-issue-date')) $('inp-issue-date').value = d.issue_date || new Date().toISOString().split('T')[0];
+        
+        // ★追加: 店舗コードを画面に復元する
+        if ($('inp-customer-code')) $('inp-customer-code').value = d.customer_code || '';
+
         const sel = $('sel-customer');
         let found = false;
         for (let i = 0; i < sel.options.length; i++) {
