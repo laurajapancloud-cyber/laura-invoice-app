@@ -1423,12 +1423,12 @@ def build_invoice_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
     # ===== 共通スタイル定義 =====
     FF = "游ゴシック"
     FONT_TITLE   = Font(name=FF, size=16, bold=True, color="FFFFFF")
-    FONT_HEADER  = Font(name=FF, size=10, bold=True, color="1F2937")
-    FONT_LABEL   = Font(name=FF, size=9,  bold=True, color="6B7280")
-    FONT_BODY    = Font(name=FF, size=10, color="111827")
-    FONT_BODY_SM = Font(name=FF, size=9,  color="6B7280")
-    FONT_TOTAL   = Font(name=FF, size=12, bold=True, color="111827")
-    FONT_MONEY   = Font(name=FF, size=10, color="111827")
+    FONT_HEADER  = Font(name=FF, size=10, bold=True, color="000000")
+    FONT_LABEL   = Font(name=FF, size=9,  bold=True, color="000000")
+    FONT_BODY    = Font(name=FF, size=10, color="000000")
+    FONT_BODY_SM = Font(name=FF, size=9,  color="000000")
+    FONT_TOTAL   = Font(name=FF, size=12, bold=True, color="000000")
+    FONT_MONEY   = Font(name=FF, size=10, color="000000")
 
     FILL_TITLE     = PatternFill("solid", fgColor="1F2937")
     FILL_HEADER    = PatternFill("solid", fgColor="F3F4F6")
@@ -1578,10 +1578,10 @@ def build_invoice_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
         ws[f"F{r}"].number_format = '0'
         ws[f"G{r}"] = item["unit_price"]
         ws[f"G{r}"].font = FONT_MONEY
-        ws[f"G{r}"].number_format = '#,##0;[Red]△#,##0'
+        ws[f"G{r}"].number_format = '#,##0;△#,##0'
         ws[f"H{r}"] = item["net_amount"]
         ws[f"H{r}"].font = FONT_MONEY
-        ws[f"H{r}"].number_format = '#,##0;[Red]△#,##0'
+        ws[f"H{r}"].number_format = '#,##0;△#,##0'
         ws[f"I{r}"] = rate_label
         ws[f"I{r}"].font = FONT_BODY_SM
         
@@ -1625,7 +1625,7 @@ def build_invoice_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
         rr = last_r + i
         c_label = ws.cell(row=rr, column=7, value=label)
         c_val = ws.cell(row=rr, column=8, value=val)
-        c_val.number_format = '¥#,##0;[Red]△¥#,##0'
+        c_val.number_format = '¥#,##0;△¥#,##0'
 
         if i == 2:
             c_label.font = FONT_TOTAL
