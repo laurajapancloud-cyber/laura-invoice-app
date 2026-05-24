@@ -1426,9 +1426,11 @@ def build_invoice_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
     FONT_HEADER  = Font(name=FF, size=10, bold=True, color="000000")
     FONT_LABEL   = Font(name=FF, size=9,  bold=True, color="000000")
     FONT_BODY    = Font(name=FF, size=10, color="000000")
+    FONT_BODY_BOLD = Font(name=FF, size=10, bold=True, color="000000")
     FONT_BODY_SM = Font(name=FF, size=9,  color="000000")
     FONT_TOTAL   = Font(name=FF, size=12, bold=True, color="000000")
     FONT_MONEY   = Font(name=FF, size=10, color="000000")
+    FONT_MONEY_BOLD = Font(name=FF, size=10, bold=True, color="000000")
 
     FILL_TITLE     = PatternFill("solid", fgColor="1F2937")
     FILL_HEADER    = PatternFill("solid", fgColor="F3F4F6")
@@ -1559,31 +1561,31 @@ def build_invoice_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
 
     for i, item in enumerate(invoice_data["items"]):
         r = start_row + 1 + i
-        ws.row_dimensions[r].height = 36
+        ws.row_dimensions[r].height = 54
 
         if i % 2 == 1:
             for col in ["A","B","C","D","E","F","G","H","I"]:
                 ws[f"{col}{r}"].fill = FILL_ZEBRA
 
         ws[f"A{r}"] = i + 1
-        ws[f"A{r}"].font = FONT_BODY_SM
+        ws[f"A{r}"].font = FONT_BODY_BOLD
         ws[f"B{r}"] = item["code"]
-        ws[f"B{r}"].font = FONT_BODY
+        ws[f"B{r}"].font = FONT_BODY_BOLD
         ws[f"C{r}"] = item["color"]
-        ws[f"C{r}"].font = FONT_BODY
+        ws[f"C{r}"].font = FONT_BODY_BOLD
         ws[f"D{r}"] = item["size"]
-        ws[f"D{r}"].font = FONT_BODY
+        ws[f"D{r}"].font = FONT_BODY_BOLD
         ws[f"F{r}"] = item["quantity"]
-        ws[f"F{r}"].font = FONT_BODY
+        ws[f"F{r}"].font = FONT_BODY_BOLD
         ws[f"F{r}"].number_format = '0'
         ws[f"G{r}"] = item["unit_price"]
-        ws[f"G{r}"].font = FONT_MONEY
+        ws[f"G{r}"].font = FONT_MONEY_BOLD
         ws[f"G{r}"].number_format = '#,##0;△#,##0'
         ws[f"H{r}"] = item["net_amount"]
-        ws[f"H{r}"].font = FONT_MONEY
+        ws[f"H{r}"].font = FONT_MONEY_BOLD
         ws[f"H{r}"].number_format = '#,##0;△#,##0'
         ws[f"I{r}"] = rate_label
-        ws[f"I{r}"].font = FONT_BODY_SM
+        ws[f"I{r}"].font = FONT_BODY_BOLD
         
         for col in ["A","B","C","D","E","F","G","H","I"]:
             ws[f"{col}{r}"].border = border_thin
@@ -1605,7 +1607,7 @@ def build_invoice_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
                 img = ExcelImage(bc_io)
                 img.width, img.height = 160, 36
                 marker = AnchorMarker(col=4, colOff=pixels_to_EMU(8),
-                                      row=r-1, rowOff=pixels_to_EMU(3))
+                                      row=r-1, rowOff=pixels_to_EMU(15))
                 img.anchor = OneCellAnchor(
                     _from=marker,
                     ext=XDRPositiveSize2D(cx=pixels_to_EMU(160), cy=pixels_to_EMU(36))
