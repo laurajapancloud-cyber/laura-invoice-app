@@ -6236,10 +6236,10 @@
             const newItems = Object.values(merged);
             newItems.forEach(newItem => {
               const existingItem = extractedItems.find(it => 
-                it.code === newItem.code && 
-                it.color === newItem.color && 
-                String(it.size) === String(newItem.size) && 
-                it.unit_price === newItem.unit_price
+                String(it.code || '').trim() === String(newItem.code || '').trim() && 
+                String(it.color || '').trim() === String(newItem.color || '').trim() && 
+                String(it.size || '').trim() === String(newItem.size || '').trim() && 
+                Number(it.unit_price || 0) === Number(newItem.unit_price || 0)
               );
               if (existingItem) {
                 existingItem.quantity += newItem.quantity;
