@@ -6234,11 +6234,22 @@
               }
             });
             const newItems = Object.values(merged);
+            
+            const normStr = (s) => {
+              if (s === null || s === undefined) return '';
+              return String(s)
+                .replace(/[Ａ-Ｚａ-ｚ０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+                .replace(/[\s　]/g, '')
+                .replace(/[〜～~-]/g, '-')
+                .replace(/（/g, '(').replace(/）/g, ')')
+                .toUpperCase();
+            };
+
             newItems.forEach(newItem => {
               const existingItem = extractedItems.find(it => 
-                String(it.code || '').trim() === String(newItem.code || '').trim() && 
-                String(it.color || '').trim() === String(newItem.color || '').trim() && 
-                String(it.size || '').trim() === String(newItem.size || '').trim() && 
+                normStr(it.code) === normStr(newItem.code) && 
+                normStr(it.color) === normStr(newItem.color) && 
+                normStr(it.size) === normStr(newItem.size) && 
                 Number(it.unit_price || 0) === Number(newItem.unit_price || 0)
               );
               if (existingItem) {
