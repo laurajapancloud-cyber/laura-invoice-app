@@ -6101,6 +6101,7 @@
       c.innerHTML = '';
       $('btn-analyze').disabled = !selectedFiles.length;
       if (selectedFiles.length) {
+        $('btn-analyze').style.display = ''; // 追加: 画像が選ばれたらボタンを再表示
         if (extractedItems.length > 0) {
           $('btn-analyze-text').textContent = `${selectedFiles.length}枚を追加抽出・合流`;
         } else {
