@@ -4095,7 +4095,12 @@
 
       <div class="card" id="preview-card" style="display:none" x-data="{ isDesktop: window.innerWidth >= 1024 }"
         @resize.window.debounce.100ms="isDesktop = window.innerWidth >= 1024">
-        <div class="card-title" id="preview-title">✎ 読み取り結果（タップで修正可能）</div>
+        <div class="card-title" id="preview-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+          <span>✎ 読み取り結果（タップで修正可能）</span>
+          <button class="btn btn-outline" style="font-size:12px; padding:6px 12px; border-color:var(--gold); color:var(--gold);" onclick="window.scrollTo({top:$('drop-area').offsetTop - 20, behavior:'smooth'})">
+            ➕ さらに追加撮影する
+          </button>
+        </div>
 
         <!-- デスクトップ表示 (Table) -->
         <div class="item-table-container" x-show="isDesktop">
@@ -6067,18 +6072,27 @@
     });
     $('drop-area').addEventListener('dragover', e => { e.preventDefault(); $('drop-area').style.borderColor = 'var(--gold)'; });
     $('drop-area').addEventListener('dragleave', e => { $('drop-area').style.borderColor = ''; });
+    function addFilesWithLimit(newFiles) {
+      const spaceLeft = 30 - selectedFiles.length;
+      if (newFiles.length > spaceLeft) {
+        toast(`1度に解析できるのは30枚までです。${newFiles.length - spaceLeft}枚スキップされました。`, 'warn');
+      }
+      const filesToAdd = newFiles.slice(0, Math.max(0, spaceLeft));
+      filesToAdd.forEach(f => selectedFiles.push(f));
+      renderThumbs();
+    }
+
     $('drop-area').addEventListener('drop', e => {
       e.preventDefault();
       $('drop-area').style.borderColor = '';
       const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
-      files.forEach(f => selectedFiles.push(f));
-      renderThumbs();
+      addFilesWithLimit(files);
     });
     $('file-input').addEventListener('change', e => {
       if (e.target.files.length) {
-        Array.from(e.target.files).forEach(f => selectedFiles.push(f));
+        const files = Array.from(e.target.files);
+        addFilesWithLimit(files);
         e.target.value = '';
-        renderThumbs();
       }
     });
 
@@ -6086,7 +6100,15 @@
       const c = $('thumbs');
       c.innerHTML = '';
       $('btn-analyze').disabled = !selectedFiles.length;
-      $('btn-analyze-text').textContent = selectedFiles.length ? `${selectedFiles.length}枚を抽出する` : 'AIでデータを抽出する';
+      if (selectedFiles.length) {
+        if (extractedItems.length > 0) {
+          $('btn-analyze-text').textContent = `${selectedFiles.length}枚を追加抽出・合流`;
+        } else {
+          $('btn-analyze-text').textContent = `${selectedFiles.length}枚を抽出する`;
+        }
+      } else {
+        $('btn-analyze-text').textContent = 'AIでデータを抽出する';
+      }
       selectedFiles.forEach((f, i) => {
         const r = new FileReader();
         r.onload = e => {
@@ -6210,7 +6232,32 @@
                 };
               }
             });
-            extractedItems = Object.values(merged);
+            const newItems = Object.values(merged);
+            newItems.forEach(newItem => {
+              const existingItem = extractedItems.find(it => 
+                it.code === newItem.code && 
+                it.color === newItem.color && 
+                String(it.size) === String(newItem.size) && 
+                it.unit_price === newItem.unit_price
+              );
+              if (existingItem) {
+                existingItem.quantity += newItem.quantity;
+                if (existingItem.source_images && newItem.source_images) {
+                  existingItem.source_images.push(...newItem.source_images);
+                  existingItem.source_count = (existingItem.source_count || 0) + newItem.source_count;
+                }
+              } else {
+                extractedItems.push(newItem);
+              }
+            });
+
+            selectedFiles = [];
+            selectedFileThumbs = [];
+            renderThumbs();
+
+            $('drop-area').style.display = '';
+            $('btn-analyze').style.display = 'none';
+            scheduleAutosave();
 
             renderPreview();
             $('btn-analyze').disabled = false;
@@ -7053,6 +7100,10 @@
     }
 
     $('cam-shutter').addEventListener('click', () => {
+      if (selectedFiles.length >= 30) {
+        toast('1度に解析できるのは30枚までです。抽出を実行してください。', 'warn');
+        return;
+      }
       const video = $('cam-video');
       const canvas = document.createElement('canvas');
       canvas.width = video.videoWidth;
