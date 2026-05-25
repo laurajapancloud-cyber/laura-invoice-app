@@ -6175,7 +6175,7 @@
       return (items || []).map((it, index) => ({
         code: (it.code || '').trim().toUpperCase(),
         color: (it.color || '').trim(),
-        size: (it.size || '').trim(),
+        size: String(it.size || '').replace(/\s*[（(].*?[)）]/g, '').trim(),
         unit_price: Number(it.unit_price || 0),
         quantity: Number(it.quantity || 1),
         source_image_no: it.source_image_no ?? index,
