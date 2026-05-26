@@ -5138,6 +5138,7 @@
 
       async enqueue(type, endpoint, body, callbacks = {}) {
         try {
+          JobUI.show(type); // 即座に「○○を準備中...」のゲージを表示してラグをなくす
           const options = { method: 'POST', body };
           if (!(body instanceof FormData)) {
             options.headers = { 'Content-Type': 'application/json' };
@@ -5153,11 +5154,11 @@
           const data = await r.json();
           if (data.job_id) {
             this.trackJob(data.job_id, type, callbacks);
-            JobUI.show();
             return data.job_id;
           }
           throw new Error(data.detail || 'ジョブの作成に失敗しました');
         } catch (e) {
+          JobUI.hide(); // エラー時はゲージを閉じる
           toast('ジョブ開始エラー: ' + e.message, 'err');
           if (callbacks.onError) callbacks.onError(e.message);
           return null;
@@ -5243,11 +5244,13 @@
     }
 
     const JobUI = {
-      show() {
+      show(type = '') {
         const panel = $('job-panel');
         if (panel) panel.style.display = 'flex';
         const strip = $('active-job-strip');
+        const stripText = $('active-job-text');
         if (strip) strip.style.display = 'block';
+        if (stripText && type) stripText.textContent = `${this.getJobLabel(type)}を準備中...`;
       },
       updateItem(job) {
         const strip = $('active-job-strip');
