@@ -4228,7 +4228,7 @@
           style="margin-top:14px;width:100%">＋ 空白行を追加</button>
 
         <div style="margin-top:18px">
-          <button class="btn btn-gold" id="btn-generate">
+          <button class="btn btn-gold" id="btn-generate" onclick="generateInvoice()">
             <div class="spinner" id="sp2"></div>最終データを確定して保存
           </button>
           <button class="btn btn-blue" id="btn-preview-only" style="margin-top:10px; width:100%">
@@ -4580,7 +4580,7 @@
   <div class="mobile-action-bar" id="mobile-action-bar">
     <button class="btn btn-outline" onclick="document.getElementById('btn-add-row').click()">＋ 行追加</button>
     <button class="btn btn-blue" onclick="document.getElementById('btn-preview-only').click()">👁 確認</button>
-    <button class="btn btn-gold" onclick="document.getElementById('btn-generate').click()">保存</button>
+    <button class="btn btn-gold" onpointerdown="event.preventDefault(); generateInvoice()" onclick="generateInvoice()">保存</button>
   </div>
 
   <script>
@@ -6433,7 +6433,7 @@
       renderPreview();
     });
 
-    $('btn-generate').addEventListener('click', async () => {
+    async function generateInvoice() {
       syncInputs();
       if (!extractedItems.length) return toast('商品がありません', 'err');
 
@@ -6494,7 +6494,8 @@
           $('btn-generate').disabled = false;
         }
       });
-    });
+      });
+    }
 
     $('btn-lock-final')?.addEventListener('click', async () => {
       if (!lastInvoiceId) return;
