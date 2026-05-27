@@ -1633,18 +1633,8 @@ def build_invoice_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
                 except Exception as e:
                     logger.warning("Item barcode skipped (row %d, code=%s): %s", r, item.get("code"), e)
 
-        # チャンクが20行未満の場合は空枠でパディング
-        pad_r = r7 + 1 + len(chunk_items)
-        while pad_r <= r7 + chunk_size:
-            ws.row_dimensions[pad_r].height = 54
-            if (pad_r - r7 - 1) % 2 == 1:
-                for col in ["A","B","C","D","E","F","G","H","I"]:
-                    ws[f"{col}{pad_r}"].fill = FILL_ZEBRA
-            for col in ["A","B","C","D","E","F","G","H","I"]:
-                ws[f"{col}{pad_r}"].border = border_thin
-            pad_r += 1
-
-        last_item_row = r7 + chunk_size
+        # 空枠でのパディングを削除し、実際のアイテム数に合わせて高さを詰める
+        last_item_row = r7 + len(chunk_items)
 
         if chunk_idx < len(chunks) - 1:
             from openpyxl.worksheet.pagebreak import Break
