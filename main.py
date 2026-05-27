@@ -1457,9 +1457,9 @@ def build_invoice_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
     for col, w in col_widths.items():
         ws.column_dimensions[col].width = w
 
-    # ===== 商品のチャンク処理 (20行ごと) =====
+    # ===== 商品のチャンク処理 (15行ごと) =====
     all_items = invoice_data.get("items", [])
-    chunk_size = 20
+    chunk_size = 15
     chunks = [all_items[i:i + chunk_size] for i in range(0, len(all_items), chunk_size)]
     if not chunks:
         chunks = [[]]
