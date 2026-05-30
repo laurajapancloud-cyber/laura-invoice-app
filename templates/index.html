@@ -6553,6 +6553,22 @@
       $('sp2').style.display = 'none';
       $('preview-title').textContent = '✎ 読み取り結果（タップで修正可能）';
       localStorage.removeItem('laura-draft');
+
+      // フォーム入力をクリア
+      if ($('inp-customer-code')) $('inp-customer-code').value = '';
+      if ($('inp-manual-customer')) $('inp-manual-customer').value = '';
+      
+      const selCust = $('sel-customer');
+      if (selCust) {
+        selCust.value = 'manual';
+        selCust.dispatchEvent(new Event('change'));
+      }
+      
+      if (window.Alpine) {
+        Alpine.store('app').rate = 35;
+      }
+      document.querySelector('.doctype-btn[data-type="delivery"]')?.click();
+
       updateMobileActionBar();
     });
 

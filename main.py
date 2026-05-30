@@ -774,24 +774,24 @@ def get_dashboard(username: Annotated[str, Depends(authenticate)], user_id: Opti
         # 前月の開始時刻 (JST)
         last_month_start = (month_start - datetime.timedelta(days=1)).replace(day=1)
         
-        # 今月の統計（全伝票タイプ）
+        # 今月の統計（正式な納品と返品のみ）
         cur.execute(
             """SELECT doc_type, COUNT(*) as cnt, COALESCE(SUM(total_grand_total),0) as total
-               FROM invoices WHERE created_at >= %s GROUP BY doc_type""",
+               FROM invoices WHERE created_at >= %s AND doc_type IN ('delivery', 'return') GROUP BY doc_type""",
             (month_start,)
         )
         this_month_rows = cur.fetchall()
         
-        # 前月の統計（全伝票タイプ）
+        # 前月の統計（正式な納品と返品のみ）
         cur.execute(
             """SELECT doc_type, COUNT(*) as cnt, COALESCE(SUM(total_grand_total),0) as total
-               FROM invoices WHERE created_at >= %s AND created_at < %s GROUP BY doc_type""",
+               FROM invoices WHERE created_at >= %s AND created_at < %s AND doc_type IN ('delivery', 'return') GROUP BY doc_type""",
             (last_month_start, month_start)
         )
         last_month_rows = cur.fetchall()
         
         # 返品はマイナスとして集計する
-        return_types = {'return', 'prov_return'}
+        return_types = {'return'}
         
         def aggregate(rows):
             total_cnt = 0
@@ -827,16 +827,16 @@ def get_dashboard(username: Annotated[str, Depends(authenticate)], user_id: Opti
         if user_id:
             cur.execute(
                 """SELECT doc_type, COUNT(*) as cnt, COALESCE(SUM(total_grand_total),0) as total
-                   FROM invoices WHERE created_at >= %s AND user_id = %s GROUP BY doc_type""",
+                   FROM invoices WHERE created_at >= %s AND user_id = %s AND doc_type IN ('delivery', 'return') GROUP BY doc_type""",
                 (month_start, user_id)
             )
             my_month = aggregate(cur.fetchall())
         
-        # 月別推移 (過去12ヶ月, 納品/返品を分離)
+        # 月別推移 (過去12ヶ月, 納品/返品を分離、仮納品/仮返品を除く)
         cur.execute(
             """SELECT to_char(created_at, 'YYYY-MM') as month, doc_type,
                       COUNT(*) as cnt, COALESCE(SUM(total_grand_total),0) as total
-               FROM invoices GROUP BY month, doc_type ORDER BY month DESC LIMIT 60"""
+               FROM invoices WHERE doc_type IN ('delivery', 'return') GROUP BY month, doc_type ORDER BY month DESC LIMIT 60"""
         )
         monthly_raw = cur.fetchall()
         monthly_map = {}
@@ -854,10 +854,10 @@ def get_dashboard(username: Annotated[str, Depends(authenticate)], user_id: Opti
                 monthly_map[m]['net'] += amt
         monthly = sorted(monthly_map.values(), key=lambda x: x['month'], reverse=True)[:12]
         
-        # 全期間の取引先別売上トップ5（返品をマイナスで加算）
+        # 全期間の取引先別売上トップ5（正式な納品と返品のみ、返品をマイナスで加算）
         cur.execute(
             """SELECT customer_name, doc_type, SUM(total_grand_total) as total
-               FROM invoices GROUP BY customer_name, doc_type"""
+               FROM invoices WHERE doc_type IN ('delivery', 'return') GROUP BY customer_name, doc_type"""
         )
         cust_raw = cur.fetchall()
         cust_map = {}
@@ -875,10 +875,11 @@ def get_dashboard(username: Annotated[str, Depends(authenticate)], user_id: Opti
             key=lambda x: x['total'], reverse=True
         )[:5]
         
-        # 全期間の商品別(品番)数量トップ5
+        # 全期間の商品別(品番)数量トップ5（正式な納品と返品のみ）
         cur.execute(
             """SELECT ii.code, SUM(ii.quantity) as qty
                FROM invoice_items ii JOIN invoices i ON ii.invoice_id = i.id
+               WHERE i.doc_type IN ('delivery', 'return')
                GROUP BY ii.code ORDER BY qty DESC LIMIT 5"""
         )
         top_items = cur.fetchall()
