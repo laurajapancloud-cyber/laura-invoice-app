@@ -140,16 +140,19 @@ if SUPABASE_URL and SUPABASE_SERVICE_KEY and create_client:
 DOC_TYPE_PREFIXES = {
     "delivery": "LJ", "return": "LR",
     "prov_delivery": "TLJ", "prov_return": "TLR",
+    "statement": "LS",
 }
 DOC_TYPE_LABELS = {
     "delivery": "納品伝票", "return": "返品伝票",
     "prov_delivery": "仮納品", "prov_return": "仮返品",
+    "statement": "明細表",
 }
 DOC_TYPE_TITLES = {
     "delivery":      {"main": "納 品 書", "detail": "商 品 明 細 表",   "pdf_title": "納品書",   "detail_pdf_title": "商品明細表"},
     "return":        {"main": "返 品 書", "detail": "返 品 明 細 表",   "pdf_title": "返品書",   "detail_pdf_title": "返品明細表"},
     "prov_delivery": {"main": "仮 納 品 書", "detail": "仮納品 明細表",     "pdf_title": "仮納品書", "detail_pdf_title": "仮納品明細表"},
     "prov_return":   {"main": "仮 返 品 書", "detail": "仮返品 明細表",     "pdf_title": "仮返品書", "detail_pdf_title": "仮返品明細表"},
+    "statement":     {"main": "明 細 表", "detail": "明 細 表",   "pdf_title": "明細表",   "detail_pdf_title": "明細表"},
 }
 
 def storage_upload(path: str, data: bytes, mime: str) -> str:
@@ -367,6 +370,7 @@ def init_db():
         cur.execute("ALTER TABLE invoices ADD COLUMN IF NOT EXISTS doc_type TEXT NOT NULL DEFAULT 'delivery';")
         cur.execute("ALTER TABLE invoices ADD COLUMN IF NOT EXISTS customer_code TEXT;")
         cur.execute("ALTER TABLE invoices ADD COLUMN IF NOT EXISTS issue_date DATE;")
+        cur.execute("ALTER TABLE invoices ADD COLUMN IF NOT EXISTS client_excel_storage_path TEXT;")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_invoices_doc_type ON invoices(doc_type);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_invoices_user ON invoices(user_id);")
 
@@ -1688,14 +1692,166 @@ def build_invoice_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
 
 
 
+def build_client_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
+    """取引先提出用 Excel (PDFと同レイアウト、掛率非表示)"""
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = invoice_data.get("doc_pdf_title", "明細表")
+    
+    apply_a4_print_settings(ws, orientation="portrait", fit_to_width=True, fit_to_height=False)
+
+    FF = "游ゴシック"
+    FONT_TITLE   = Font(name=FF, size=18, bold=True, color="000000")
+    FONT_HEADER  = Font(name=FF, size=10, bold=True, color="000000")
+    FONT_BODY    = Font(name=FF, size=10, color="000000")
+    FONT_TOTAL   = Font(name=FF, size=12, bold=True, color="000000")
+
+    FILL_HEADER  = PatternFill("solid", fgColor="F0F0F0")
+
+    border_all = Border(
+        left=Side(style='thin', color='CCCCCC'),
+        right=Side(style='thin', color='CCCCCC'),
+        top=Side(style='thin', color='CCCCCC'),
+        bottom=Side(style='thin', color='CCCCCC')
+    )
+
+    # 列幅
+    col_widths = {'A': 6, 'B': 18, 'C': 14, 'D': 10, 'E': 8, 'F': 14, 'G': 14}
+    for col, w in col_widths.items():
+        ws.column_dimensions[col].width = w
+
+    # タイトル
+    ws.merge_cells("A1:G1")
+    ws["A1"] = invoice_data.get("doc_title_main", "納 品 書")
+    ws["A1"].font = FONT_TITLE
+    ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
+    ws.row_dimensions[1].height = 40
+
+    # 顧客名
+    ws.merge_cells("A3:E3")
+    ws["A3"] = f"{invoice_data.get('customer_name', '')}"
+    ws["A3"].font = Font(name=FF, size=14, bold=True)
+    ws["A3"].alignment = Alignment(horizontal="left", vertical="center")
+
+    # 日付等
+    dt = to_jst(invoice_data.get("locked_at") or invoice_data.get("created_at"))
+    date_str = f"{dt.year}年{dt.month}月{dt.day}日"
+    
+    ws.merge_cells("F3:G3")
+    ws["F3"] = date_str
+    ws["F3"].font = FONT_BODY
+    ws["F3"].alignment = Alignment(horizontal="right", vertical="center")
+
+    ws.merge_cells("F4:G4")
+    ws["F4"] = f"発行者: LAURA FELICE"
+    ws["F4"].font = FONT_BODY
+    ws["F4"].alignment = Alignment(horizontal="right", vertical="center")
+
+    if invoice_data.get("user_name"):
+        ws.merge_cells("F5:G5")
+        ws["F5"] = f"担当: {invoice_data['user_name']}"
+        ws["F5"].font = FONT_BODY
+        ws["F5"].alignment = Alignment(horizontal="right", vertical="center")
+
+    # テーブルヘッダ
+    r = 7
+    headers = ["No.", "品番", "カラー", "サイズ", "数量", "単価", "金額"]
+    for i, h in enumerate(headers):
+        col_letter = chr(ord('A') + i)
+        cell = ws[f"{col_letter}{r}"]
+        cell.value = h
+        cell.font = FONT_HEADER
+        cell.fill = FILL_HEADER
+        cell.border = border_all
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    # データ行
+    items = invoice_data.get("items", [])
+    r += 1
+    for idx, item in enumerate(items, 1):
+        row_data = [
+            idx,
+            item.get("code", ""),
+            item.get("color", ""),
+            item.get("size", ""),
+            item.get("quantity", 0),
+            item.get("unit_price", 0),
+            item.get("net_amount", 0)
+        ]
+        for i, val in enumerate(row_data):
+            col_letter = chr(ord('A') + i)
+            cell = ws[f"{col_letter}{r}"]
+            cell.value = val
+            cell.font = FONT_BODY
+            cell.border = border_all
+            if i in (4, 5, 6): # 数値列
+                cell.alignment = Alignment(horizontal="center" if i == 4 else "right", vertical="center")
+                if i in (5, 6):
+                    cell.number_format = '"¥"#,##0'
+            else:
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+        r += 1
+
+    # 合計部分
+    r += 1
+    ws.merge_cells(f"E{r}:F{r}")
+    ws[f"E{r}"] = "小計:"
+    ws[f"E{r}"].font = FONT_BODY
+    ws[f"E{r}"].alignment = Alignment(horizontal="right", vertical="center")
+    ws[f"G{r}"] = invoice_data.get("total_net_amount", 0)
+    ws[f"G{r}"].font = FONT_BODY
+    ws[f"G{r}"].number_format = '"¥"#,##0'
+    ws[f"G{r}"].alignment = Alignment(horizontal="right", vertical="center")
+
+    r += 1
+    ws.merge_cells(f"E{r}:F{r}")
+    ws[f"E{r}"] = "消費税(10%):"
+    ws[f"E{r}"].font = FONT_BODY
+    ws[f"E{r}"].alignment = Alignment(horizontal="right", vertical="center")
+    ws[f"G{r}"] = invoice_data.get("total_tax_amount", 0)
+    ws[f"G{r}"].font = FONT_BODY
+    ws[f"G{r}"].number_format = '"¥"#,##0'
+    ws[f"G{r}"].alignment = Alignment(horizontal="right", vertical="center")
+
+    r += 1
+    ws.merge_cells(f"E{r}:F{r}")
+    ws[f"E{r}"] = "合計金額:"
+    ws[f"E{r}"].font = FONT_TOTAL
+    ws[f"E{r}"].alignment = Alignment(horizontal="right", vertical="center")
+    
+    ws[f"G{r}"] = invoice_data.get("total_grand_total", 0)
+    ws[f"G{r}"].font = FONT_TOTAL
+    ws[f"G{r}"].number_format = '"¥"#,##0'
+    ws[f"G{r}"].alignment = Alignment(horizontal="right", vertical="center")
+
+    # 上線
+    for col in ("E", "F", "G"):
+        ws[f"{col}{r}"].border = Border(top=Side(style='medium', color='000000'))
+
+    if is_preview:
+        from tempfile import NamedTemporaryFile
+        with NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp:
+            wb.save(tmp.name)
+            with open(tmp.name, "rb") as f:
+                data = f.read()
+        import os
+        os.unlink(tmp.name)
+        return data
+
+    out = BytesIO()
+    wb.save(out)
+    return out.getvalue()
+
+
 def build_all_files(invoice_data: dict, is_preview: bool = False) -> dict:
-    """4ファイルまとめて生成"""
+    """5ファイルまとめて生成"""
     doc_type = invoice_data.get("doc_type", "delivery")
     return {
         "pdf": build_invoice_pdf(invoice_data),
         "excel": build_invoice_excel(invoice_data, is_preview=is_preview),
         "detail_pdf": build_detail_pdf(invoice_data["invoice_number"], invoice_data["customer_name"], invoice_data["items"], doc_type, invoice_data.get("user_name", "")),
         "detail_excel": build_detail_excel(invoice_data["invoice_number"], invoice_data["customer_name"], invoice_data["items"], doc_type, invoice_data.get("user_name", "")),
+        "client_excel": build_client_excel(invoice_data, is_preview=is_preview),
     }
 
 def build_single_file(kind: str, invoice_data: dict) -> bytes:
@@ -1862,7 +2018,7 @@ def _save_invoice_record(payload: "DocumentRequest"):
             cur.execute("""
                 UPDATE invoices SET customer_name=%s, customer_code=%s, discount_rate=%s, total_net_amount=%s, total_tax_amount=%s, total_grand_total=%s,
                 item_count=%s, status='draft', locked_at=NULL, doc_type=%s, user_id=%s, issue_date=%s,
-                pdf_storage_path=NULL, excel_storage_path=NULL, detail_pdf_storage_path=NULL, detail_excel_storage_path=NULL
+                pdf_storage_path=NULL, excel_storage_path=NULL, detail_pdf_storage_path=NULL, detail_excel_storage_path=NULL, client_excel_storage_path=NULL
                 WHERE id=%s
             """, (payload.customer_name, payload.customer_code, payload.discount_rate, inv_data["total_net_amount"], inv_data["total_tax_amount"], inv_data["total_grand_total"], len(inv_data["items"]), doc_type, payload.user_id, payload.issue_date, payload.invoice_id))
             cur.execute("DELETE FROM invoice_items WHERE invoice_id=%s", (payload.invoice_id,))
@@ -2011,6 +2167,7 @@ KIND_CONFIG = {
     "excel":        {"path_field": "excel_storage_path",        "mime": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",         "ext": "xlsx", "files_key": "excel"},
     "detail_pdf":   {"path_field": "detail_pdf_storage_path",   "mime": "application/pdf",                                                            "ext": "pdf",  "files_key": "detail_pdf"},
     "detail_excel": {"path_field": "detail_excel_storage_path", "mime": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",         "ext": "xlsx", "files_key": "detail_excel"},
+    "client_excel": {"path_field": "client_excel_storage_path", "mime": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",         "ext": "xlsx", "files_key": "client_excel"},
 }
 
 def serve_file(inv_id: int, kind: str, disposition: str = "attachment"):
@@ -2086,6 +2243,10 @@ def dl_detail_pdf(inv_id: int, username: Annotated[str, Depends(authenticate)]):
 @app.get("/api/history/{inv_id}/detail-excel")
 def dl_detail_excel(inv_id: int, username: Annotated[str, Depends(authenticate)]):
     return serve_file(inv_id, "detail_excel")
+
+@app.get("/api/history/{inv_id}/client-excel")
+def dl_client_excel(inv_id: int, username: Annotated[str, Depends(authenticate)]):
+    return serve_file(inv_id, "client_excel")
 
 @app.get("/api/history/{inv_id}/pdf-preview", response_class=HTMLResponse)
 def preview_pdf(inv_id: int, username: Annotated[str, Depends(authenticate)]):
@@ -2204,6 +2365,7 @@ def get_invoice_generated_files(inv_id: int):
         "excel": "excel_storage_path",
         "detail_pdf": "detail_pdf_storage_path",
         "detail_excel": "detail_excel_storage_path",
+        "client_excel": "client_excel_storage_path",
     }
 
     # 確定済みかつ4ファイルのキャッシュが揃っている場合はStorageを優先
@@ -2239,6 +2401,8 @@ def dl_zip(inv_id: int, username: Annotated[str, Depends(authenticate)]):
             z.writestr(f"{inv_num}_{customer}_{titles['pdf_title']}.xlsx", files["excel"])
             z.writestr(f"{inv_num}_{customer}_{titles['detail_pdf_title']}.pdf", files["detail_pdf"])
             z.writestr(f"{inv_num}_{customer}_{titles['detail_pdf_title']}.xlsx", files["detail_excel"])
+            if "client_excel" in files and files["client_excel"]:
+                z.writestr(f"{inv_num}_{customer}_{titles['pdf_title']}_提出用.xlsx", files["client_excel"])
         
         zip_buffer.seek(0)
         
@@ -2276,14 +2440,14 @@ def get_history_items(inv_id: int, username: Annotated[str, Depends(authenticate
 @app.delete("/api/history/{inv_id}")
 def delete_history(inv_id: int, username: Annotated[str, Depends(authenticate)]):
     with db_conn() as conn, conn.cursor() as cur:
-        cur.execute("SELECT pdf_storage_path, excel_storage_path, detail_pdf_storage_path, detail_excel_storage_path FROM invoices WHERE id = %s", (inv_id,))
+        cur.execute("SELECT pdf_storage_path, excel_storage_path, detail_pdf_storage_path, detail_excel_storage_path, client_excel_storage_path FROM invoices WHERE id = %s", (inv_id,))
         row = cur.fetchone()
         if not row: raise HTTPException(404, "Invoice not found")
         
         # 確定済みであっても削除を許可する（403回避）
         
         if STORAGE_BUCKET and supabase_client:
-            for col in ['pdf_storage_path', 'excel_storage_path', 'detail_pdf_storage_path', 'detail_excel_storage_path']:
+            for col in ['pdf_storage_path', 'excel_storage_path', 'detail_pdf_storage_path', 'detail_excel_storage_path', 'client_excel_storage_path']:
                 path = row.get(col)
                 if not path:
                     continue
@@ -2516,6 +2680,7 @@ def get_history_data(inv_id: int, username: Annotated[str, Depends(authenticate)
         "excel_base64": base64.b64encode(files["excel"]).decode(),
         "detail_pdf_base64": base64.b64encode(files["detail_pdf"]).decode(),
         "detail_excel_base64": base64.b64encode(files["detail_excel"]).decode(),
+        "client_excel_base64": base64.b64encode(files["client_excel"]).decode() if files.get("client_excel") else None,
     }
 
 

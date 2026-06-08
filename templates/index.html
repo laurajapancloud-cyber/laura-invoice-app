@@ -3948,6 +3948,7 @@
           <button class="doctype-btn" data-type="return">返品</button>
           <button class="doctype-btn" data-type="prov_delivery">仮納品</button>
           <button class="doctype-btn" data-type="prov_return">仮返品</button>
+          <button class="doctype-btn" data-type="statement">明細表</button>
         </div>
         <div class="form-row">
           <div class="form-group" style="max-width:140px;">
@@ -4293,6 +4294,7 @@
             <option value="return">返品伝票</option>
             <option value="prov_delivery">仮納品</option>
             <option value="prov_return">仮返品</option>
+            <option value="statement">明細表</option>
           </select>
           <select id="hist-user-filter" style="padding:12px; border-radius:10px;">
             <option value="">すべてのユーザー</option>
@@ -4387,7 +4389,7 @@
                         @click.stop="unlockHist(inv.id)">解除</button>
                       <button x-if="inv.status === 'locked'" class="btn btn-blue btn-sm"
                         @click.stop="uploadDrive(inv.id, $el)">保存 Drive</button>
-                      <button class="btn btn-outline btn-sm" @click.stop="downloadZip(inv.id)">ZIP</button>
+                      <button class="btn btn-outline btn-sm" @click.stop="downloadZip(inv.id)" title="PDFとExcelが含まれています">ZIP (Excel含)</button>
                       <button x-if="inv.status !== 'locked'" class="btn btn-outline btn-sm"
                         @click.stop="editHist(inv.id)">編集</button>
                       <button class="btn btn-red btn-sm" x-init="bindLongPress($el, () => delHist(inv.id))"
@@ -4839,6 +4841,7 @@
       return: { main: '返品書', detail: '返品明細表', label: '返品', pdf_title: '返品書', detail_pdf_title: '返品明細表' },
       prov_delivery: { main: '仮納品書', detail: '仮納品明細表', label: '仮納品', pdf_title: '仮納品書', detail_pdf_title: '仮納品明細表' },
       prov_return: { main: '仮返品書', detail: '仮返品明細表', label: '仮返品', pdf_title: '仮返品書', detail_pdf_title: '仮返品明細表' },
+      statement: { main: '明細表', detail: '明細表', label: '明細表', pdf_title: '明細表', detail_pdf_title: '明細表' },
     };
 
     // ★追加: 共通のファイル名生成関数（Python側と完全に同じ書式）
@@ -4860,7 +4863,8 @@
     }
     const TYPE_COLORS = {
       delivery: 'var(--gold)', return: 'var(--red)',
-      prov_delivery: 'var(--blue)', prov_return: '#a87fb8'
+      prov_delivery: 'var(--blue)', prov_return: '#a87fb8',
+      statement: '#5bc0be'
     };
 
     // --- User Functions ---
@@ -5863,7 +5867,7 @@
 								<button class="btn btn-outline btn-sm" onclick="editHist(${d.invoice_id})">✎ 編集</button>
 								${lockBtn}
 								${driveBtn}
-								<button class="btn btn-outline btn-sm" onclick="downloadZip(${d.invoice_id})">ZIP</button>
+								<button class="btn btn-outline btn-sm" onclick="downloadZip(${d.invoice_id})" title="PDFとExcelが含まれています">ZIP (Excel含)</button>
 								<button class="btn btn-red btn-sm" onclick="delHist(${d.invoice_id})">✕ 削除</button>
 							</div>
 						</div>
