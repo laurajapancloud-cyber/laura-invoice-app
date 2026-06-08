@@ -3776,7 +3776,8 @@
         <div class="preview-pane" id="m-ppane-excel">
           <div id="excel-preview-grid" class="excel-preview-container"></div>
           <div class="preview-actions">
-            <button class="btn btn-green btn-dl-xl">📊 Excel保存</button>
+            <button class="btn btn-green btn-dl-xl" title="バーコード付き">📊 会社控Excel</button>
+            <button class="btn btn-green btn-dl-client-xl" title="掛率なし・PDFレイアウト">📊 提出用Excel</button>
           </div>
         </div>
 
@@ -5458,7 +5459,7 @@
       }
 
       // ダウンロードボタンの表示制御
-      const dlBtns = ['.btn-dl-pdf', '.btn-dl-xl', '.btn-dl-dpdf', '.btn-dl-dxl'].map(s => document.querySelector(s));
+      const dlBtns = ['.btn-dl-pdf', '.btn-dl-xl', '.btn-dl-client-xl', '.btn-dl-dpdf', '.btn-dl-dxl'].map(s => document.querySelector(s));
       dlBtns.forEach(btn => { if(btn) btn.style.display = (isPreviewOnly && !d.id) ? 'none' : 'flex'; });
 
       setTimeout(() => {
@@ -5470,6 +5471,7 @@
       const dateISO = d.locked_at || d.created_at;
       const fPdf = getFileName(d.doc_type, customer, dateISO, 'pdf');
       const fXl = getFileName(d.doc_type, customer, dateISO, 'excel');
+      const fClientXl = fXl.replace('.xlsx', '_提出用.xlsx');
       const fDpdf = getFileName(d.doc_type, customer, dateISO, 'detail-pdf');
       const fDxl = getFileName(d.doc_type, customer, dateISO, 'detail-excel');
 
@@ -5477,11 +5479,15 @@
         if (isNativeApp) {
           document.querySelector('.btn-dl-pdf').onclick = () => dlFromServer(`/api/history/${d.id}/pdf`, fPdf);
           document.querySelector('.btn-dl-xl').onclick = () => dlFromServer(`/api/history/${d.id}/excel`, fXl);
+          const btnClientXl = document.querySelector('.btn-dl-client-xl');
+          if(btnClientXl) btnClientXl.onclick = () => dlFromServer(`/api/history/${d.id}/client-excel`, fClientXl);
           document.querySelector('.btn-dl-dpdf').onclick = () => dlFromServer(`/api/history/${d.id}/detail-pdf`, fDpdf);
           document.querySelector('.btn-dl-dxl').onclick = () => dlFromServer(`/api/history/${d.id}/detail-excel`, fDxl);
         } else {
           document.querySelector('.btn-dl-pdf').onclick = () => dlFromServer(`/api/history/${d.id}/pdf`, fPdf);
           document.querySelector('.btn-dl-xl').onclick = () => dlFromServer(`/api/history/${d.id}/excel`, fXl);
+          const btnClientXl = document.querySelector('.btn-dl-client-xl');
+          if(btnClientXl) btnClientXl.onclick = () => dlFromServer(`/api/history/${d.id}/client-excel`, fClientXl);
           document.querySelector('.btn-dl-dpdf').onclick = () => dlFromServer(`/api/history/${d.id}/detail-pdf`, fDpdf);
           document.querySelector('.btn-dl-dxl').onclick = () => dlFromServer(`/api/history/${d.id}/detail-excel`, fDxl);
         }
@@ -5843,6 +5849,7 @@
         // ファイル名を生成
         const fPdf = getFileName(d.doc_type, d.customer_name, d.locked_at || d.created_at, 'pdf');
         const fXl = getFileName(d.doc_type, d.customer_name, d.locked_at || d.created_at, 'excel');
+        const fClientXl = fXl.replace('.xlsx', '_提出用.xlsx');
         const fDpdf = getFileName(d.doc_type, d.customer_name, d.locked_at || d.created_at, 'detail-pdf');
         const fDxl = getFileName(d.doc_type, d.customer_name, d.locked_at || d.created_at, 'detail-excel');
 
@@ -5880,7 +5887,8 @@
 							<iframe class="pdf-preview-frame" src="${d.pdf_preview_url || d.pdf_url}"></iframe>
 							<div class="preview-actions">
 								<button class="btn btn-red" onclick="dlFromServer('/api/history/${d.invoice_id}/pdf','${fPdf}')">📄 PDF保存</button>
-								<button class="btn btn-green" onclick="dlFromServer('/api/history/${d.invoice_id}/excel','${fXl}')">📊 Excel保存</button>
+								<button class="btn btn-green" onclick="dlFromServer('/api/history/${d.invoice_id}/excel','${fXl}')" title="バーコード付き">📊 会社控Excel</button>
+								<button class="btn btn-green" onclick="dlFromServer('/api/history/${d.invoice_id}/client-excel','${fClientXl}')" title="掛率なし・PDFレイアウト">📊 提出用Excel</button>
 							</div>
 						</div>
 						<div class="preview-pane" id="dpane-detail">
