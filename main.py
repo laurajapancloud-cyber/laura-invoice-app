@@ -1889,6 +1889,9 @@ def build_single_file(kind: str, invoice_data: dict) -> bytes:
             invoice_data.get("user_name", ""),
         )
 
+    if kind == "client_excel":
+        return build_client_excel(invoice_data)
+
     raise ValueError(f"Unsupported file kind: {kind}")
 
 def assemble_invoice_data(inv_info: dict, items_input: list, discount_rate: int, doc_type='delivery') -> dict:
