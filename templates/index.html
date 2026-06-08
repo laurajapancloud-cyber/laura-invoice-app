@@ -5413,9 +5413,14 @@
       // ==========================================
       // ★修正箇所: メイン（納品書）の表示
       // ==========================================
-      $('modal-pdf-frame').removeAttribute('src'); // srcは使わない
+      $('modal-pdf-frame').removeAttribute('src');
+      $('modal-pdf-frame').removeAttribute('srcdoc');
       if (d.html_preview) {
         $('modal-pdf-frame').srcdoc = d.html_preview; // HTML文字列を直接流し込む
+      } else if (d.pdf_preview_url || d.pdf_url) {
+        $('modal-pdf-frame').src = d.pdf_preview_url || d.pdf_url;
+      } else if (pdfData) {
+        $('modal-pdf-frame').src = `data:application/pdf;base64,${pdfData}#toolbar=0&navpanes=0&scrollbar=0`;
       } else {
         $('modal-pdf-frame').srcdoc = '<div style="padding:20px;text-align:center;">プレビューデータを取得できませんでした</div>';
       }
@@ -5423,7 +5428,8 @@
       // ==========================================
       // ★修正箇所: 明細表の表示
       // ==========================================
-      $('modal-detail-frame').removeAttribute('src'); // srcは使わない
+      $('modal-detail-frame').removeAttribute('src');
+      $('modal-detail-frame').removeAttribute('srcdoc');
       if (d.detail_html_preview) {
         $('modal-detail-frame').srcdoc = d.detail_html_preview; // HTML文字列を直接流し込む
       } else if (isPreviewOnly) {
@@ -5432,6 +5438,10 @@
             明細PDFは保存後に生成されます
           </div>
         `;
+      } else if (d.detail_pdf_preview_url || d.detail_pdf_url) {
+        $('modal-detail-frame').src = d.detail_pdf_preview_url || d.detail_pdf_url;
+      } else if (detailPdfData) {
+        $('modal-detail-frame').src = `data:application/pdf;base64,${detailPdfData}#toolbar=0&navpanes=0&scrollbar=0`;
       } else {
         $('modal-detail-frame').srcdoc = '<div style="padding:20px;text-align:center;">プレビューデータを取得できませんでした</div>';
       }
