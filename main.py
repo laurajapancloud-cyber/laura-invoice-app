@@ -1743,7 +1743,7 @@ def build_client_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
     ws["F3"].alignment = Alignment(horizontal="right", vertical="center")
 
     ws.merge_cells("F4:G4")
-    ws["F4"] = f"発行者: LAURA FELICE"
+    ws["F4"] = f"発行者: 株式会社 ラウラジャパン"
     ws["F4"].font = FONT_BODY
     ws["F4"].alignment = Alignment(horizontal="right", vertical="center")
 
