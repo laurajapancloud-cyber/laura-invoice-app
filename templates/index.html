@@ -4,8 +4,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://cdn.sheetjs.com" crossorigin>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <title>LAURA JAPAN | Invoice System</title>
-  <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+  <script defer src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
   <link
     href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700;800&family=Noto+Sans+JP:wght@300;400;500;700&display=swap"
@@ -1932,8 +1936,15 @@
       }
 
       @keyframes pulse-dot {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.4; }
+
+        0%,
+        100% {
+          opacity: 1;
+        }
+
+        50% {
+          opacity: 0.4;
+        }
       }
 
       .statusbar-spacer {
@@ -1954,7 +1965,9 @@
         max-width: 1400px;
         padding: 28px 36px 60px;
       }
-    } /* end layout @media */
+    }
+
+    /* end layout @media */
 
     /* ===== History as Master-Detail Split ===== */
     @media (min-width: 1024px) {
@@ -2004,9 +2017,10 @@
     }
 
     @media (min-width: 1024px) {
+
       /* History list as proper data table (操作は詳細ペイン側に集約) */
-    .hist-table-header {
-      display: grid !important;
+      .hist-table-header {
+        display: grid !important;
         grid-template-columns: 110px 52px minmax(140px, 1fr) 110px 84px !important;
         gap: 8px !important;
         padding: 10px 12px;
@@ -2034,8 +2048,13 @@
         color: var(--gold-bright);
       }
 
-      .hist-table-header span:nth-child(2) { text-align: center; }
-      .hist-table-header span:nth-child(5) { text-align: center; }
+      .hist-table-header span:nth-child(2) {
+        text-align: center;
+      }
+
+      .hist-table-header span:nth-child(5) {
+        text-align: center;
+      }
 
       .hist-table-header span.sort-asc::after {
         content: ' ▲';
@@ -2088,8 +2107,8 @@
         min-width: 0;
       }
 
-      .hist-item > div:nth-child(2),
-      .hist-item > div:nth-child(5) {
+      .hist-item>div:nth-child(2),
+      .hist-item>div:nth-child(5) {
         display: flex;
         justify-content: center;
         align-items: center;
@@ -2470,7 +2489,7 @@
       }
     }
 
-      @media (min-width: 1024px) {
+    @media (min-width: 1024px) {
       .modal-content {
         max-width: 1100px !important;
       }
@@ -2843,9 +2862,9 @@
       z-index: 9500;
       padding: 10px 12px;
       border-radius: 12px;
-      background: rgba(24,24,24,0.96);
+      background: rgba(24, 24, 24, 0.96);
       border: 1px solid var(--border-strong);
-      box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
       color: var(--text-secondary);
       font-size: 12px;
     }
@@ -2853,7 +2872,7 @@
     .active-job-bar {
       margin-top: 6px;
       height: 3px;
-      background: rgba(255,255,255,0.08);
+      background: rgba(255, 255, 255, 0.08);
       border-radius: 999px;
       overflow: hidden;
     }
@@ -2866,8 +2885,13 @@
     }
 
     @keyframes activeJobPulse {
-      0% { transform: translateX(-120%); }
-      100% { transform: translateX(320%); }
+      0% {
+        transform: translateX(-120%);
+      }
+
+      100% {
+        transform: translateX(320%);
+      }
     }
 
     @media (min-width: 1024px) {
@@ -3613,6 +3637,7 @@
       color: var(--gold-bright);
       border-color: var(--gold);
     }
+
     /* スマホ向け：ヘッダーをスリムなバーに変身させる */
     @media (max-width: 1023px) {
       .app-header {
@@ -3622,24 +3647,30 @@
         justify-content: space-between;
         min-height: 52px;
       }
+
       .app-header .logo {
         font-size: 16px;
         margin: 0;
         letter-spacing: 0.15em;
         text-indent: 0;
       }
+
       .app-header .logo-sub,
       .app-header .divider-gold {
-        display: none !important; /* スマホでは不要な装飾を消す */
+        display: none !important;
+        /* スマホでは不要な装飾を消す */
       }
+
       #mobile-user-chip {
         margin: 0 !important;
       }
     }
+
     /* ===== Custom Searchable Dropdown ===== */
     .custom-select-wrap {
       position: relative;
     }
+
     .custom-select-input {
       width: 100%;
       padding: 12px 14px;
@@ -3653,11 +3684,13 @@
       transition: all 0.2s;
       cursor: text;
     }
+
     .custom-select-input:focus {
       border-color: var(--gold-bright);
       box-shadow: 0 0 0 3px rgba(232, 196, 104, 0.16);
       outline: none;
     }
+
     .custom-select-dropdown {
       position: absolute;
       top: 100%;
@@ -3670,8 +3703,9 @@
       border-radius: 10px;
       max-height: 250px;
       overflow-y: auto;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
     }
+
     .custom-select-item {
       padding: 12px 14px;
       font-size: 14px;
@@ -3680,25 +3714,406 @@
       color: var(--text-primary);
       transition: background 0.1s;
     }
+
     .custom-select-item:hover {
       background: rgba(201, 169, 97, 0.12);
       color: var(--gold-bright);
     }
+
     .custom-select-item:last-child {
       border-bottom: none;
     }
+
     .custom-select-meta {
       font-size: 11px;
       color: var(--text-muted);
       margin-left: 8px;
     }
+
     /* ライトモード用の上書き */
     [data-theme="light"] .custom-select-dropdown {
-      background: #ffffff; border-color: var(--border-strong); box-shadow: var(--shadow-md);
+      background: #ffffff;
+      border-color: var(--border-strong);
+      box-shadow: var(--shadow-md);
     }
-    [data-theme="light"] .custom-select-item { border-bottom-color: var(--border-subtle); color: var(--text-primary); }
-    [data-theme="light"] .custom-select-input { background: #ffffff; color: var(--text-primary); border-color: var(--border-strong); }
-    [data-theme="light"] .custom-select-item:hover { background: var(--bg-card-hover); color: var(--gold-deep); }
+
+    [data-theme="light"] .custom-select-item {
+      border-bottom-color: var(--border-subtle);
+      color: var(--text-primary);
+    }
+
+    [data-theme="light"] .custom-select-input {
+      background: #ffffff;
+      color: var(--text-primary);
+      border-color: var(--border-strong);
+    }
+
+    [data-theme="light"] .custom-select-item:hover {
+      background: var(--bg-card-hover);
+      color: var(--gold-deep);
+    }
+
+    /* =========================================================
+       ===== MODERN REFRESH (2026-06) ==========================
+       デザイン刷新レイヤー: 後勝ちで既存スタイルを上書き
+       ========================================================= */
+
+    /* ---- Design tokens (dark refined) ---- */
+    html:not([data-theme="light"]) {
+      --bg-base: #0c0d10;
+      --bg-elevated: #121419;
+      --bg-card: #16181e;
+      --bg-card-hover: #1c1f26;
+      --bg-input: #0f1115;
+
+      --gold: #d2ab63;
+      --gold-bright: #ecd194;
+      --gold-deep: #9a7d42;
+      --gold-soft: rgba(210, 171, 99, 0.12);
+
+      --text-primary: #f5f3ed;
+      --text-secondary: #b7b3a8;
+      --text-muted: #807c70;
+
+      --border: rgba(255, 255, 255, 0.08);
+      --border-strong: rgba(236, 209, 148, 0.32);
+      --border-subtle: rgba(255, 255, 255, 0.05);
+
+      --shadow-sm: 0 1px 2px rgba(0, 0, 0, .45);
+      --shadow-md: 0 10px 30px -12px rgba(0, 0, 0, .55);
+      --shadow-gold: 0 8px 24px -10px rgba(210, 171, 99, .35);
+    }
+
+    html:not([data-theme="light"]) body {
+      background:
+        radial-gradient(ellipse 90% 55% at 50% -12%, rgba(210, 171, 99, .07), transparent 60%),
+        radial-gradient(ellipse 70% 45% at 85% 110%, rgba(120, 174, 232, .04), transparent 60%),
+        var(--bg-base);
+      background-attachment: fixed;
+    }
+
+    /* ---- Scrollbar / selection / focus ---- */
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+    }
+
+    *::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+
+    *::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.14);
+      border-radius: 99px;
+    }
+
+    *::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.24);
+    }
+
+    *::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::selection {
+      background: rgba(210, 171, 99, 0.35);
+    }
+
+    :focus-visible {
+      outline: 2px solid var(--gold);
+      outline-offset: 2px;
+      border-radius: 4px;
+    }
+
+    /* ---- Header: ロゴはブランドのまま、余白を引き締め ---- */
+    .app-header {
+      padding-top: 20px;
+    }
+
+    .logo {
+      font-size: 28px;
+      letter-spacing: 0.34em;
+      text-indent: 0.34em;
+    }
+
+    .logo-sub {
+      margin-bottom: 14px;
+    }
+
+    .divider-gold {
+      margin-bottom: 12px;
+    }
+
+    .tab {
+      border-radius: 8px 8px 0 0;
+    }
+
+    .tab:hover {
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    /* ---- Cards: フラット&クリーン、金線の装飾を撤去 ---- */
+    .card {
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-sm);
+      padding: 22px;
+    }
+
+    .card::before {
+      display: none;
+    }
+
+    .card-title {
+      font-family: 'Inter', 'Noto Sans JP', sans-serif;
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+      color: var(--text-primary);
+      margin-bottom: 16px;
+    }
+
+    /* ---- Forms ---- */
+    .form-group label {
+      letter-spacing: 0.08em;
+      font-size: 10.5px;
+      color: var(--text-muted);
+    }
+
+    .form-group input,
+    .form-group select {
+      background: var(--bg-input);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 12px;
+      transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus {
+      border-color: var(--gold);
+      box-shadow: 0 0 0 3px rgba(210, 171, 99, 0.18);
+    }
+
+    /* ---- Upload ---- */
+    .upload-area {
+      border-radius: 16px;
+      border-width: 1.5px;
+      border-color: rgba(255, 255, 255, 0.16);
+    }
+
+    .upload-area:hover {
+      border-color: var(--gold);
+      box-shadow: var(--shadow-gold);
+    }
+
+    /* ---- Buttons ---- */
+    .btn {
+      border-radius: 12px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+
+    .btn-gold {
+      background: linear-gradient(180deg, #e3c27c 0%, #cda85f 100%);
+      color: #17130a;
+      box-shadow: 0 1px 0 rgba(255, 255, 255, .25) inset, 0 6px 16px -6px rgba(210, 171, 99, .5);
+    }
+
+    .btn-gold:hover:not(:disabled) {
+      background: linear-gradient(180deg, #efd08c 0%, #d8b369 100%);
+      transform: translateY(-1px);
+      box-shadow: 0 1px 0 rgba(255, 255, 255, .3) inset, 0 10px 22px -8px rgba(210, 171, 99, .55);
+    }
+
+    .btn-dark,
+    .btn-outline {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+
+    .btn-dark:hover:not(:disabled),
+    .btn-outline:hover:not(:disabled) {
+      background: rgba(255, 255, 255, 0.07);
+      border-color: rgba(236, 209, 148, 0.45);
+    }
+
+    .btn-sm {
+      border-radius: 9px;
+    }
+
+    /* ---- Stats: 数字はサンセリフでくっきり ---- */
+    .stat-box {
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      text-align: left;
+      padding: 18px 18px 16px;
+    }
+
+    .stat-box::before {
+      display: none;
+    }
+
+    .stat-val {
+      font-family: 'Inter', 'Noto Sans JP', sans-serif;
+      font-size: 30px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: var(--text-primary);
+    }
+
+    #dash-inv-amt {
+      font-size: 26px !important;
+    }
+
+    .stat-label {
+      font-size: 10.5px;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+    }
+
+    .bar {
+      border-radius: 4px;
+      box-shadow: none;
+      background: linear-gradient(180deg, var(--gold-bright), var(--gold));
+      opacity: .92;
+    }
+
+    .usage-row strong {
+      color: var(--text-primary);
+    }
+
+    /* ---- History / Summary: 金額の視認性UP ---- */
+    .hist-num {
+      font-family: 'Inter', 'Noto Sans JP', sans-serif;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+      color: var(--text-primary);
+    }
+
+    .hist-amt {
+      font-family: 'Inter', 'Noto Sans JP', sans-serif;
+      font-size: 17px;
+      font-weight: 800;
+      letter-spacing: -0.01em;
+      color: var(--gold-bright);
+    }
+
+    .preview-summary {
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      background: var(--bg-elevated);
+    }
+
+    .preview-summary::before {
+      display: none;
+    }
+
+    .preview-summary-row.total {
+      font-family: 'Inter', 'Noto Sans JP', sans-serif;
+      font-size: 21px;
+      font-weight: 800;
+      letter-spacing: -0.01em;
+    }
+
+    .empty-state-title {
+      font-family: 'Inter', 'Noto Sans JP', sans-serif;
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+    }
+
+    .empty-state-icon {
+      filter: none;
+      opacity: .85;
+    }
+
+    .upload-icon {
+      filter: none;
+    }
+
+    /* ---- Item cards ---- */
+    .item-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+    }
+
+    .item-card:hover {
+      border-color: rgba(236, 209, 148, 0.35);
+      box-shadow: var(--shadow-sm);
+    }
+
+    /* ---- Doctype buttons ---- */
+    .doctype-btn {
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      font-weight: 600;
+    }
+
+    .doctype-btn.active {
+      background: var(--gold-soft);
+      border-color: rgba(210, 171, 99, 0.55);
+      color: var(--gold-bright);
+      box-shadow: none;
+    }
+
+    /* ---- Modal ---- */
+    .modal-content {
+      border-radius: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 0 24px 80px -20px rgba(0, 0, 0, 0.7);
+    }
+
+    /* ---- Bottom nav (mobile): ガラス調 ---- */
+    .bottom-nav {
+      background: rgba(14, 15, 18, 0.82);
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(18px) saturate(1.4);
+      -webkit-backdrop-filter: blur(18px) saturate(1.4);
+    }
+
+    .bn-tab {
+      border-radius: 12px;
+    }
+
+    .bn-tab.active {
+      background: var(--gold-soft);
+      color: var(--gold-bright);
+    }
+
+    /* ---- Badges ---- */
+    .status-badge {
+      letter-spacing: 0.03em;
+    }
+
+    .status-locked {
+      background: var(--gold-soft);
+      border-color: rgba(210, 171, 99, 0.45);
+    }
+
+    /* ---- Skeleton (dark refined) ---- */
+    html:not([data-theme="light"]) .skel {
+      background: linear-gradient(90deg,
+          rgba(255, 255, 255, 0.045) 0%,
+          rgba(255, 255, 255, 0.09) 50%,
+          rgba(255, 255, 255, 0.045) 100%);
+      background-size: 200% 100%;
+    }
+
+    /* ---- Motion: 過剰な動きを抑制 ---- */
+    @media (prefers-reduced-motion: reduce) {
+
+      *,
+      *::before,
+      *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
   </style>
 </head>
 
@@ -3958,7 +4373,8 @@
           </div>
           <div class="form-group" style="max-width:140px;">
             <label>店舗コード</label>
-            <input type="text" id="inp-customer-code" placeholder="例: 1001" oninput="handleCustomerCodeInput(this.value)">
+            <input type="text" id="inp-customer-code" placeholder="例: 1001"
+              oninput="handleCustomerCodeInput(this.value)">
           </div>
           <div class="form-group custom-select-wrap" x-data="{
             open: false,
@@ -4019,39 +4435,41 @@
             document.getElementById('sel-customer').addEventListener('change', () => syncFromSelect());
           ">
             <label>店名 (取引先)</label>
-            
+
             <select id="sel-customer" style="display:none;">
               <option value="manual" selected>-- 手動入力 --</option>
               <template x-for="c in $store.app.customers" :key="c.id">
                 <option :value="JSON.stringify(c)" x-text="c.name"></option>
               </template>
             </select>
-      
+
             <div style="position: relative;">
-              <input type="text" class="custom-select-input"
-                x-model="search" 
-                @focus="open = true; $el.select()" 
-                placeholder="🔍 検索または選択..." 
-                autocomplete="off">
-              <button type="button" x-show="search !== ''" @click.stop="selectCustomer('manual')" 
+              <input type="text" class="custom-select-input" x-model="search" @focus="open = true; $el.select()"
+                placeholder="🔍 検索または選択..." autocomplete="off">
+              <button type="button" x-show="search !== ''" @click.stop="selectCustomer('manual')"
                 style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 16px;">
                 ✕
               </button>
             </div>
-      
+
             <div x-show="open" class="custom-select-dropdown" x-transition style="display: none;">
-              <div class="custom-select-item" @click="selectCustomer('manual')" style="color: var(--gold); font-weight: bold;">
+              <div class="custom-select-item" @click="selectCustomer('manual')"
+                style="color: var(--gold); font-weight: bold;">
                 -- 手動入力 --
               </div>
               <template x-for="c in filteredCustomers" :key="c.id">
-                <div class="custom-select-item" @click="selectCustomer(c)" :style="c.user_id === currentUser?.id ? 'background: rgba(201, 169, 97, 0.05);' : ''">
+                <div class="custom-select-item" @click="selectCustomer(c)"
+                  :style="c.user_id === currentUser?.id ? 'background: rgba(201, 169, 97, 0.05);' : ''">
                   <span x-text="c.name"></span>
                   <span class="custom-select-meta" x-text="c.code ? `(${c.code})` : ''"></span>
-                  <span x-show="c.user_id === currentUser?.id" style="font-size:10px; background:var(--gold-deep); color:#111; padding:1px 4px; border-radius:3px; margin-left:4px;">担当</span>
-                  <span class="custom-select-meta" x-show="c.discount_rate" x-text="`${c.discount_rate}%`" style="float: right;"></span>
+                  <span x-show="c.user_id === currentUser?.id"
+                    style="font-size:10px; background:var(--gold-deep); color:#111; padding:1px 4px; border-radius:3px; margin-left:4px;">担当</span>
+                  <span class="custom-select-meta" x-show="c.discount_rate" x-text="`${c.discount_rate}%`"
+                    style="float: right;"></span>
                 </div>
               </template>
-              <div x-show="filteredCustomers.length === 0" style="padding: 12px; color: var(--text-muted); text-align: center;">
+              <div x-show="filteredCustomers.length === 0"
+                style="padding: 12px; color: var(--text-muted); text-align: center;">
                 見つかりません
               </div>
             </div>
@@ -4097,9 +4515,12 @@
 
       <div class="card" id="preview-card" style="display:none" x-data="{ isDesktop: window.innerWidth >= 1024 }"
         @resize.window.debounce.100ms="isDesktop = window.innerWidth >= 1024">
-        <div class="card-title" id="preview-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+        <div class="card-title" id="preview-title"
+          style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
           <span>✎ 読み取り結果（タップで修正可能）</span>
-          <button class="btn btn-outline" style="font-size:12px; padding:6px 12px; border-color:var(--gold); color:var(--gold);" onclick="window.scrollTo({top:$('drop-area').offsetTop - 20, behavior:'smooth'})">
+          <button class="btn btn-outline"
+            style="font-size:12px; padding:6px 12px; border-color:var(--gold); color:var(--gold);"
+            onclick="window.scrollTo({top:$('drop-area').offsetTop - 20, behavior:'smooth'})">
             ➕ さらに追加撮影する
           </button>
         </div>
@@ -4154,32 +4575,44 @@
         <div class="item-cards" x-show="!isDesktop">
           <template x-for="(item, index) in $store.app.items" :key="index">
             <div x-data="{ expanded: validateItem(item).level !== 'ok' || $store.app.items.length === 1 }"
-                 :class="'item-card ai-' + validateItem(item).level">
+              :class="'item-card ai-' + validateItem(item).level">
 
               <!-- アコーディオンヘッダー -->
-              <div class="item-card-summary" @click="expanded = !expanded" style="display:flex; align-items:center; gap: 12px; cursor: pointer;">
+              <div class="item-card-summary" @click="expanded = !expanded"
+                style="display:flex; align-items:center; gap: 12px; cursor: pointer;">
                 <template x-if="item.source_images && item.source_images.length">
-                  <img :src="item.source_images[0].thumb" style="width:48px; height:64px; object-fit:cover; border-radius:6px; flex-shrink:0; border: 1px solid var(--border);">
+                  <img :src="item.source_images[0].thumb"
+                    style="width:48px; height:64px; object-fit:cover; border-radius:6px; flex-shrink:0; border: 1px solid var(--border);">
                 </template>
                 <template x-if="!(item.source_images && item.source_images.length)">
-                  <div style="width:48px; height:64px; background:var(--bg-input); border-radius:6px; flex-shrink:0; display:flex; align-items:center; justify-content:center; color:var(--text-muted); font-size:10px; border: 1px solid var(--border);">No Img</div>
+                  <div
+                    style="width:48px; height:64px; background:var(--bg-input); border-radius:6px; flex-shrink:0; display:flex; align-items:center; justify-content:center; color:var(--text-muted); font-size:10px; border: 1px solid var(--border);">
+                    No Img</div>
                 </template>
 
                 <div style="flex: 1; min-width:0;">
                   <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:4px;">
-                    <div style="font-weight:700; color:var(--text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:15px;" x-text="item.code || '(品番なし)'"></div>
-                    <div style="font-size:15px; font-weight:700; color:var(--gold-bright); font-family: 'Cormorant Garamond', serif; letter-spacing: 0.05em;" x-text="'¥' + $store.app.calcItemAmount(item).toLocaleString()"></div>
+                    <div
+                      style="font-weight:700; color:var(--text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:15px;"
+                      x-text="item.code || '(品番なし)'"></div>
+                    <div
+                      style="font-size:15px; font-weight:700; color:var(--gold-bright); font-family: 'Cormorant Garamond', serif; letter-spacing: 0.05em;"
+                      x-text="'¥' + $store.app.calcItemAmount(item).toLocaleString()"></div>
                   </div>
                   <div style="font-size:12px; color:var(--text-muted); display:flex; justify-content:space-between;">
                     <span x-text="(item.color || '-') + ' / ' + (item.size || '-')"></span>
                     <span x-text="item.quantity + '個'"></span>
                   </div>
                   <div x-show="validateItem(item).level !== 'ok'" style="margin-top:6px;">
-                    <span :class="'ai-badge ai-badge-' + validateItem(item).level" x-text="validateItem(item).level === 'error' ? '⚠ 要確認' : '⚠ 警告'" style="padding:3px 8px; font-size:10px;"></span>
+                    <span :class="'ai-badge ai-badge-' + validateItem(item).level"
+                      x-text="validateItem(item).level === 'error' ? '⚠ 要確認' : '⚠ 警告'"
+                      style="padding:3px 8px; font-size:10px;"></span>
                   </div>
                 </div>
 
-                <div style="color:var(--text-muted); font-size:14px; transition:transform 0.2s; width: 20px; text-align: center;" :style="expanded ? 'transform: rotate(180deg)' : ''">
+                <div
+                  style="color:var(--text-muted); font-size:14px; transition:transform 0.2s; width: 20px; text-align: center;"
+                  :style="expanded ? 'transform: rotate(180deg)' : ''">
                   ▼
                 </div>
               </div>
@@ -4206,9 +4639,11 @@
                 </div>
 
                 <template x-if="item.source_images && item.source_images.length">
-                  <div class="source-thumbs" style="position: sticky; top: 50px; z-index: 10; background: var(--bg-card); padding: 8px; border-radius: 8px; border: 1px solid var(--border-strong); box-shadow: var(--shadow-md); margin-bottom: 14px; justify-content: center;">
+                  <div class="source-thumbs"
+                    style="position: sticky; top: 50px; z-index: 10; background: var(--bg-card); padding: 8px; border-radius: 8px; border: 1px solid var(--border-strong); box-shadow: var(--shadow-md); margin-bottom: 14px; justify-content: center;">
                     <template x-for="src in item.source_images">
-                      <img class="source-thumb" :src="src.thumb" @click="openSourceImage(src.thumb)" style="width: auto; height: 140px; object-fit: contain;">
+                      <img class="source-thumb" :src="src.thumb" @click="openSourceImage(src.thumb)"
+                        style="width: auto; height: 140px; object-fit: contain;">
                     </template>
                   </div>
                 </template>
@@ -4425,7 +4860,8 @@
                         @click.stop="unlockHist(inv.id)">解除</button>
                       <button x-if="inv.status === 'locked'" class="btn btn-blue btn-sm"
                         @click.stop="uploadDrive(inv.id, $el)">保存 Drive</button>
-                      <button class="btn btn-outline btn-sm" @click.stop="downloadZip(inv.id)" title="PDFとExcelが含まれています">ZIP (Excel含)</button>
+                      <button class="btn btn-outline btn-sm" @click.stop="downloadZip(inv.id)"
+                        title="PDFとExcelが含まれています">ZIP (Excel含)</button>
                       <button x-if="inv.status !== 'locked'" class="btn btn-outline btn-sm"
                         @click.stop="editHist(inv.id)">編集</button>
                       <button class="btn btn-red btn-sm" x-init="bindLongPress($el, () => delHist(inv.id))"
@@ -4434,6 +4870,9 @@
                   </div>
                 </div>
               </template>
+            </div>
+            <div style="text-align: center; padding: 16px;">
+              <button class="btn btn-outline" style="width: 100%; max-width: 300px;" @click="$store.app.fetchHistory(currentHistoryType, true)" x-show="$store.app.rawHistory.length >= 200">さらに読み込む</button>
             </div>
           </template>
         </div>
@@ -4459,14 +4898,16 @@
           </div>
         </div>
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:16px;">
-          <div style="padding:12px; background:rgba(46,94,62,0.15); border-radius:10px; border:1px solid rgba(46,94,62,0.3);">
+          <div
+            style="padding:12px; background:rgba(46,94,62,0.15); border-radius:10px; border:1px solid rgba(46,94,62,0.3);">
             <div style="font-size:11px; color:var(--green); letter-spacing:0.08em; margin-bottom:4px;">📦 納品</div>
             <div style="display:flex; justify-content:space-between; align-items:baseline;">
               <span id="dash-delivery-cnt" style="font-size:22px; font-weight:700; color:var(--text-primary);">0</span>
               <span id="dash-delivery-amt" style="font-size:14px; color:var(--text-secondary);">¥0</span>
             </div>
           </div>
-          <div style="padding:12px; background:rgba(200,51,46,0.12); border-radius:10px; border:1px solid rgba(200,51,46,0.3);">
+          <div
+            style="padding:12px; background:rgba(200,51,46,0.12); border-radius:10px; border:1px solid rgba(200,51,46,0.3);">
             <div style="font-size:11px; color:var(--red); letter-spacing:0.08em; margin-bottom:4px;">↩ 返品</div>
             <div style="display:flex; justify-content:space-between; align-items:baseline;">
               <span id="dash-return-cnt" style="font-size:22px; font-weight:700; color:var(--text-primary);">0</span>
@@ -4504,17 +4945,22 @@
       <div class="card">
         <div class="card-title">⚜ 取引先マスタ</div>
         <div style="margin-bottom:12px; display:flex; gap:8px; align-items:center;">
-          <input type="text" id="cust-search" placeholder="🔍 店名・コードで検索..." style="flex:1; padding:8px 12px; font-size:13px; background:var(--bg-input); border:1px solid var(--border); border-radius:8px; color:var(--text-primary);" oninput="filterCustomerList(this.value)">
+          <input type="text" id="cust-search" placeholder="🔍 店名・コードで検索..."
+            style="flex:1; padding:8px 12px; font-size:13px; background:var(--bg-input); border:1px solid var(--border); border-radius:8px; color:var(--text-primary);"
+            oninput="filterCustomerList(this.value)">
         </div>
         <div id="cust-list" style="display:flex; flex-direction:column; gap:6px; max-height:400px; overflow-y:auto;">
           <template x-for="c in $store.app.customers" :key="c.id">
-            <div class="user-pill cust-row" :data-cust-id="c.id" style="justify-content:space-between; padding:10px 14px; flex-wrap:wrap;">
+            <div class="user-pill cust-row" :data-cust-id="c.id"
+              style="justify-content:space-between; padding:10px 14px; flex-wrap:wrap;">
               <!-- 表示モード -->
-              <div class="cust-display" style="display:flex; align-items:center; justify-content:space-between; width:100%;">
+              <div class="cust-display"
+                style="display:flex; align-items:center; justify-content:space-between; width:100%;">
                 <div>
                   <span x-text="c.name" style="font-weight:600"></span>
                   <span x-show="c.code" x-text="` (${c.code})`" style="font-size:11px; color:var(--text-muted)"></span>
-                  <span x-show="c.user_name" x-text="`担当: ${c.user_name}`" style="font-size:10px; background:var(--gold-soft); color:var(--gold-bright); padding:2px 6px; border-radius:4px; margin-left:8px;"></span>
+                  <span x-show="c.user_name" x-text="`担当: ${c.user_name}`"
+                    style="font-size:10px; background:var(--gold-soft); color:var(--gold-bright); padding:2px 6px; border-radius:4px; margin-left:8px;"></span>
                 </div>
                 <div style="display:flex; align-items:center; gap:10px">
                   <span style="font-size:12px; color:var(--text-muted)" x-text="c.discount_rate + '%'"></span>
@@ -4525,75 +4971,92 @@
                 </div>
               </div>
               <!-- 編集モード (非表示) -->
-              <div class="cust-edit" style="display:none; width:100%; margin-top:8px; background:rgba(201,169,97,0.05); padding:12px; border-radius:8px; border:1px solid rgba(201,169,97,0.2);">
+              <div class="cust-edit"
+                style="display:none; width:100%; margin-top:8px; background:rgba(201,169,97,0.05); padding:12px; border-radius:8px; border:1px solid rgba(201,169,97,0.2);">
                 <div style="display:flex; flex-direction:column; gap:12px;">
                   <div style="display:flex; gap:10px;">
                     <div style="flex: 0 0 100px;">
-                      <label style="display:block; font-size:11px; color:var(--gold); margin-bottom:4px; font-weight:600;">店舗コード</label>
-                      <input type="text" class="edit-code" style="width:100%; padding:10px; font-size:14px; background:#1a1a1a; border:1px solid #444; border-radius:6px; color:#fff;">
+                      <label
+                        style="display:block; font-size:11px; color:var(--gold); margin-bottom:4px; font-weight:600;">店舗コード</label>
+                      <input type="text" class="edit-code"
+                        style="width:100%; padding:10px; font-size:14px; background:#1a1a1a; border:1px solid #444; border-radius:6px; color:#fff;">
                     </div>
                     <div style="flex: 1;">
-                      <label style="display:block; font-size:11px; color:var(--gold); margin-bottom:4px; font-weight:600;">取引先名 (店名)</label>
-                      <input type="text" class="edit-name" style="width:100%; padding:10px; font-size:14px; background:#1a1a1a; border:1px solid #444; border-radius:6px; color:#fff;">
+                      <label
+                        style="display:block; font-size:11px; color:var(--gold); margin-bottom:4px; font-weight:600;">取引先名
+                        (店名)</label>
+                      <input type="text" class="edit-name"
+                        style="width:100%; padding:10px; font-size:14px; background:#1a1a1a; border:1px solid #444; border-radius:6px; color:#fff;">
                     </div>
                   </div>
                   <div style="display:flex; justify-content:space-between; align-items:flex-end;">
                     <div style="flex: 0 0 80px;">
-                      <label style="display:block; font-size:11px; color:var(--gold); margin-bottom:4px; font-weight:600;">掛率(%)</label>
-                      <input type="number" class="edit-rate" style="width:100%; padding:10px; font-size:14px; background:#1a1a1a; border:1px solid #444; border-radius:6px; color:#fff;" inputmode="numeric">
+                      <label
+                        style="display:block; font-size:11px; color:var(--gold); margin-bottom:4px; font-weight:600;">掛率(%)</label>
+                      <input type="number" class="edit-rate"
+                        style="width:100%; padding:10px; font-size:14px; background:#1a1a1a; border:1px solid #444; border-radius:6px; color:#fff;"
+                        inputmode="numeric">
                     </div>
                     <div style="flex: 0 0 120px;">
-                      <label style="display:block; font-size:11px; color:var(--gold); margin-bottom:4px; font-weight:600;">担当者</label>
-                      <select class="edit-user" style="width:100%; padding:10px; font-size:14px; background:#1a1a1a; border:1px solid #444; border-radius:6px; color:#fff;">
+                      <label
+                        style="display:block; font-size:11px; color:var(--gold); margin-bottom:4px; font-weight:600;">担当者</label>
+                      <select class="edit-user"
+                        style="width:100%; padding:10px; font-size:14px; background:#1a1a1a; border:1px solid #444; border-radius:6px; color:#fff;">
                         <option value="">なし</option>
                       </select>
                     </div>
                   </div>
                   <div style="display:flex; gap:8px;">
-                      <button class="btn btn-sm" @click="cancelEditCust($el.closest('.cust-row'))" style="padding:10px 16px; background:#333; border:1px solid #444; color:#ccc;">取消</button>
-                      <button class="btn btn-gold btn-sm" @click="saveEditCust(c.id, $el.closest('.cust-row'))" style="padding:10px 24px; font-weight:700;">保存する</button>
-                    </div>
+                    <button class="btn btn-sm" @click="cancelEditCust($el.closest('.cust-row'))"
+                      style="padding:10px 16px; background:#333; border:1px solid #444; color:#ccc;">取消</button>
+                    <button class="btn btn-gold btn-sm" @click="saveEditCust(c.id, $el.closest('.cust-row'))"
+                      style="padding:10px 24px; font-weight:700;">保存する</button>
                   </div>
                 </div>
               </div>
             </div>
-          </template>
-          <template x-if="!$store.app.customers.length">
-            <div class="empty-state">登録された取引先はありません</div>
-          </template>
         </div>
-        <div style="margin-top:18px;border-top:1px solid var(--border);padding-top:18px">
-          <div class="form-row">
-            <div class="form-group" style="max-width:120px"><label>店舗コード</label><input type="text" id="new-cust-code" placeholder="例: 1001"></div>
-            <div class="form-group"><label>取引先名(店名)</label><input type="text" id="new-cust-name" placeholder="例: 株式会社 〇〇 御中"></div>
-            <div class="form-group" style="max-width:90px"><label>掛率(%)</label><input type="number" id="new-cust-rate" inputmode="numeric" value="35"></div>
-            <div class="form-group" style="max-width:120px"><label>担当者</label>
-              <select id="new-cust-user" style="width:100%; padding:12px 14px; background:#121212; border:1px solid rgba(255,255,255,0.16); border-radius:10px; color:#fffaf0;"></select>
-            </div>
+        </template>
+        <template x-if="!$store.app.customers.length">
+          <div class="empty-state">登録された取引先はありません</div>
+        </template>
+      </div>
+      <div style="margin-top:18px;border-top:1px solid var(--border);padding-top:18px">
+        <div class="form-row">
+          <div class="form-group" style="max-width:120px"><label>店舗コード</label><input type="text" id="new-cust-code"
+              placeholder="例: 1001"></div>
+          <div class="form-group"><label>取引先名(店名)</label><input type="text" id="new-cust-name"
+              placeholder="例: 株式会社 〇〇 御中"></div>
+          <div class="form-group" style="max-width:90px"><label>掛率(%)</label><input type="number" id="new-cust-rate"
+              inputmode="numeric" value="35"></div>
+          <div class="form-group" style="max-width:120px"><label>担当者</label>
+            <select id="new-cust-user"
+              style="width:100%; padding:12px 14px; background:#121212; border:1px solid rgba(255,255,255,0.16); border-radius:10px; color:#fffaf0;"></select>
           </div>
-          <button class="btn btn-gold btn-sm" id="btn-add-cust" style="width:100%;margin-top:6px">＋
-            取引先を追加</button>
         </div>
+        <button class="btn btn-gold btn-sm" id="btn-add-cust" style="width:100%;margin-top:6px">＋
+          取引先を追加</button>
       </div>
-      <div class="card">
-        <div class="card-title">⚜ 表示設定</div>
-        <div style="display:flex; justify-content:space-between; align-items:center; gap:14px; padding:6px 2px;">
-          <div style="min-width:0">
-            <div style="font-weight:600; color:var(--text-primary)">テーマ</div>
-            <div style="font-size:12px; color:var(--text-muted); margin-top:4px">ライト / ダークの切り替え</div>
-          </div>
-          <button id="theme-toggle-settings" class="theme-toggle" type="button" title="テーマ切替"
-            aria-label="テーマ切替">☀</button>
+    </div>
+    <div class="card">
+      <div class="card-title">⚜ 表示設定</div>
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:14px; padding:6px 2px;">
+        <div style="min-width:0">
+          <div style="font-weight:600; color:var(--text-primary)">テーマ</div>
+          <div style="font-size:12px; color:var(--text-muted); margin-top:4px">ライト / ダークの切り替え</div>
         </div>
+        <button id="theme-toggle-settings" class="theme-toggle" type="button" title="テーマ切替"
+          aria-label="テーマ切替">☀</button>
       </div>
-      <div class="card">
-        <div class="card-title">セキュリティ</div>
-        <div style="text-align:center; padding: 10px 0;">
-          <a href="/logout" class="btn btn-outline"
-            style="display:inline-block; text-decoration:none; padding: 10px 24px;">システムからログアウト</a>
-          <p style="font-size:12px; color:var(--text-muted); margin-top:8px;">※ログアウトすると次回からパスワードの再入力が必要になります</p>
-        </div>
+    </div>
+    <div class="card">
+      <div class="card-title">セキュリティ</div>
+      <div style="text-align:center; padding: 10px 0;">
+        <a href="/logout" class="btn btn-outline"
+          style="display:inline-block; text-decoration:none; padding: 10px 24px;">システムからログアウト</a>
+        <p style="font-size:12px; color:var(--text-muted); margin-top:8px;">※ログアウトすると次回からパスワードの再入力が必要になります</p>
       </div>
+    </div>
     </div>
   </main>
 
@@ -4618,7 +5081,8 @@
   <div class="mobile-action-bar" id="mobile-action-bar">
     <button class="btn btn-outline" onclick="document.getElementById('btn-add-row').click()">＋ 行追加</button>
     <button class="btn btn-blue" onclick="document.getElementById('btn-preview-only').click()">👁 確認</button>
-    <button class="btn btn-gold" onpointerdown="event.preventDefault(); generateInvoice()" onclick="generateInvoice()">保存</button>
+    <button class="btn btn-gold" onpointerdown="event.preventDefault(); generateInvoice()"
+      onclick="generateInvoice()">保存</button>
   </div>
 
   <script>
@@ -4812,6 +5276,7 @@
         customers: [],
         history: [],
         rawHistory: [],
+        historyOffset: 0,
         isLoadingHistory: false,
 
         async fetchCustomers() {
@@ -4821,10 +5286,20 @@
           } catch (e) { console.error('fetchCustomers failed', e); }
         },
 
-        async fetchHistory(type = 'all') {
+        async fetchHistory(type = 'all', append = false) {
           try {
-            const r = await fetch(`/api/history?doc_type=${type}`);
-            this.rawHistory = await r.json();
+            if (!append) {
+              this.historyOffset = 0;
+            } else {
+              this.historyOffset += 200;
+            }
+            const r = await fetch(`/api/history?doc_type=${type}&offset=${this.historyOffset}&limit=200`);
+            const data = await r.json();
+            if (append) {
+              this.rawHistory = [...this.rawHistory, ...data];
+            } else {
+              this.rawHistory = data;
+            }
             // 取得後にフィルタリングを適用
             if (window.applyHistoryFilters) applyHistoryFilters();
           } catch (e) { console.error('fetchHistory failed', e); }
@@ -4935,8 +5410,8 @@
         // マスタの新規追加用プルダウンを更新
         const newCustUser = $('new-cust-user');
         if (newCustUser) {
-            newCustUser.innerHTML = '<option value="">なし</option>' + 
-                allUsers.map(u => `<option value="${u.id}">${u.name}</option>`).join('');
+          newCustUser.innerHTML = '<option value="">なし</option>' +
+            allUsers.map(u => `<option value="${u.id}">${u.name}</option>`).join('');
         }
       } catch (e) { console.error(e); }
     }
@@ -5023,7 +5498,7 @@
         const targetWidth = 520; // ★限界まで絞って大きく表示 (520px)
         const docHeight = 740;  // 幅に合わせてA4比率(1:1.41)で高さを調整
         const scale = containerWidth / targetWidth;
-        
+
         // iOS Safari対策: 強制的にサイズを固定
         frame.style.width = targetWidth + 'px';
         frame.style.height = docHeight + 'px';
@@ -5441,7 +5916,7 @@
 
     function openPreviewModal(d, payload) {
       const isPreviewOnly = !!d.preview_only || !!d.html_preview || !d.id;
-      
+
       $('modal-title').textContent = `📄 ${d.invoice_number || 'PREVIEW'} - プレビュー`;
       $('modal-preview').style.display = 'flex';
 
@@ -5505,7 +5980,7 @@
 
       // ダウンロードボタンの表示制御
       const dlBtns = ['.btn-dl-pdf', '.btn-dl-xl', '.btn-dl-client-xl', '.btn-dl-dpdf', '.btn-dl-dxl'].map(s => document.querySelector(s));
-      dlBtns.forEach(btn => { if(btn) btn.style.display = (isPreviewOnly && !d.id) ? 'none' : 'flex'; });
+      dlBtns.forEach(btn => { if (btn) btn.style.display = (isPreviewOnly && !d.id) ? 'none' : 'flex'; });
 
       setTimeout(() => {
         adjustIframeScale('modal-pdf-frame');
@@ -5525,14 +6000,14 @@
           document.querySelector('.btn-dl-pdf').onclick = () => dlFromServer(`/api/history/${d.id}/pdf`, fPdf);
           document.querySelector('.btn-dl-xl').onclick = () => dlFromServer(`/api/history/${d.id}/excel`, fXl);
           const btnClientXl = document.querySelector('.btn-dl-client-xl');
-          if(btnClientXl) btnClientXl.onclick = () => dlFromServer(`/api/history/${d.id}/client-excel`, fClientXl);
+          if (btnClientXl) btnClientXl.onclick = () => dlFromServer(`/api/history/${d.id}/client-excel`, fClientXl);
           document.querySelector('.btn-dl-dpdf').onclick = () => dlFromServer(`/api/history/${d.id}/detail-pdf`, fDpdf);
           document.querySelector('.btn-dl-dxl').onclick = () => dlFromServer(`/api/history/${d.id}/detail-excel`, fDxl);
         } else {
           document.querySelector('.btn-dl-pdf').onclick = () => dlFromServer(`/api/history/${d.id}/pdf`, fPdf);
           document.querySelector('.btn-dl-xl').onclick = () => dlFromServer(`/api/history/${d.id}/excel`, fXl);
           const btnClientXl = document.querySelector('.btn-dl-client-xl');
-          if(btnClientXl) btnClientXl.onclick = () => dlFromServer(`/api/history/${d.id}/client-excel`, fClientXl);
+          if (btnClientXl) btnClientXl.onclick = () => dlFromServer(`/api/history/${d.id}/client-excel`, fClientXl);
           document.querySelector('.btn-dl-dpdf').onclick = () => dlFromServer(`/api/history/${d.id}/detail-pdf`, fDpdf);
           document.querySelector('.btn-dl-dxl').onclick = () => dlFromServer(`/api/history/${d.id}/detail-excel`, fDxl);
         }
@@ -5689,10 +6164,10 @@
       editDiv.querySelector('.edit-code').value = c.code || '';
       editDiv.querySelector('.edit-name').value = c.name || '';
       editDiv.querySelector('.edit-rate').value = c.discount_rate || 35;
-      
+
       const userSelect = editDiv.querySelector('.edit-user');
-      userSelect.innerHTML = '<option value="">なし</option>' + 
-          allUsers.map(u => `<option value="${u.id}" ${u.id === c.user_id ? 'selected' : ''}>${u.name}</option>`).join('');
+      userSelect.innerHTML = '<option value="">なし</option>' +
+        allUsers.map(u => `<option value="${u.id}" ${u.id === c.user_id ? 'selected' : ''}>${u.name}</option>`).join('');
     }
 
     function cancelEditCust(row) {
@@ -5748,7 +6223,7 @@
           const err = await res.json();
           toast(err.detail || 'インポートに失敗しました', 'err');
         }
-      } catch(e) {
+      } catch (e) {
         toast('インポートに失敗しました: ' + e.message, 'err');
       }
     }
@@ -6006,7 +6481,7 @@
 
         $('inp-rate').value = d.discount_rate;
         if ($('inp-issue-date')) $('inp-issue-date').value = d.issue_date || new Date().toISOString().split('T')[0];
-        
+
         // ★追加: 店舗コードを画面に復元する
         if ($('inp-customer-code')) $('inp-customer-code').value = d.customer_code || '';
 
@@ -6096,7 +6571,7 @@
       const match = customers.find(c => c.code === code);
       if (match) {
         const sel = $('sel-customer');
-        for(let i=0; i < sel.options.length; i++) {
+        for (let i = 0; i < sel.options.length; i++) {
           try {
             const optVal = JSON.parse(sel.options[i].value);
             if (optVal && optVal.id === match.id) {
@@ -6104,7 +6579,7 @@
               sel.dispatchEvent(new Event('change'));
               break;
             }
-          } catch(e) {}
+          } catch (e) { }
         }
       }
     }
@@ -6294,7 +6769,7 @@
               }
             });
             const newItems = Object.values(merged);
-            
+
             const normStr = (s) => {
               if (s === null || s === undefined) return '';
               return String(s)
@@ -6306,10 +6781,10 @@
             };
 
             newItems.forEach(newItem => {
-              const existingItem = extractedItems.find(it => 
-                normStr(it.code) === normStr(newItem.code) && 
-                normStr(it.color) === normStr(newItem.color) && 
-                normStr(it.size) === normStr(newItem.size) && 
+              const existingItem = extractedItems.find(it =>
+                normStr(it.code) === normStr(newItem.code) &&
+                normStr(it.color) === normStr(newItem.color) &&
+                normStr(it.size) === normStr(newItem.size) &&
                 Number(it.unit_price || 0) === Number(newItem.unit_price || 0)
               );
               if (existingItem) {
@@ -6614,13 +7089,13 @@
       // フォーム入力をクリア
       if ($('inp-customer-code')) $('inp-customer-code').value = '';
       if ($('inp-manual-customer')) $('inp-manual-customer').value = '';
-      
+
       const selCust = $('sel-customer');
       if (selCust) {
         selCust.value = 'manual';
         selCust.dispatchEvent(new Event('change'));
       }
-      
+
       if (window.Alpine) {
         Alpine.store('app').rate = 35;
       }
@@ -6641,7 +7116,7 @@
         // ★追加: 個人成績の描画
         let myStatsHtml = '';
         if (d.my_this_month && currentUser) {
-            myStatsHtml = `
+          myStatsHtml = `
               <div class="card" style="border-color: var(--gold); background: linear-gradient(180deg, rgba(201,169,97,0.05) 0%, transparent 100%);">
                 <div class="card-title">👤 ${currentUser.name} さんの今月の実績</div>
                 <div style="display:flex; justify-content:space-around; text-align:center;">
@@ -6657,12 +7132,12 @@
               </div>
             `;
         }
-        
+
         // 個人成績を一番上に挿入（id="dash-personal" 用の空divを作っておきそこに挿入するなど）
         if (!$('dash-personal')) {
-            const pdiv = document.createElement('div');
-            pdiv.id = 'dash-personal';
-            $('page-dashboard').prepend(pdiv);
+          const pdiv = document.createElement('div');
+          pdiv.id = 'dash-personal';
+          $('page-dashboard').prepend(pdiv);
         }
         $('dash-personal').innerHTML = myStatsHtml;
 
@@ -6722,7 +7197,7 @@
               </div>
               <div class="bar-label">${m.month.slice(5)}月</div>
               <div style="font-size:9px; color:var(--text-muted); margin-top:2px;">¥${((m.net || 0) / 1000).toFixed(0)}k</div>`;
-            col.title = `納品: ¥${(m.delivery||0).toLocaleString()} / 返品: ¥${(m.return||0).toLocaleString()} / 純売上: ¥${(m.net||0).toLocaleString()}`;
+            col.title = `納品: ¥${(m.delivery || 0).toLocaleString()} / 返品: ¥${(m.return || 0).toLocaleString()} / 純売上: ¥${(m.net || 0).toLocaleString()}`;
             bc.appendChild(col);
           });
         } else {
@@ -7220,4 +7695,4 @@
   </script>
 </body>
 
-</html>
+</html>

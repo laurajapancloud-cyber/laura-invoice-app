@@ -596,6 +596,15 @@ except Exception as e:
     logger.warning("Font preload skipped: %s", e)
 
 # ==================== FastAPI App ====================
+from jinja2 import Environment, FileSystemLoader, select_autoescape
+
+pdf_jinja_env = Environment(
+    loader=FileSystemLoader("templates"),
+    autoescape=select_autoescape(["html", "xml"]),
+    cache_size=50,
+    auto_reload=False,
+)
+
 app = FastAPI()
 app.mount("/static", StaticFiles(directory="static"), name="static")
 cookie_sec = APIKeyCookie(name="laura_session", auto_error=False)
@@ -765,52 +774,57 @@ async def health():
 
 # ==================== Dashboard API ====================
 @app.get("/api/dashboard")
-def get_dashboard(username: Annotated[str, Depends(authenticate)], user_id: Optional[int] = None):
+import threading
+
+_dashboard_cache: Dict[str, tuple] = {}
+_dashboard_lock = threading.Lock()
+_DASHBOARD_TTL = 60
+
+def _compute_dashboard(user_id: Optional[int]):
     with db_conn() as conn, conn.cursor() as cur:
-        # DBセッションをJSTに設定
         try:
             cur.execute("SET TIME ZONE 'Asia/Tokyo'")
         except: pass
         
         now = get_jst_now()
-        # 今月の開始時刻 (JST)
         month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        # 前月の開始時刻 (JST)
         last_month_start = (month_start - datetime.timedelta(days=1)).replace(day=1)
         
-        # 今月の統計（正式な納品と返品のみ）
-        cur.execute(
-            """SELECT doc_type, COUNT(*) as cnt, COALESCE(SUM(total_grand_total),0) as total
-               FROM invoices WHERE created_at >= %s AND doc_type IN ('delivery', 'return') GROUP BY doc_type""",
-            (month_start,)
-        )
-        this_month_rows = cur.fetchall()
+        cur.execute("""
+            SELECT
+                CASE
+                    WHEN created_at >= %(month_start)s THEN 'this'
+                    ELSE 'last'
+                END AS period,
+                doc_type,
+                COUNT(*) AS cnt,
+                COALESCE(SUM(total_grand_total), 0) AS total,
+                COUNT(*) FILTER (WHERE created_at >= %(month_start)s AND user_id = %(uid)s) AS my_cnt,
+                COALESCE(SUM(total_grand_total) FILTER (
+                    WHERE created_at >= %(month_start)s AND user_id = %(uid)s), 0) AS my_total
+            FROM invoices
+            WHERE created_at >= %(last_month_start)s
+              AND doc_type IN ('delivery', 'return')
+            GROUP BY period, doc_type
+        """, {"month_start": month_start, "last_month_start": last_month_start, "uid": user_id})
+        rows = cur.fetchall()
         
-        # 前月の統計（正式な納品と返品のみ）
-        cur.execute(
-            """SELECT doc_type, COUNT(*) as cnt, COALESCE(SUM(total_grand_total),0) as total
-               FROM invoices WHERE created_at >= %s AND created_at < %s AND doc_type IN ('delivery', 'return') GROUP BY doc_type""",
-            (last_month_start, month_start)
-        )
-        last_month_rows = cur.fetchall()
-        
-        # 返品はマイナスとして集計する
         return_types = {'return'}
         
-        def aggregate(rows):
+        def aggregate(period_rows):
             total_cnt = 0
             total_amt = 0
             delivery_cnt = 0; delivery_amt = 0
             return_cnt = 0; return_amt = 0
-            for r in rows:
+            for r in period_rows:
                 dt = r['doc_type']
                 cnt = r['cnt']
-                amt = abs(r['total']) # 絶対値で扱う
+                amt = abs(r['total'])
                 total_cnt += cnt
                 if dt in return_types:
                     return_cnt += cnt
                     return_amt += amt
-                    total_amt -= amt  # 返品はマイナス
+                    total_amt -= amt
                 else:
                     delivery_cnt += cnt
                     delivery_amt += amt
@@ -823,18 +837,40 @@ def get_dashboard(username: Annotated[str, Depends(authenticate)], user_id: Opti
                 'return_count': return_cnt,
                 'return_amount': return_amt,
             }
+
+        this_month_rows = [r for r in rows if r["period"] == "this"]
+        last_month_rows = [r for r in rows if r["period"] == "last"]
         
         this_month = aggregate(this_month_rows)
         last_month = aggregate(last_month_rows)
         
         my_month = None
         if user_id:
-            cur.execute(
-                """SELECT doc_type, COUNT(*) as cnt, COALESCE(SUM(total_grand_total),0) as total
-                   FROM invoices WHERE created_at >= %s AND user_id = %s AND doc_type IN ('delivery', 'return') GROUP BY doc_type""",
-                (month_start, user_id)
-            )
-            my_month = aggregate(cur.fetchall())
+            my_cnt_total = 0
+            my_amt_total = 0
+            my_del_cnt = 0; my_del_amt = 0
+            my_ret_cnt = 0; my_ret_amt = 0
+            for r in this_month_rows:
+                dt = r['doc_type']
+                cnt = r['my_cnt']
+                amt = abs(r['my_total'])
+                my_cnt_total += cnt
+                if dt in return_types:
+                    my_ret_cnt += cnt
+                    my_ret_amt += amt
+                    my_amt_total -= amt
+                else:
+                    my_del_cnt += cnt
+                    my_del_amt += amt
+                    my_amt_total += amt
+            my_month = {
+                'invoices': my_cnt_total,
+                'total_amount': my_amt_total,
+                'delivery_count': my_del_cnt,
+                'delivery_amount': my_del_amt,
+                'return_count': my_ret_cnt,
+                'return_amount': my_ret_amt,
+            }
         
         # 月別推移 (過去12ヶ月, 納品/返品を分離、仮納品/仮返品を除く)
         cur.execute(
@@ -914,6 +950,21 @@ def get_dashboard(username: Annotated[str, Depends(authenticate)], user_id: Opti
         "top_items": [dict(i) for i in top_items],
         "api_usage": usage_list
     }
+
+@app.get("/api/dashboard")
+def get_dashboard(username: Annotated[str, Depends(authenticate)], user_id: Optional[int] = None):
+    cache_key = f"dash:{user_id or 0}"
+    now_ts = time.time()
+    with _dashboard_lock:
+        hit = _dashboard_cache.get(cache_key)
+        if hit and hit[0] > now_ts:
+            return hit[1]
+
+    data = _compute_dashboard(user_id)
+
+    with _dashboard_lock:
+        _dashboard_cache[cache_key] = (now_ts + _DASHBOARD_TTL, data)
+    return data
 
 # ==================== User Master API ====================
 @app.get("/api/users")
@@ -1405,17 +1456,25 @@ th{{background:#f4ecd8;}}
 
 def build_invoice_pdf(invoice_data: dict) -> bytes:
     """納品書 PDF (HTMLテンプレート経由)"""
-    from jinja2 import Environment, FileSystemLoader, select_autoescape
-    env = Environment(
-        loader=FileSystemLoader("templates"),
-        autoescape=select_autoescape(["html", "xml"])
-    )
-    template = env.get_template("invoice_template.html")
+    template = pdf_jinja_env.get_template("invoice_template.html")
     render_data = {**invoice_data, "font_face_css": get_pdf_font_css()}
     html_str = template.render(**render_data)
     if HTML is None:
         raise RuntimeError("WeasyPrint is not available. PDF generation is disabled.")
     return HTML(string=html_str).write_pdf()
+
+from functools import lru_cache
+
+@lru_cache(maxsize=512)
+def _barcode_png(code_str: str) -> bytes:
+    """Code128 PNG を生成してキャッシュ"""
+    bc = barcode.get('code128', code_str, writer=ImageWriter())
+    bio = BytesIO()
+    bc.write(bio, options={
+        "write_text": False, "quiet_zone": 2,
+        "font_size": 0, "text_distance": 0, "module_height": 10,
+    })
+    return bio.getvalue()
 
 def build_invoice_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
     """納品書 Excel (バーコード付き・モダンデザイン)"""
@@ -1535,13 +1594,8 @@ def build_invoice_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
         store_code = invoice_data.get("customer_code", "")
         if store_code and not is_preview:
             try:
-                bc_store = barcode.get('code128', store_code, writer=ImageWriter())
-                bc_io_store = BytesIO()
-                bc_store.write(bc_io_store, options={
-                    "write_text": False, "quiet_zone": 2,
-                    "font_size": 0, "text_distance": 0, "module_height": 10
-                })
-                img_store = ExcelImage(bc_io_store)
+                bc_bytes = _barcode_png(store_code)
+                img_store = ExcelImage(BytesIO(bc_bytes))
                 img_store.width, img_store.height = 160, 36
                 marker_store = AnchorMarker(col=1, colOff=pixels_to_EMU(4),
                                             row=r5-1, rowOff=pixels_to_EMU(2))
@@ -1620,14 +1674,10 @@ def build_invoice_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
             if not is_preview:
                 try:
                     bc_str = f"{item.get('code', '')}{item.get('color', '')}{item.get('size', '')}".replace("-", "")
-                    ean = barcode.get('code128', bc_str, writer=ImageWriter())
-                    bc_io = BytesIO()
-                    ean.write(bc_io, options={
-                        "write_text": False, "quiet_zone": 2,
-                        "font_size": 0, "text_distance": 0, "module_height": 10
-                    })
-                    img = ExcelImage(bc_io)
-                    img.width, img.height = 160, 36
+                    bc_bytes = _barcode_png(bc_str) if bc_str else None
+                    if bc_bytes:
+                        img = ExcelImage(BytesIO(bc_bytes))
+                        img.width, img.height = 160, 36
                     marker = AnchorMarker(col=4, colOff=pixels_to_EMU(8),
                                           row=r-1, rowOff=pixels_to_EMU(15))
                     img.anchor = OneCellAnchor(
@@ -1971,12 +2021,7 @@ def preview_documents(username: Annotated[str, Depends(authenticate)], payload: 
     )
     
     # WeasyPrintでPDF化せず、Jinja2のHTML文字列をそのまま返す
-    from jinja2 import Environment, FileSystemLoader, select_autoescape
-    env = Environment(
-        loader=FileSystemLoader("templates"),
-        autoescape=select_autoescape(["html", "xml"])
-    )
-    template = env.get_template("invoice_template.html")
+    template = pdf_jinja_env.get_template("invoice_template.html")
     # preview用にはフォントCSSを空にする（ブラウザがGoogle Fontsを読むため）
     render_data = {**inv_data, "font_face_css": ""}
     html_str = template.render(**render_data)
@@ -2100,6 +2145,9 @@ def lock_invoice_internal(jid: str, inv_id: int, bt: Optional[BackgroundTasks] =
                 return
             conn.commit()
 
+        with _dashboard_lock:
+            _dashboard_cache.clear()
+
         # --------------------------------------------------------
         # 確定成功時、自動でDriveアップロードジョブを起動する
         # --------------------------------------------------------
@@ -2140,7 +2188,14 @@ async def unlock_invoice(inv_id: int, username: Annotated[str, Depends(authentic
 
 # ==================== History & Serving API ====================
 @app.get("/api/history")
-def get_history(username: Annotated[str, Depends(authenticate)], doc_type: Optional[str] = None, user_id: Optional[int] = None):
+def get_history(
+    username: Annotated[str, Depends(authenticate)],
+    doc_type: Optional[str] = None,
+    user_id: Optional[int] = None,
+    limit: int = 200,
+    offset: int = 0,
+):
+    limit = max(1, min(limit, 200))  # 上限ガード
     with db_conn() as conn, conn.cursor() as cur:
         query = """
             SELECT i.id, i.invoice_number, i.customer_name, i.total_grand_total, i.item_count, i.status, i.doc_type, i.user_id,
@@ -2159,7 +2214,8 @@ def get_history(username: Annotated[str, Depends(authenticate)], doc_type: Optio
             query += " AND i.user_id = %s"
             params.append(user_id)
 
-        query += " ORDER BY i.id DESC"
+        query += " ORDER BY i.id DESC LIMIT %s OFFSET %s"
+        params.extend([limit, offset])
         cur.execute(query, tuple(params))
         rows = cur.fetchall()
     return [dict(r) for r in rows]
@@ -2221,6 +2277,19 @@ def serve_file(inv_id: int, kind: str, disposition: str = "attachment"):
     inv_data = assemble_invoice_data(dict(inv), items, dr, inv.get("doc_type", "delivery"))
     content = build_single_file(cfg["files_key"], inv_data)
 
+    # 確定済み伝票なら生成結果をStorageに保存して次回以降キャッシュヒットさせる
+    if inv.get("status") == "locked" and supabase_client:
+        try:
+            path = f"{inv['invoice_number']}/{kind}.{cfg['ext']}"
+            storage_upload(path, content, cfg["mime"])
+            with db_transaction() as conn2, conn2.cursor() as cur2:
+                cur2.execute(
+                    f"UPDATE invoices SET {cfg['path_field']}=%s WHERE id=%s",
+                    (path, inv_id),
+                )
+        except Exception as e:
+            logger.warning("cache write-back failed: %s", e)
+
     return Response(
         content=content,
         media_type=cfg["mime"],
@@ -2265,9 +2334,7 @@ def preview_pdf(inv_id: int, username: Annotated[str, Depends(authenticate)]):
     dr = inv.get("discount_rate") or 100
     inv_data = assemble_invoice_data(dict(inv), items, dr, inv.get("doc_type", "delivery"))
 
-    from jinja2 import Environment, FileSystemLoader, select_autoescape
-    env = Environment(loader=FileSystemLoader("templates"), autoescape=select_autoescape(["html", "xml"]))
-    template = env.get_template("invoice_template.html")
+    template = pdf_jinja_env.get_template("invoice_template.html")
     
     # プレビュー表示用なのでWebフォント(Google Fonts)を読み込ませるため font_face_css は空にする
     render_data = {**inv_data, "font_face_css": ""}
@@ -2561,9 +2628,7 @@ def get_history_meta(inv_id: int, username: Annotated[str, Depends(authenticate)
     inv_data = assemble_invoice_data(inv, items, dr, doc_type)
     
     # 1. 納品書（メイン）のHTMLプレビューを生成
-    from jinja2 import Environment, FileSystemLoader, select_autoescape
-    env = Environment(loader=FileSystemLoader("templates"), autoescape=select_autoescape(["html", "xml"]))
-    template = env.get_template("invoice_template.html")
+    template = pdf_jinja_env.get_template("invoice_template.html")
     main_html = template.render(**{**inv_data, "font_face_css": ""})
 
     # 2. 明細表のHTMLプレビューを生成
