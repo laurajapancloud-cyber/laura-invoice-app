@@ -2068,7 +2068,7 @@
 
       .hist-item {
         display: grid !important;
-        grid-template-columns: 110px 52px minmax(140px, 1fr) 110px 84px !important;
+        grid-template-columns: 32px 110px 52px minmax(140px, 1fr) 110px 84px !important;
         gap: 8px !important;
         align-items: center;
         padding: 12px !important;
@@ -4787,6 +4787,7 @@
 
         <!-- デスクトップでだけ表示されるテーブルヘッダー (Sticky) -->
         <div class="hist-table-header sticky-on" style="display:none">
+          <span></span>
           <span data-sort="invoice_number">伝票番号</span>
           <span data-sort="doc_type">種別</span>
           <span data-sort="customer_name">取引先 / 件数</span>
@@ -4815,10 +4816,12 @@
               :class="'hist-item' + (inv.status === 'locked' ? ' locked' : '') + (selectedHistId === inv.id ? ' selected' : '')"
               @click="selectHistItem(inv, $event)">
 
-              <input type="checkbox"
-                     style="margin-right: 12px; transform: scale(1.2); pointer-events: auto; flex-shrink: 0;"
-                     :checked="$store.app.selectedInvoiceIds.includes(inv.id)"
-                     @click.stop="$store.app.toggleInvoiceSelect(inv.id)">
+              <div style="display: flex; align-items: center; justify-content: center;">
+                <input type="checkbox"
+                       style="transform: scale(1.2); pointer-events: auto; flex-shrink: 0; margin: 0;"
+                       :checked="$store.app.selectedInvoiceIds.includes(inv.id)"
+                       @click.stop="$store.app.toggleInvoiceSelect(inv.id)">
+              </div>
 
               <!-- デスクトップ表示 -->
               <template x-if="isDesktop">
@@ -4869,16 +4872,16 @@
                     </div>
                     <div class="hist-actions-row">
                       <button class="btn btn-gold btn-sm" @click.stop="quickPreview(inv.id)">高速プレビュー</button>
-                      <button x-if="inv.status !== 'locked'" class="btn btn-gold btn-sm"
+                      <button x-show="inv.status !== 'locked'" class="btn btn-gold btn-sm"
                         x-init="bindLongPress($el, () => lockHist(inv.id))" title="長押しで確定" @click.stop.prevent>確定
                         (長押し)</button>
-                      <button x-if="inv.status === 'locked'" class="btn btn-outline btn-sm"
+                      <button x-show="inv.status === 'locked'" class="btn btn-outline btn-sm"
                         @click.stop="unlockHist(inv.id)">解除</button>
-                      <button x-if="inv.status === 'locked'" class="btn btn-blue btn-sm"
+                      <button x-show="inv.status === 'locked'" class="btn btn-blue btn-sm"
                         @click.stop="uploadDrive(inv.id, $el)">保存 Drive</button>
                       <button class="btn btn-outline btn-sm" @click.stop="downloadZip(inv.id)"
                         title="PDFとExcelが含まれています">ZIP (Excel含)</button>
-                      <button x-if="inv.status !== 'locked'" class="btn btn-outline btn-sm"
+                      <button x-show="inv.status !== 'locked'" class="btn btn-outline btn-sm"
                         @click.stop="editHist(inv.id)">編集</button>
                       <button class="btn btn-red btn-sm" x-init="bindLongPress($el, () => delHist(inv.id))"
                         title="長押しで削除" @click.stop.prevent>削除 (長押し)</button>
