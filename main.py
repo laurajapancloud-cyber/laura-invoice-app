@@ -773,7 +773,6 @@ async def health():
     return {"status": "alive", "time": get_jst_now().isoformat()}
 
 # ==================== Dashboard API ====================
-@app.get("/api/dashboard")
 import threading
 
 _dashboard_cache: Dict[str, tuple] = {}
