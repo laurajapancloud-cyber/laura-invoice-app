@@ -1475,6 +1475,152 @@ def _barcode_png(code_str: str) -> bytes:
     })
     return bio.getvalue()
 
+# ===== 会社控え用スタイル・描画ロジック =====
+FF = "游ゴシック"
+CC_FONT_HEADER = Font(name=FF, size=9, bold=True, color="1F2937")
+CC_FONT_BODY   = Font(name=FF, size=10, color="111827")
+CC_FONT_TOTAL  = Font(name=FF, size=11, bold=True, color="111827")
+CC_FILL_TITLE  = PatternFill("solid", fgColor="1F2937")
+CC_FILL_HEADER = PatternFill("solid", fgColor="F3F4F6")
+CC_FILL_ZEBRA  = PatternFill("solid", fgColor="F9FAFB")
+CC_BORDER = Border(
+    left=Side(style='thin', color='D1D5DB'),
+    right=Side(style='thin', color='D1D5DB'),
+    top=Side(style='thin', color='D1D5DB'),
+    bottom=Side(style='thin', color='D1D5DB'),
+)
+
+def block_height(items: list) -> int:
+    """伝票1件がシート上で占める行数（改ページ判定に使う）"""
+    return 1 + 1 + len(items) + 1 + 1
+
+def write_invoice_block(ws, start_row: int, inv: dict, items: list) -> int:
+    """1伝票分のブロックを start_row から描画し、次の空き行番号を返す"""
+    r = start_row
+    doc_label = DOC_TYPE_LABELS.get(inv.get("doc_type", "delivery"), "納品伝票")
+    dt = to_jst(inv.get("locked_at") or inv.get("created_at"))
+
+    # --- 伝票ヘッダー行（1行に圧縮: 伝票番号 / 取引先 / 日付 / 担当） ---
+    ws.merge_cells(f"A{r}:G{r}")
+    head = ws[f"A{r}"]
+    head.value = (
+        f"{inv['invoice_number']}　{doc_label}　"
+        f"{inv['customer_name']}　{dt.year}年{dt.month}月{dt.day}日"
+        + (f"　担当: {inv['user_name']}" if inv.get("user_name") else "")
+    )
+    head.font = Font(name=FF, size=10, bold=True, color="FFFFFF")
+    head.fill = CC_FILL_TITLE
+    head.alignment = Alignment(horizontal="left", vertical="center", indent=1)
+    ws.row_dimensions[r].height = 24
+    r += 1
+
+    # --- テーブルヘッダー ---
+    headers = {"A": "No.", "B": "品番", "C": "カラー", "D": "サイズ",
+               "E": "数量", "F": "単価", "G": "金額"}
+    for col, label in headers.items():
+        cell = ws[f"{col}{r}"]
+        cell.value = label
+        cell.font = CC_FONT_HEADER
+        cell.fill = CC_FILL_HEADER
+        cell.border = CC_BORDER
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+    ws.row_dimensions[r].height = 20
+    r += 1
+
+    # --- 明細行 ---
+    subtotal = 0
+    for i, item in enumerate(items):
+        ws[f"A{r}"] = i + 1
+        ws[f"B{r}"] = item.get("code", "")
+        ws[f"C{r}"] = item.get("color", "")
+        ws[f"D{r}"] = item.get("size", "")
+        ws[f"E{r}"] = item.get("quantity", 0)
+        ws[f"F{r}"] = item.get("unit_price", 0)
+        ws[f"G{r}"] = item.get("net_amount", 0)
+        subtotal += item.get("net_amount", 0) or 0
+
+        for col in "ABCDEFG":
+            cell = ws[f"{col}{r}"]
+            cell.font = CC_FONT_BODY
+            cell.border = CC_BORDER
+            if i % 2 == 1:
+                cell.fill = CC_FILL_ZEBRA
+        for col in "ABCDE":
+            ws[f"{col}{r}"].alignment = Alignment(horizontal="center", vertical="center")
+        for col in "FG":
+            ws[f"{col}{r}"].alignment = Alignment(horizontal="right", vertical="center", indent=1)
+            ws[f"{col}{r}"].number_format = '#,##0;△#,##0'
+        ws.row_dimensions[r].height = 18
+        r += 1
+
+    # --- 小計行（税込合計はDBの値を使用） ---
+    ws.merge_cells(f"A{r}:E{r}")
+    ws[f"A{r}"] = "小計（税抜） / 合計（税込）"
+    ws[f"A{r}"].font = CC_FONT_TOTAL
+    ws[f"A{r}"].alignment = Alignment(horizontal="right", vertical="center", indent=1)
+    ws[f"F{r}"] = inv.get("total_net_amount", subtotal)
+    ws[f"G{r}"] = inv.get("total_grand_total", 0)
+    for col in "FG":
+        ws[f"{col}{r}"].font = CC_FONT_TOTAL
+        ws[f"{col}{r}"].number_format = '¥#,##0;△¥#,##0'
+        ws[f"{col}{r}"].alignment = Alignment(horizontal="right", vertical="center", indent=1)
+    for col in "ABCDEFG":
+        ws[f"{col}{r}"].border = Border(
+            top=Side(style='medium', color='1F2937'),
+            bottom=Side(style='medium', color='1F2937'),
+        )
+    ws.row_dimensions[r].height = 22
+    r += 1
+
+    return r + 1
+
+from openpyxl.worksheet.pagebreak import Break
+ROWS_PER_PAGE = 42
+
+def build_company_copy_excel(invoice_rows: list) -> bytes:
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "会社控え"
+    apply_a4_print_settings(ws, orientation="portrait", fit_to_width=True, fit_to_height=False)
+
+    for col, w in {"A": 5, "B": 16, "C": 10, "D": 8, "E": 7, "F": 12, "G": 14}.items():
+        ws.column_dimensions[col].width = w
+
+    current_row = 1
+    rows_in_page = 0
+    grand_net = grand_total = 0
+
+    for inv, items in invoice_rows:
+        bh = block_height(items)
+        if rows_in_page > 0 and rows_in_page + bh > ROWS_PER_PAGE:
+            ws.row_breaks.append(Break(id=current_row - 1))
+            rows_in_page = 0
+
+        current_row = write_invoice_block(ws, current_row, inv, items)
+        rows_in_page += bh
+        grand_net += inv.get("total_net_amount", 0) or 0
+        grand_total += inv.get("total_grand_total", 0) or 0
+
+    r = current_row + 1
+    ws.merge_cells(f"A{r}:E{r}")
+    ws[f"A{r}"] = f"選択 {len(invoice_rows)} 伝票 総合計（税抜 / 税込）"
+    ws[f"A{r}"].font = Font(name=FF, size=12, bold=True)
+    ws[f"A{r}"].alignment = Alignment(horizontal="right", vertical="center", indent=1)
+    ws[f"F{r}"] = grand_net
+    ws[f"G{r}"] = grand_total
+    for col in "FG":
+        ws[f"{col}{r}"].font = Font(name=FF, size=12, bold=True)
+        ws[f"{col}{r}"].number_format = '¥#,##0;△¥#,##0'
+        ws[f"{col}{r}"].fill = PatternFill("solid", fgColor="FEF3C7")
+        ws[f"{col}{r}"].alignment = Alignment(horizontal="right", vertical="center", indent=1)
+    ws.row_dimensions[r].height = 26
+
+    ws.print_area = f"A1:G{ws.max_row}"
+
+    out = BytesIO()
+    wb.save(out)
+    return out.getvalue()
+
 def build_invoice_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
     """納品書 Excel (バーコード付き・モダンデザイン)"""
     wb = openpyxl.Workbook()
@@ -2186,6 +2332,61 @@ async def unlock_invoice(inv_id: int, username: Annotated[str, Depends(authentic
     return {"status": "draft"}
 
 # ==================== History & Serving API ====================
+def load_invoice_with_items(cur, inv_id: int) -> tuple:
+    """伝票ヘッダーと明細行をDBから取得する"""
+    cur.execute("""
+        SELECT i.*, u.name AS user_name
+        FROM invoices i
+        LEFT JOIN users u ON i.user_id = u.id
+        WHERE i.id = %s
+    """, (inv_id,))
+    inv = cur.fetchone()
+    if not inv:
+        raise HTTPException(404, f"伝票が見つかりません (id={inv_id})")
+    cur.execute(
+        "SELECT code, color, size, unit_price, quantity, net_amount "
+        "FROM invoice_items WHERE invoice_id = %s ORDER BY id",
+        (inv_id,),
+    )
+    items = [dict(r) for r in cur.fetchall()]
+    return dict(inv), items
+
+class CompanyCopyRequest(BaseModel):
+    invoice_ids: List[int]
+
+@app.post("/api/export/company-copy")
+def export_company_copy(
+    username: Annotated[str, Depends(authenticate)],
+    payload: CompanyCopyRequest,
+):
+    if not payload.invoice_ids:
+        raise HTTPException(400, "伝票が選択されていません")
+    if len(payload.invoice_ids) > 100:
+        raise HTTPException(400, "一度にまとめられるのは100件までです")
+
+    invoice_rows = []
+    with db_conn() as conn, conn.cursor() as cur:
+        for inv_id in payload.invoice_ids:
+            inv, items = load_invoice_with_items(cur, inv_id)
+            invoice_rows.append((inv, items))
+    
+    # 伝票番号順でソート
+    invoice_rows.sort(key=lambda x: x[0]["invoice_number"])
+
+    content = build_company_copy_excel(invoice_rows)
+
+    customers = {inv["customer_name"] for inv, _ in invoice_rows}
+    now = get_jst_now()
+    base = safe_filename(customers.pop()) if len(customers) == 1 else "会社控え"
+    fname = f"{base}_控え_{now.month}月{now.day}日.xlsx"
+    encoded = urllib.parse.quote(fname)
+
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded}"},
+    )
+
 @app.get("/api/history")
 def get_history(
     username: Annotated[str, Depends(authenticate)],

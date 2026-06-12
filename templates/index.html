@@ -4774,6 +4774,17 @@
             <option value="">すべての月</option>
           </select>
         </div>
+
+        <!-- ★会社控え用アクションバー -->
+        <div class="copy-action-bar" x-show="$store.app.selectedInvoiceIds.length > 0" x-transition style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: #FEF3C7; border-radius: 12px; margin-bottom: 16px; border: 1px solid #F59E0B;">
+          <span style="font-weight: bold; color: #92400E;" x-text="$store.app.selectedInvoiceIds.length + '件 選択中'"></span>
+          <button class="btn btn-gold btn-sm" @click="$store.app.downloadCompanyCopy()" style="margin-left: auto;">
+            📗 まとめて控え保存
+          </button>
+          <button class="btn btn-outline btn-sm" @click="$store.app.selectAllVisible()">全選択</button>
+          <button class="btn btn-outline btn-sm" @click="$store.app.selectedInvoiceIds = []">解除</button>
+        </div>
+
         <!-- デスクトップでだけ表示されるテーブルヘッダー (Sticky) -->
         <div class="hist-table-header sticky-on" style="display:none">
           <span data-sort="invoice_number">伝票番号</span>
@@ -4803,6 +4814,11 @@
             <div
               :class="'hist-item' + (inv.status === 'locked' ? ' locked' : '') + (selectedHistId === inv.id ? ' selected' : '')"
               @click="selectHistItem(inv, $event)">
+
+              <input type="checkbox"
+                     style="margin-right: 12px; transform: scale(1.2); pointer-events: auto; flex-shrink: 0;"
+                     :checked="$store.app.selectedInvoiceIds.includes(inv.id)"
+                     @click.stop="$store.app.toggleInvoiceSelect(inv.id)">
 
               <!-- デスクトップ表示 -->
               <template x-if="isDesktop">
@@ -5278,6 +5294,52 @@
         rawHistory: [],
         historyOffset: 0,
         isLoadingHistory: false,
+        selectedInvoiceIds: [],
+
+        toggleInvoiceSelect(id) {
+          const i = this.selectedInvoiceIds.indexOf(id);
+          if (i >= 0) this.selectedInvoiceIds.splice(i, 1);
+          else this.selectedInvoiceIds.push(id);
+        },
+
+        selectAllVisible() {
+          if (this.history && this.history.length > 0) {
+            this.selectedInvoiceIds = this.history.map(inv => inv.id);
+          }
+        },
+
+        async downloadCompanyCopy() {
+          if (this.selectedInvoiceIds.length === 0) {
+            toast('伝票を選択してください', 'error');
+            return;
+          }
+          try {
+            toast('会社控えを生成中...', 'info');
+            const res = await fetch('/api/export/company-copy', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ invoice_ids: this.selectedInvoiceIds }),
+            });
+            if (!res.ok) {
+              toast('控えの生成に失敗しました', 'error');
+              return;
+            }
+            const blob = await res.blob();
+            const cd = res.headers.get('Content-Disposition') || '';
+            const m = cd.match(/filename\*=UTF-8''(.+)/);
+            const fname = m ? decodeURIComponent(m[1]) : '会社控え.xlsx';
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = fname; a.click();
+            URL.revokeObjectURL(url);
+            this.selectedInvoiceIds = [];
+            toast('会社控えを保存しました ✅');
+          } catch (e) {
+            console.error(e);
+            toast('ネットワークエラーが発生しました', 'error');
+          }
+        },
+
 
         async fetchCustomers() {
           try {
