@@ -4890,10 +4890,12 @@
                 </div>
               </template>
             </div>
-            <div style="text-align: center; padding: 16px;">
-              <button class="btn btn-outline" style="width: 100%; max-width: 300px;" @click="$store.app.fetchHistory(currentHistoryType, true)" x-show="$store.app.rawHistory.length >= 200">さらに読み込む</button>
-            </div>
           </template>
+
+          <!-- さらに読み込むボタン -->
+          <div style="text-align: center; padding: 16px;">
+            <button class="btn btn-outline" style="width: 100%; max-width: 300px;" @click="$store.app.fetchHistory(currentHistoryType, true)" x-show="$store.app.rawHistory.length >= 200">さらに読み込む</button>
+          </div>
         </div>
       </div>
       <!-- ↓ デスクトップ用、詳細ペイン -->
