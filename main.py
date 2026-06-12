@@ -1477,9 +1477,9 @@ def _barcode_png(code_str: str) -> bytes:
 
 # ===== 会社控え用スタイル・描画ロジック =====
 FF = "游ゴシック"
-CC_FONT_HEADER = Font(name=FF, size=9, bold=True, color="1F2937")
-CC_FONT_BODY   = Font(name=FF, size=10, color="111827")
-CC_FONT_TOTAL  = Font(name=FF, size=11, bold=True, color="111827")
+CC_FONT_HEADER = Font(name=FF, size=10, bold=True, color="000000")
+CC_FONT_BODY   = Font(name=FF, size=10, bold=True, color="000000")
+CC_FONT_TOTAL  = Font(name=FF, size=12, bold=True, color="000000")
 CC_FILL_TITLE  = PatternFill("solid", fgColor="1F2937")
 CC_FILL_HEADER = PatternFill("solid", fgColor="F3F4F6")
 CC_FILL_ZEBRA  = PatternFill("solid", fgColor="F9FAFB")
@@ -1508,10 +1508,10 @@ def write_invoice_block(ws, start_row: int, inv: dict, items: list) -> int:
         f"{inv['customer_name']}　{dt.year}年{dt.month}月{dt.day}日"
         + (f"　担当: {inv['user_name']}" if inv.get("user_name") else "")
     )
-    head.font = Font(name=FF, size=10, bold=True, color="FFFFFF")
+    head.font = Font(name=FF, size=12, bold=True, color="FFFFFF")
     head.fill = CC_FILL_TITLE
     head.alignment = Alignment(horizontal="left", vertical="center", indent=1)
-    ws.row_dimensions[r].height = 28
+    ws.row_dimensions[r].height = 42
     
     # Store barcode
     if barcode:
@@ -1520,7 +1520,7 @@ def write_invoice_block(ws, start_row: int, inv: dict, items: list) -> int:
             try:
                 bc_bytes = _barcode_png(store_code)
                 img = ExcelImage(BytesIO(bc_bytes))
-                img.width, img.height = 140, 24
+                img.width, img.height = 160, 36
                 ws.add_image(img, f"H{r}")
             except Exception as e:
                 logger.warning("Store barcode skipped: %s", e)
@@ -1537,7 +1537,7 @@ def write_invoice_block(ws, start_row: int, inv: dict, items: list) -> int:
         cell.fill = CC_FILL_HEADER
         cell.border = CC_BORDER
         cell.alignment = Alignment(horizontal="center", vertical="center")
-    ws.row_dimensions[r].height = 20
+    ws.row_dimensions[r].height = 26
     r += 1
 
     # --- 明細行 ---
@@ -1554,12 +1554,12 @@ def write_invoice_block(ws, start_row: int, inv: dict, items: list) -> int:
         
         # Item barcode
         if barcode:
-            bc_str = item.get("code", "")
+            bc_str = f"{item.get('code', '')}{item.get('color', '')}{item.get('size', '')}".replace("-", "")
             if bc_str:
                 try:
                     bc_bytes = _barcode_png(bc_str)
                     img = ExcelImage(BytesIO(bc_bytes))
-                    img.width, img.height = 130, 22
+                    img.width, img.height = 160, 36
                     ws.add_image(img, f"H{r}")
                 except Exception as e:
                     logger.warning("Item barcode skipped: %s", e)
@@ -1575,7 +1575,7 @@ def write_invoice_block(ws, start_row: int, inv: dict, items: list) -> int:
         for col in "FG":
             ws[f"{col}{r}"].alignment = Alignment(horizontal="right", vertical="center", indent=1)
             ws[f"{col}{r}"].number_format = '#,##0;△#,##0'
-        ws.row_dimensions[r].height = 28
+        ws.row_dimensions[r].height = 54
         r += 1
 
     # --- 小計行（税込合計はDBの値を使用） ---
@@ -1594,13 +1594,13 @@ def write_invoice_block(ws, start_row: int, inv: dict, items: list) -> int:
             top=Side(style='medium', color='1F2937'),
             bottom=Side(style='medium', color='1F2937'),
         )
-    ws.row_dimensions[r].height = 24
+    ws.row_dimensions[r].height = 36
     r += 1
 
     return r + 1
 
 from openpyxl.worksheet.pagebreak import Break
-ROWS_PER_PAGE = 26
+ROWS_PER_PAGE = 12
 
 def build_company_copy_excel(invoice_rows: list) -> bytes:
     wb = openpyxl.Workbook()
@@ -1608,7 +1608,7 @@ def build_company_copy_excel(invoice_rows: list) -> bytes:
     ws.title = "会社控え"
     apply_a4_print_settings(ws, orientation="portrait", fit_to_width=True, fit_to_height=False)
 
-    for col, w in {"A": 5, "B": 16, "C": 10, "D": 8, "E": 7, "F": 12, "G": 14, "H": 22}.items():
+    for col, w in {"A": 5, "B": 14, "C": 10, "D": 12, "E": 8, "F": 13, "G": 15, "H": 26}.items():
         ws.column_dimensions[col].width = w
 
     current_row = 1
@@ -1625,21 +1625,6 @@ def build_company_copy_excel(invoice_rows: list) -> bytes:
         rows_in_page += bh
         grand_net += inv.get("total_net_amount", 0) or 0
         grand_total += inv.get("total_grand_total", 0) or 0
-
-    r = current_row + 1
-    ws.merge_cells(f"A{r}:E{r}")
-    ws[f"A{r}"] = f"選択 {len(invoice_rows)} 伝票 総合計（税抜 / 税込）"
-    ws[f"A{r}"].font = Font(name=FF, size=12, bold=True)
-    ws[f"A{r}"].alignment = Alignment(horizontal="right", vertical="center", indent=1)
-    ws[f"F{r}"] = grand_net
-    ws[f"G{r}"] = grand_total
-    for col in "FGH":
-        ws[f"{col}{r}"].font = Font(name=FF, size=12, bold=True)
-        if col != "H":
-            ws[f"{col}{r}"].number_format = '¥#,##0;△¥#,##0'
-        ws[f"{col}{r}"].fill = PatternFill("solid", fgColor="FEF3C7")
-        ws[f"{col}{r}"].alignment = Alignment(horizontal="right", vertical="center", indent=1)
-    ws.row_dimensions[r].height = 26
 
     ws.print_area = f"A1:H{ws.max_row}"
 
