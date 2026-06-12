@@ -1511,12 +1511,25 @@ def write_invoice_block(ws, start_row: int, inv: dict, items: list) -> int:
     head.font = Font(name=FF, size=10, bold=True, color="FFFFFF")
     head.fill = CC_FILL_TITLE
     head.alignment = Alignment(horizontal="left", vertical="center", indent=1)
-    ws.row_dimensions[r].height = 24
+    ws.row_dimensions[r].height = 28
+    
+    # Store barcode
+    if barcode:
+        store_code = inv.get("customer_code", "")
+        if store_code:
+            try:
+                bc_bytes = _barcode_png(store_code)
+                img = ExcelImage(BytesIO(bc_bytes))
+                img.width, img.height = 140, 24
+                ws.add_image(img, f"H{r}")
+            except Exception as e:
+                logger.warning("Store barcode skipped: %s", e)
+    
     r += 1
 
     # --- テーブルヘッダー ---
     headers = {"A": "No.", "B": "品番", "C": "カラー", "D": "サイズ",
-               "E": "数量", "F": "単価", "G": "金額"}
+               "E": "数量", "F": "単価", "G": "金額", "H": "バーコード"}
     for col, label in headers.items():
         cell = ws[f"{col}{r}"]
         cell.value = label
@@ -1538,8 +1551,20 @@ def write_invoice_block(ws, start_row: int, inv: dict, items: list) -> int:
         ws[f"F{r}"] = item.get("unit_price", 0)
         ws[f"G{r}"] = item.get("net_amount", 0)
         subtotal += item.get("net_amount", 0) or 0
+        
+        # Item barcode
+        if barcode:
+            bc_str = item.get("code", "")
+            if bc_str:
+                try:
+                    bc_bytes = _barcode_png(bc_str)
+                    img = ExcelImage(BytesIO(bc_bytes))
+                    img.width, img.height = 130, 22
+                    ws.add_image(img, f"H{r}")
+                except Exception as e:
+                    logger.warning("Item barcode skipped: %s", e)
 
-        for col in "ABCDEFG":
+        for col in "ABCDEFGH":
             cell = ws[f"{col}{r}"]
             cell.font = CC_FONT_BODY
             cell.border = CC_BORDER
@@ -1550,7 +1575,7 @@ def write_invoice_block(ws, start_row: int, inv: dict, items: list) -> int:
         for col in "FG":
             ws[f"{col}{r}"].alignment = Alignment(horizontal="right", vertical="center", indent=1)
             ws[f"{col}{r}"].number_format = '#,##0;△#,##0'
-        ws.row_dimensions[r].height = 18
+        ws.row_dimensions[r].height = 28
         r += 1
 
     # --- 小計行（税込合計はDBの値を使用） ---
@@ -1564,18 +1589,18 @@ def write_invoice_block(ws, start_row: int, inv: dict, items: list) -> int:
         ws[f"{col}{r}"].font = CC_FONT_TOTAL
         ws[f"{col}{r}"].number_format = '¥#,##0;△¥#,##0'
         ws[f"{col}{r}"].alignment = Alignment(horizontal="right", vertical="center", indent=1)
-    for col in "ABCDEFG":
+    for col in "ABCDEFGH":
         ws[f"{col}{r}"].border = Border(
             top=Side(style='medium', color='1F2937'),
             bottom=Side(style='medium', color='1F2937'),
         )
-    ws.row_dimensions[r].height = 22
+    ws.row_dimensions[r].height = 24
     r += 1
 
     return r + 1
 
 from openpyxl.worksheet.pagebreak import Break
-ROWS_PER_PAGE = 42
+ROWS_PER_PAGE = 26
 
 def build_company_copy_excel(invoice_rows: list) -> bytes:
     wb = openpyxl.Workbook()
@@ -1583,7 +1608,7 @@ def build_company_copy_excel(invoice_rows: list) -> bytes:
     ws.title = "会社控え"
     apply_a4_print_settings(ws, orientation="portrait", fit_to_width=True, fit_to_height=False)
 
-    for col, w in {"A": 5, "B": 16, "C": 10, "D": 8, "E": 7, "F": 12, "G": 14}.items():
+    for col, w in {"A": 5, "B": 16, "C": 10, "D": 8, "E": 7, "F": 12, "G": 14, "H": 22}.items():
         ws.column_dimensions[col].width = w
 
     current_row = 1
@@ -1608,14 +1633,15 @@ def build_company_copy_excel(invoice_rows: list) -> bytes:
     ws[f"A{r}"].alignment = Alignment(horizontal="right", vertical="center", indent=1)
     ws[f"F{r}"] = grand_net
     ws[f"G{r}"] = grand_total
-    for col in "FG":
+    for col in "FGH":
         ws[f"{col}{r}"].font = Font(name=FF, size=12, bold=True)
-        ws[f"{col}{r}"].number_format = '¥#,##0;△¥#,##0'
+        if col != "H":
+            ws[f"{col}{r}"].number_format = '¥#,##0;△¥#,##0'
         ws[f"{col}{r}"].fill = PatternFill("solid", fgColor="FEF3C7")
         ws[f"{col}{r}"].alignment = Alignment(horizontal="right", vertical="center", indent=1)
     ws.row_dimensions[r].height = 26
 
-    ws.print_area = f"A1:G{ws.max_row}"
+    ws.print_area = f"A1:H{ws.max_row}"
 
     out = BytesIO()
     wb.save(out)
