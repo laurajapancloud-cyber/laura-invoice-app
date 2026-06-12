@@ -858,6 +858,32 @@
       letter-spacing: 0.03em;
     }
 
+    /* ===== Company copy action bar ===== */
+    .copy-action-bar {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding: 10px 14px;
+      background: rgba(245, 158, 11, 0.10);
+      border: 1px solid rgba(245, 158, 11, 0.45);
+      border-radius: 12px;
+      margin-bottom: 14px;
+    }
+
+    .copy-action-bar .copy-action-count {
+      font-weight: 700;
+      font-size: 13px;
+      color: #f59e0b;
+      white-space: nowrap;
+    }
+
+    .copy-action-bar .btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      transform: none !important;
+    }
+
     /* ===== History ===== */
     .hist-item {
       display: flex;
@@ -2021,7 +2047,7 @@
       /* History list as proper data table (操作は詳細ペイン側に集約) */
       .hist-table-header {
         display: grid !important;
-        grid-template-columns: 32px 110px 52px minmax(140px, 1fr) 110px 84px !important;
+        grid-template-columns: 28px 104px 52px minmax(0, 1fr) 104px 80px !important;
         gap: 8px !important;
         padding: 10px 12px;
         font-size: 10px;
@@ -2048,11 +2074,11 @@
         color: var(--gold-bright);
       }
 
-      .hist-table-header span:nth-child(2) {
+      .hist-table-header span:nth-child(3) {
         text-align: center;
       }
 
-      .hist-table-header span:nth-child(5) {
+      .hist-table-header span:nth-child(6) {
         text-align: center;
       }
 
@@ -2068,7 +2094,7 @@
 
       .hist-item {
         display: grid !important;
-        grid-template-columns: 32px 110px 52px minmax(140px, 1fr) 110px 84px !important;
+        grid-template-columns: 28px 104px 52px minmax(0, 1fr) 104px 80px !important;
         gap: 8px !important;
         align-items: center;
         padding: 12px !important;
@@ -2107,8 +2133,8 @@
         min-width: 0;
       }
 
-      .hist-item>div:nth-child(2),
-      .hist-item>div:nth-child(5) {
+      .hist-item>div[style*="display: contents"]>div:nth-child(2),
+      .hist-item>div[style*="display: contents"]>div:nth-child(5) {
         display: flex;
         justify-content: center;
         align-items: center;
@@ -4776,13 +4802,15 @@
         </div>
 
         <!-- ★会社控え用アクションバー -->
-        <div class="copy-action-bar" x-show="$store.app.selectedInvoiceIds.length > 0" x-transition style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: #FEF3C7; border-radius: 12px; margin-bottom: 16px; border: 1px solid #F59E0B;">
-          <span style="font-weight: bold; color: #92400E;" x-text="$store.app.selectedInvoiceIds.length + '件 選択中'"></span>
-          <button class="btn btn-gold btn-sm" @click="$store.app.downloadCompanyCopy()" style="margin-left: auto;">
+        <div class="copy-action-bar" x-show="$store.app.history.length > 0" x-transition>
+          <span class="copy-action-count" x-text="$store.app.selectedInvoiceIds.length + '件 選択中'"></span>
+          <button class="btn btn-outline btn-sm" @click="$store.app.selectAllVisible()">全選択</button>
+          <button class="btn btn-outline btn-sm" x-show="$store.app.selectedInvoiceIds.length > 0"
+            @click="$store.app.selectedInvoiceIds = []">解除</button>
+          <button class="btn btn-gold btn-sm" style="margin-left: auto;"
+            :disabled="$store.app.selectedInvoiceIds.length === 0" @click="$store.app.downloadCompanyCopy()">
             📗 まとめて控え保存
           </button>
-          <button class="btn btn-outline btn-sm" @click="$store.app.selectAllVisible()">全選択</button>
-          <button class="btn btn-outline btn-sm" @click="$store.app.selectedInvoiceIds = []">解除</button>
         </div>
 
         <!-- デスクトップでだけ表示されるテーブルヘッダー (Sticky) -->
@@ -4817,10 +4845,9 @@
               @click="selectHistItem(inv, $event)">
 
               <div style="display: flex; align-items: center; justify-content: center;">
-                <input type="checkbox"
-                       style="transform: scale(1.2); pointer-events: auto; flex-shrink: 0; margin: 0;"
-                       :checked="$store.app.selectedInvoiceIds.includes(inv.id)"
-                       @click.stop="$store.app.toggleInvoiceSelect(inv.id)">
+                <input type="checkbox" style="transform: scale(1.2); pointer-events: auto; flex-shrink: 0; margin: 0;"
+                  :checked="$store.app.selectedInvoiceIds.includes(inv.id)"
+                  @click.stop="$store.app.toggleInvoiceSelect(inv.id)">
               </div>
 
               <!-- デスクトップ表示 -->
@@ -4851,7 +4878,7 @@
 
               <!-- モバイル表示 -->
               <template x-if="!isDesktop">
-                <div style="width: 100%">
+                <div style="width: 100%; min-width: 0; overflow: hidden;">
                   <div class="hist-info">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px">
                       <div class="hist-num">
@@ -4894,7 +4921,9 @@
 
           <!-- さらに読み込むボタン -->
           <div style="text-align: center; padding: 16px;">
-            <button class="btn btn-outline" style="width: 100%; max-width: 300px;" @click="$store.app.fetchHistory(currentHistoryType, true)" x-show="$store.app.rawHistory.length >= 200">さらに読み込む</button>
+            <button class="btn btn-outline" style="width: 100%; max-width: 300px;"
+              @click="$store.app.fetchHistory(currentHistoryType, true)"
+              x-show="$store.app.rawHistory.length >= 200">さらに読み込む</button>
           </div>
         </div>
       </div>
@@ -5310,6 +5339,9 @@
         selectAllVisible() {
           if (this.history && this.history.length > 0) {
             this.selectedInvoiceIds = this.history.map(inv => inv.id);
+            toast(this.selectedInvoiceIds.length + '件を選択しました');
+          } else {
+            toast('表示中の伝票がありません', 'error');
           }
         },
 
@@ -5326,13 +5358,17 @@
               body: JSON.stringify({ invoice_ids: this.selectedInvoiceIds }),
             });
             if (!res.ok) {
-              toast('控えの生成に失敗しました', 'error');
+              let detail = '';
+              try { const j = await res.json(); detail = j.detail || ''; } catch (_) { /* ignore */ }
+              console.error('company-copy failed:', res.status, detail);
+              toast('控えの生成に失敗しました (HTTP ' + res.status + (detail ? ': ' + detail : '') + ')', 'error', 8000);
               return;
             }
             const blob = await res.blob();
             const cd = res.headers.get('Content-Disposition') || '';
-            const m = cd.match(/filename\*=UTF-8''(.+)/);
-            const fname = m ? decodeURIComponent(m[1]) : '会社控え.xlsx';
+            const m = cd.match(/filename\*?="?(?:UTF-8'')?([^";]+)"?/i);
+            let fname = '会社控え.xlsx';
+            if (m) { try { fname = decodeURIComponent(m[1]); } catch (_) { fname = m[1]; } }
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url; a.download = fname; a.click();
