@@ -4780,7 +4780,8 @@
     </div>
 
     <!-- ========== TAB 2: HISTORY ========== -->
-    <div class="page" id="page-history">
+    <div class="page" id="page-history" x-data="{ isDesktop: window.innerWidth >= 1024 }"
+      @resize.window.debounce.100ms="isDesktop = window.innerWidth >= 1024">
       <div class="card">
         <div class="card-title">⌘ 伝票履歴</div>
         <div class="search-bar-wrap" style="display:flex; gap:10px; margin-bottom:14px">
@@ -4822,8 +4823,7 @@
           <span data-sort="total_grand_total" style="text-align:right">金額</span>
           <span data-sort="status">状態</span>
         </div>
-        <div id="hist-list" x-data="{ isDesktop: window.innerWidth >= 1024 }"
-          @resize.window.debounce.100ms="isDesktop = window.innerWidth >= 1024">
+        <div id="hist-list">
           <template x-if="$store.app.isLoadingHistory">
             <div id="skel-wrap" x-html="skeletonRows(4)"></div>
           </template>
