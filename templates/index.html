@@ -3,17 +3,12 @@
 
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="preconnect" href="https://cdn.sheetjs.com" crossorigin>
-  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>LAURA JAPAN | Invoice System</title>
-  <script defer src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-  <link
-    href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700;800&family=Noto+Sans+JP:wght@300;400;500;700&display=swap"
-    rel="stylesheet">
+  <!-- ライブラリ・フォントは自己ホスト（オフライン信頼性 / CSP強化 / 体感速度向上）。
+       初回のみ static 配下に資産を配置してください（同梱の fetch_assets.sh を実行）。 -->
+  <script defer src="/static/vendor/xlsx.full.min.js"></script>
+  <script defer src="/static/vendor/alpine.min.js"></script>
   <link rel="icon"
     href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📄</text></svg>">
   <link rel="manifest" href="/manifest.json">
@@ -24,6 +19,132 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="LAURA">
   <style>
+    /* ===== Self-hosted Web Fonts (font-display: swap, local() 優先) ===== */
+    @font-face {
+      font-family: 'Inter';
+      font-style: normal;
+      font-weight: 400;
+      font-display: swap;
+      src: local('Inter'), url('/static/fonts/inter-400.woff2') format('woff2')
+    }
+
+    @font-face {
+      font-family: 'Inter';
+      font-style: normal;
+      font-weight: 500;
+      font-display: swap;
+      src: local('Inter Medium'), url('/static/fonts/inter-500.woff2') format('woff2')
+    }
+
+    @font-face {
+      font-family: 'Inter';
+      font-style: normal;
+      font-weight: 600;
+      font-display: swap;
+      src: local('Inter SemiBold'), url('/static/fonts/inter-600.woff2') format('woff2')
+    }
+
+    @font-face {
+      font-family: 'Inter';
+      font-style: normal;
+      font-weight: 700;
+      font-display: swap;
+      src: local('Inter Bold'), url('/static/fonts/inter-700.woff2') format('woff2')
+    }
+
+    @font-face {
+      font-family: 'Cormorant Garamond';
+      font-style: normal;
+      font-weight: 500;
+      font-display: swap;
+      src: local('Cormorant Garamond Medium'), url('/static/fonts/cormorant-garamond-500.woff2') format('woff2')
+    }
+
+    @font-face {
+      font-family: 'Cormorant Garamond';
+      font-style: normal;
+      font-weight: 600;
+      font-display: swap;
+      src: local('Cormorant Garamond SemiBold'), url('/static/fonts/cormorant-garamond-600.woff2') format('woff2')
+    }
+
+    @font-face {
+      font-family: 'Cormorant Garamond';
+      font-style: normal;
+      font-weight: 700;
+      font-display: swap;
+      src: local('Cormorant Garamond Bold'), url('/static/fonts/cormorant-garamond-700.woff2') format('woff2')
+    }
+
+    @font-face {
+      font-family: 'Noto Sans JP';
+      font-style: normal;
+      font-weight: 400;
+      font-display: swap;
+      src: local('Noto Sans JP'), url('/static/fonts/noto-sans-jp-400.woff2') format('woff2')
+    }
+
+    @font-face {
+      font-family: 'Noto Sans JP';
+      font-style: normal;
+      font-weight: 500;
+      font-display: swap;
+      src: local('Noto Sans JP Medium'), url('/static/fonts/noto-sans-jp-500.woff2') format('woff2')
+    }
+
+    @font-face {
+      font-family: 'Noto Sans JP';
+      font-style: normal;
+      font-weight: 700;
+      font-display: swap;
+      src: local('Noto Sans JP Bold'), url('/static/fonts/noto-sans-jp-700.woff2') format('woff2')
+    }
+
+    /* ===== Inline SVG Icon System ===== */
+    .icon {
+      width: 20px;
+      height: 20px;
+      display: inline-block;
+      vertical-align: middle;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      flex: 0 0 auto
+    }
+
+    .sidebar-tab-icon .icon {
+      width: 20px;
+      height: 20px
+    }
+
+    .bn-icon .icon {
+      width: 22px;
+      height: 22px
+    }
+
+    .fab .icon {
+      width: 26px;
+      height: 26px
+    }
+
+    .theme-toggle .icon {
+      width: 18px;
+      height: 18px
+    }
+
+    .cmdk-trigger .icon {
+      width: 16px;
+      height: 16px;
+      margin-right: 2px
+    }
+
+    .install-pill .icon {
+      width: 18px;
+      height: 18px
+    }
+
     :root {
       /* Clean Luxury / High Contrast / Business Dashboard */
       --bg-base: #111111;
@@ -39,7 +160,7 @@
 
       --text-primary: #f7f4ec;
       --text-secondary: #c8c0b2;
-      --text-muted: #8f8778;
+      --text-muted: #a59c8a;
 
       --border: rgba(232, 196, 104, 0.18);
       --border-strong: rgba(232, 196, 104, 0.38);
@@ -3498,7 +3619,7 @@
       --gold-soft: rgba(168, 137, 63, 0.12);
       --text-primary: #2a261f;
       --text-secondary: #575141;
-      --text-muted: #857c67;
+      --text-muted: #6e6552;
       --border: rgba(168, 137, 63, 0.35);
       --border-strong: rgba(168, 137, 63, 0.6);
       --border-subtle: rgba(0, 0, 0, 0.08);
@@ -4144,6 +4265,59 @@
 </head>
 
 <body>
+  <svg width="0" height="0" style="position:absolute;overflow:hidden" aria-hidden="true" focusable="false">
+    <defs>
+      <symbol id="i-scissors" viewBox="0 0 24 24">
+        <circle cx="6" cy="6" r="3" />
+        <circle cx="6" cy="18" r="3" />
+        <line x1="20" y1="4" x2="8.12" y2="15.88" />
+        <line x1="14.47" y1="14.48" x2="20" y2="20" />
+        <line x1="8.12" y1="8.12" x2="12" y2="12" />
+      </symbol>
+      <symbol id="i-history" viewBox="0 0 24 24">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+        <polyline points="14 2 14 8 20 8" />
+        <line x1="16" y1="13" x2="8" y2="13" />
+        <line x1="16" y1="17" x2="8" y2="17" />
+        <line x1="10" y1="9" x2="8" y2="9" />
+      </symbol>
+      <symbol id="i-chart" viewBox="0 0 24 24">
+        <line x1="18" y1="20" x2="18" y2="10" />
+        <line x1="12" y1="20" x2="12" y2="4" />
+        <line x1="6" y1="20" x2="6" y2="14" />
+      </symbol>
+      <symbol id="i-settings" viewBox="0 0 24 24">
+        <path
+          d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+        <circle cx="12" cy="12" r="3" />
+      </symbol>
+      <symbol id="i-book" viewBox="0 0 24 24">
+        <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+        <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+      </symbol>
+      <symbol id="i-download" viewBox="0 0 24 24">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+        <polyline points="7 10 12 15 17 10" />
+        <line x1="12" y1="15" x2="12" y2="3" />
+      </symbol>
+      <symbol id="i-search" viewBox="0 0 24 24">
+        <circle cx="11" cy="11" r="8" />
+        <line x1="21" y1="21" x2="16.65" y2="16.65" />
+      </symbol>
+      <symbol id="i-sun" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="4" />
+        <path
+          d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
+      </symbol>
+      <symbol id="i-moon" viewBox="0 0 24 24">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+      </symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24">
+        <line x1="12" y1="5" x2="12" y2="19" />
+        <line x1="5" y1="12" x2="19" y2="12" />
+      </symbol>
+    </defs>
+  </svg>
 
   <!-- 生成中オーバーレイ -->
   <div id="gen-overlay" class="gen-overlay">
@@ -4265,35 +4439,47 @@
     </div>
     <nav class="sidebar-nav">
       <div class="sidebar-tab active" data-tab="create">
-        <span class="sidebar-tab-icon">✨</span>
+        <span class="sidebar-tab-icon"><svg class="icon" aria-hidden="true">
+            <use href="#i-scissors"></use>
+          </svg></span>
         <span>新規作成</span>
         <span class="sidebar-tab-shortcut">⌘1</span>
       </div>
       <div class="sidebar-tab" data-tab="history">
-        <span class="sidebar-tab-icon">📄</span>
+        <span class="sidebar-tab-icon"><svg class="icon" aria-hidden="true">
+            <use href="#i-history"></use>
+          </svg></span>
         <span>履歴</span>
         <span class="sidebar-tab-shortcut">⌘2</span>
       </div>
       <div class="sidebar-tab" data-tab="dashboard">
-        <span class="sidebar-tab-icon">📊</span>
+        <span class="sidebar-tab-icon"><svg class="icon" aria-hidden="true">
+            <use href="#i-chart"></use>
+          </svg></span>
         <span>分析</span>
         <span class="sidebar-tab-shortcut">⌘3</span>
       </div>
       <div class="sidebar-divider"></div>
       <div class="sidebar-tab" data-tab="settings">
-        <span class="sidebar-tab-icon">⚙️</span>
+        <span class="sidebar-tab-icon"><svg class="icon" aria-hidden="true">
+            <use href="#i-settings"></use>
+          </svg></span>
         <span>設定</span>
         <span class="sidebar-tab-shortcut">⌘4</span>
       </div>
       <a href="/manual" target="_blank" class="sidebar-tab" style="text-decoration:none; color:inherit;">
-        <span class="sidebar-tab-icon">📖</span>
+        <span class="sidebar-tab-icon"><svg class="icon" aria-hidden="true">
+            <use href="#i-book"></use>
+          </svg></span>
         <span>マニュアル</span>
       </a>
     </nav>
 
     <div class="sidebar-install" id="sidebar-install-container">
       <div class="install-pill" onclick="triggerPWAInstall()">
-        <span>📲</span>
+        <span><svg class="icon" aria-hidden="true">
+            <use href="#i-download"></use>
+          </svg></span>
         <span>アプリをインストール</span>
       </div>
     </div>
@@ -4310,22 +4496,32 @@
   <nav class="bottom-nav" id="bottom-nav" aria-label="主要ナビゲーション">
     <div class="bottom-nav-inner">
       <div class="bn-tab active" data-tab="create" data-bn="create">
-        <span class="bn-icon">✂</span><span>作成</span>
+        <span class="bn-icon"><svg class="icon" aria-hidden="true">
+            <use href="#i-scissors"></use>
+          </svg></span><span>作成</span>
       </div>
       <div class="bn-tab" data-tab="history" data-bn="history">
-        <span class="bn-icon">📒</span><span>履歴</span>
+        <span class="bn-icon"><svg class="icon" aria-hidden="true">
+            <use href="#i-history"></use>
+          </svg></span><span>履歴</span>
       </div>
       <div class="bn-tab" data-tab="dashboard" data-bn="dashboard">
-        <span class="bn-icon">📊</span><span>分析</span>
+        <span class="bn-icon"><svg class="icon" aria-hidden="true">
+            <use href="#i-chart"></use>
+          </svg></span><span>分析</span>
       </div>
       <div class="bn-tab" data-tab="settings" data-bn="settings">
-        <span class="bn-icon">⚙</span><span>設定</span>
+        <span class="bn-icon"><svg class="icon" aria-hidden="true">
+            <use href="#i-settings"></use>
+          </svg></span><span>設定</span>
       </div>
     </div>
   </nav>
 
   <!-- ===== Floating Action Button (mobile only) ===== -->
-  <button id="fab-new" class="fab" type="button" aria-label="新規作成">＋</button>
+  <button id="fab-new" class="fab" type="button" aria-label="新規作成"><svg class="icon" aria-hidden="true">
+      <use href="#i-plus"></use>
+    </svg></button>
 
   <!-- ===== Command Palette (⌘K) ===== -->
   <div id="cmdk-overlay" class="cmdk-overlay">
@@ -4371,11 +4567,15 @@
         <span class="dot"></span> <span class="name">ユーザー未選択</span>
       </div>
       <button class="cmdk-trigger" id="cmdk-trigger">
-        <span>🔍</span><span>検索...</span>
+        <svg class="icon" aria-hidden="true">
+          <use href="#i-search"></use>
+        </svg><span>検索...</span>
         <span class="cmdk-shortcut">⌘K</span>
       </button>
       <button id="theme-toggle" class="theme-toggle" type="button" title="テーマ切替" aria-label="テーマ切替"
-        style="margin-left:8px">☀</button>
+        style="margin-left:8px"><svg class="icon" aria-hidden="true">
+          <use href="#i-sun"></use>
+        </svg></button>
     </div>
   </div>
 
@@ -5095,8 +5295,10 @@
           <div style="font-weight:600; color:var(--text-primary)">テーマ</div>
           <div style="font-size:12px; color:var(--text-muted); margin-top:4px">ライト / ダークの切り替え</div>
         </div>
-        <button id="theme-toggle-settings" class="theme-toggle" type="button" title="テーマ切替"
-          aria-label="テーマ切替">☀</button>
+        <button id="theme-toggle-settings" class="theme-toggle" type="button" title="テーマ切替" aria-label="テーマ切替"><svg
+            class="icon" aria-hidden="true">
+            <use href="#i-sun"></use>
+          </svg></button>
       </div>
     </div>
     <div class="card">
@@ -5250,8 +5452,10 @@
       }
       document.documentElement.setAttribute('data-theme', theme);
       localStorage.setItem('laura-theme', theme);
-      const icon = theme === 'light' ? '🌙' : '☀';
-      document.querySelectorAll('.theme-toggle').forEach(btn => { btn.textContent = icon; });
+      const iconId = theme === 'light' ? '#i-moon' : '#i-sun';
+      document.querySelectorAll('.theme-toggle').forEach(btn => {
+        btn.innerHTML = '<svg class="icon" aria-hidden="true"><use href="' + iconId + '"></use></svg>';
+      });
     };
     applyTheme();
 
