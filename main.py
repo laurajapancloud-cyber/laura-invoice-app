@@ -254,7 +254,15 @@ db_pool = None
 if DATABASE_URL and psycopg2 and pool:
     try:
         # SimpleConnectionPool ではなく ThreadedConnectionPool を使用（スレッドセーフ化）
-        db_pool = pool.ThreadedConnectionPool(1, 20, DATABASE_URL, cursor_factory=RealDictCursor)
+        # keepalives を付与し、アイドル接続が Supabase/PgBouncer に切断されるのを予防する
+        db_pool = pool.ThreadedConnectionPool(
+            1, 20, DATABASE_URL,
+            cursor_factory=RealDictCursor,
+            keepalives=1,
+            keepalives_idle=30,
+            keepalives_interval=10,
+            keepalives_count=5,
+        )
         logger.info("Database connection pool initialized.")
     except Exception as e:
         logger.error("DB Pool creation failed: %s", e)
@@ -269,7 +277,24 @@ def get_db():
     
     # プールが初期化されていればプールから取得、なければフォールバック
     if db_pool:
-        return db_pool.getconn()
+        # 死活チェック(pre-ping): プール内の接続は Supabase 側のアイドルタイムアウトや
+        # idle-in-transaction タイムアウトで切断されていることがある。
+        # 取り出した接続が生きているか SELECT 1 で確認し、死んでいれば破棄して取り直す。
+        for _ in range(3):
+            conn = db_pool.getconn()
+            try:
+                with conn.cursor() as _c:
+                    _c.execute("SELECT 1")
+                conn.rollback()  # ping 用トランザクションを閉じてクリーンな状態で返す
+                return conn
+            except Exception as e:
+                logger.warning("Stale DB connection detected, discarding and retrying: %s", e)
+                try:
+                    db_pool.putconn(conn, close=True)  # 壊れた接続はプールから完全に破棄
+                except Exception:
+                    pass
+        # 3回試しても駄目なら新規接続でフォールバック
+        return psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
     else:
         return psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
 
@@ -314,6 +339,19 @@ def db_transaction():
 
 def release_db(conn):
     if db_pool:
+        # 接続をプールへ返す前に必ず rollback してトランザクション状態をリセットする。
+        # これをしないと、読み取りだけのリクエストでも開きっぱなしのトランザクション
+        # (idle in transaction) が残り、Supabase 側に強制切断されて次回 500 になる。
+        # また aborted なトランザクションが残った接続が使い回されて連鎖的に失敗するのも防ぐ。
+        try:
+            conn.rollback()
+        except Exception as e:
+            logger.warning("DB rollback on release failed, closing connection: %s", e)
+            try:
+                db_pool.putconn(conn, close=True)
+            except Exception:
+                pass
+            return
         db_pool.putconn(conn)
     else:
         conn.close()
@@ -421,7 +459,7 @@ def init_db():
         if cur.fetchone()['count'] == 0:
             cur.executemany("INSERT INTO customers (name, discount_rate) VALUES (%s, %s)", [
                 ("株式会社 タム 御中", 35),
-                ("株式会社 サンプル 御中", 40),
+                ("株式会社 サンプル ���中", 40),
             ])
     try:
         conn.commit()
@@ -609,6 +647,34 @@ app = FastAPI()
 app.mount("/static", StaticFiles(directory="static"), name="static")
 cookie_sec = APIKeyCookie(name="laura_session", auto_error=False)
 templates = Jinja2Templates(directory="templates")
+
+# ==================== Global Exception Handlers ====================
+# 未捕捉の例外は FastAPI 既定だとプレーンテキスト "Internal Server Error" を返すため、
+# フロントの response.json() が SyntaxError で落ちる。常に JSON で返すようにする。
+from fastapi.exceptions import RequestValidationError
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+        headers=getattr(exc, "headers", None),
+    )
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    return JSONResponse(
+        status_code=422,
+        content={"detail": "リクエストの形式が不正です", "errors": exc.errors()},
+    )
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    logger.exception("Unhandled error on %s %s: %s", request.method, request.url.path, exc)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "サーバーエラーが発生しました。しばらくしてから再試行してください。"},
+    )
 
 # ==================== CSRF Protection (Origin/Referer check) ====================
 # 状態変更メソッドに対してリクエスト元オリジンをチェックし、

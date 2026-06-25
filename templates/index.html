@@ -5100,7 +5100,7 @@
       </div>
     </div>
     <div class="card">
-      <div class="card-title">セキュリティ</div>
+      <div class="card-title">セキュリテ���</div>
       <div style="text-align:center; padding: 10px 0;">
         <a href="/logout" class="btn btn-outline"
           style="display:inline-block; text-decoration:none; padding: 10px 24px;">システムからログアウト</a>
@@ -5137,6 +5137,8 @@
 
   <script>
     const $ = id => document.getElementById(id);
+    // HTML エスケープ: ユーザー入力（店名・担当者名・品番等）を innerHTML に入れる際の XSS 対策
+    const escapeHtml = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
     // ===== UX Utilities =====
     // 触覚フィードバック (Web Vibration API + iOS WebView ブリッジ対応)
@@ -5385,8 +5387,12 @@
         async fetchCustomers() {
           try {
             const r = await fetch('/api/customers');
+            if (!r.ok) throw new Error('HTTP ' + r.status);
             this.customers = await r.json();
-          } catch (e) { console.error('fetchCustomers failed', e); }
+          } catch (e) {
+            console.error('fetchCustomers failed', e);
+            if (window.toast) toast('取引先マスタの読み込みに失敗しました', 'error');
+          }
         },
 
         async fetchHistory(type = 'all', append = false) {
@@ -5397,6 +5403,7 @@
               this.historyOffset += 200;
             }
             const r = await fetch(`/api/history?doc_type=${type}&offset=${this.historyOffset}&limit=200`);
+            if (!r.ok) throw new Error('HTTP ' + r.status);
             const data = await r.json();
             if (append) {
               this.rawHistory = [...this.rawHistory, ...data];
@@ -5405,7 +5412,10 @@
             }
             // 取得後にフィルタリングを適用
             if (window.applyHistoryFilters) applyHistoryFilters();
-          } catch (e) { console.error('fetchHistory failed', e); }
+          } catch (e) {
+            console.error('fetchHistory failed', e);
+            if (window.toast) toast('履歴の読み込みに失敗しました', 'error');
+          }
         }
       });
 
@@ -5485,12 +5495,13 @@
     async function loadUsers() {
       try {
         const r = await fetch('/api/users');
+        if (!r.ok) throw new Error('HTTP ' + r.status);
         allUsers = await r.json();
         const grid = $('user-grid');
         grid.innerHTML = allUsers.map(u => `
 			<div class="user-pill" onclick='selectUser(${JSON.stringify(u).replace(/'/g, "&#39;")})'>
 				<span class="dot" style="background:${u.color}"></span>
-				<span style="font-size:14px; font-weight:600">${u.name}</span>
+				<span style="font-size:14px; font-weight:600">${escapeHtml(u.name)}</span>
 				<button class="del-user-btn" style="position:absolute; top:4px; right:4px; background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:10px" onclick="event.stopPropagation(); delUser(${u.id})">✕</button>
 			</div>
 		`).join('');
@@ -5499,7 +5510,7 @@
         if (filter) {
           const current = filter.value;
           filter.innerHTML = '<option value="">すべてのユーザー</option>' +
-            allUsers.map(u => `<option value="${u.id}">${u.name}</option>`).join('');
+            allUsers.map(u => `<option value="${u.id}">${escapeHtml(u.name)}</option>`).join('');
 
           // 初回のみ現在のユーザーをデフォルト選択にする
           if (!filter.dataset.init && currentUser) {
@@ -5514,7 +5525,7 @@
         const newCustUser = $('new-cust-user');
         if (newCustUser) {
           newCustUser.innerHTML = '<option value="">なし</option>' +
-            allUsers.map(u => `<option value="${u.id}">${u.name}</option>`).join('');
+            allUsers.map(u => `<option value="${u.id}">${escapeHtml(u.name)}</option>`).join('');
         }
       } catch (e) { console.error(e); }
     }
@@ -5878,7 +5889,7 @@
             strip.style.display = 'block';
             stripText.textContent = `${this.getJobLabel(job.type)}中...`;
           } else if (job.status === 'done') {
-            stripText.textContent = `${this.getJobLabel(job.type)}が完了しました`;
+            stripText.textContent = `${this.getJobLabel(job.type)}が完了���ました`;
             setTimeout(() => strip.style.display = 'none', 1800);
           } else if (job.status === 'failed') {
             stripText.textContent = `${this.getJobLabel(job.type)}に失敗しました`;
@@ -5934,7 +5945,7 @@
         steps = ['画像最適化', 'サーバー送信', 'AIデータ抽出', '完了'];
       } else if (mode === 'drive') {
         title = 'UPLOADING TO DRIVE';
-        steps = ['Drive接続', '認証チェック', 'データ転送', '完了'];
+        steps = ['Drive接続', '認証チェック', 'データ転送', '完���'];
       }
 
       $('gen-overlay').querySelector('.gen-sub').textContent = title;
@@ -6218,8 +6229,8 @@
         return `<tr><td class="left">${i + 1}</td><td class="left">${it.code || '-'}</td><td>${it.color || '-'}</td><td>${it.size || '-'}</td><td>${q}</td><td>¥${(it.unit_price || 0).toLocaleString()}</td><td>¥${amt.toLocaleString()}</td></tr>`;
       }).join('');
       $(targetId).innerHTML = `<div class="summary-card">
-					<div class="summary-row"><span class="lbl">伝票番号</span><span class="val">${d.invoice_number}</span></div>
-					<div class="summary-row"><span class="lbl">取引先</span><span class="val">${payload.customer_name}</span></div>
+					<div class="summary-row"><span class="lbl">伝票番号</span><span class="val">${escapeHtml(d.invoice_number)}</span></div>
+					<div class="summary-row"><span class="lbl">取引先</span><span class="val">${escapeHtml(payload.customer_name)}</span></div>
 					<div class="summary-row"><span class="lbl">掛率</span><span class="val">${rateLabel}</span></div>
 					<div class="summary-row"><span class="lbl">合計点数</span><span class="val">${totalQty}点</span></div>
 					<div class="summary-row" style="font-size:16px;font-weight:700"><span class="lbl" style="color:#8b6f1f">合計金額</span><span class="val" style="color:#3a3122">¥${grand.toLocaleString()}</span></div>
@@ -6270,7 +6281,7 @@
 
       const userSelect = editDiv.querySelector('.edit-user');
       userSelect.innerHTML = '<option value="">なし</option>' +
-        allUsers.map(u => `<option value="${u.id}" ${u.id === c.user_id ? 'selected' : ''}>${u.name}</option>`).join('');
+        allUsers.map(u => `<option value="${u.id}" ${u.id === c.user_id ? 'selected' : ''}>${escapeHtml(u.name)}</option>`).join('');
     }
 
     function cancelEditCust(row) {
@@ -6487,10 +6498,10 @@
           pane.innerHTML = `
 						<div class="detail-header">
 							<div class="detail-header-info">
-								<h2>${d.invoice_number}</h2>
+								<h2>${escapeHtml(d.invoice_number)}</h2>
 								<div class="detail-header-meta">
 									<span class="badge" style="background:${TYPE_COLORS[d.doc_type]}33; color:${TYPE_COLORS[d.doc_type]}">${titles.label}</span>
-									${d.customer_name} · ${d.items.length}点 · ¥${(d.total_grand_total || 0).toLocaleString()}
+									${escapeHtml(d.customer_name)} · ${d.items.length}点 · ¥${(d.total_grand_total || 0).toLocaleString()}
 								</div>
 							</div>
 							<div class="detail-actions">
@@ -7267,7 +7278,7 @@
             const div = document.createElement('div');
             div.style.cssText = 'display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.05);';
             const color = c.total >= 0 ? 'var(--text-primary)' : 'var(--red)';
-            div.innerHTML = `<span style="color:var(--text-secondary)">${i + 1}. ${c.customer_name}</span><span style="font-weight:600; color:${color}">¥${c.total.toLocaleString()}</span>`;
+            div.innerHTML = `<span style="color:var(--text-secondary)">${i + 1}. ${escapeHtml(c.customer_name)}</span><span style="font-weight:600; color:${color}">¥${c.total.toLocaleString()}</span>`;
             tc.appendChild(div);
           });
         } else { tc.innerHTML = '<div class="empty-state">データなし</div>'; }
@@ -7278,7 +7289,7 @@
           d.top_items.forEach((it, i) => {
             const div = document.createElement('div');
             div.style.cssText = 'display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.05);';
-            div.innerHTML = `<span style="color:var(--text-secondary)">${i + 1}. ${it.code}</span><span style="font-weight:600">${it.qty}点</span>`;
+            div.innerHTML = `<span style="color:var(--text-secondary)">${i + 1}. ${escapeHtml(it.code)}</span><span style="font-weight:600">${it.qty}点</span>`;
             ti.appendChild(div);
           });
         } else { ti.innerHTML = '<div class="empty-state">データなし</div>'; }
