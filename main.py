@@ -468,6 +468,17 @@ def init_db():
                 UNIQUE (code, color, size, unit_price)
             );
             CREATE INDEX IF NOT EXISTS idx_product_variants_code ON product_variants(code);
+            -- サーバー同期下書き: 複数の下書きをどの端末からでも再開できる
+            CREATE TABLE IF NOT EXISTS drafts (
+                id SERIAL PRIMARY KEY,
+                customer_name TEXT NOT NULL DEFAULT '',
+                doc_type TEXT NOT NULL DEFAULT 'delivery',
+                item_count INTEGER NOT NULL DEFAULT 0,
+                total_amount INTEGER NOT NULL DEFAULT 0,
+                payload JSONB NOT NULL,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            );
             -- 監査ログ: 誰がいつ何をしたか
             CREATE TABLE IF NOT EXISTS audit_log (
                 id SERIAL PRIMARY KEY,
@@ -1378,8 +1389,11 @@ def extract_json_object(text: str):
         raise ValueError("unexpected JSON shape")
     return data
 
-def _analyze_single_image(part: dict, ai_model: str) -> dict:
+def _analyze_single_image(part: dict, ai_model: str, master_codes: list = None) -> dict:
     """画像1枚を解析して item dict を返す（失敗時は例外を送出）"""
+    prompt = ANALYZE_PROMPT
+    if master_codes:
+        prompt = ANALYZE_PROMPT + "\n\n【既知の品番リスト（過去伝票の実績）】\n読み取った品番が下記のいずれかと酷似する場合（O/0・I/1・B/8などの見間違い、ハイフン抜け等）は、リスト側の正しい表記を採用してください。リストに無い新しい品番はそのまま返してください:\n" + ", ".join(master_codes)
     if ai_model == "vision":
         if not vision_client: raise Exception("Cloud VisionのJSONキーが未設定です。")
         image = vision.Image(content=part["data"])
@@ -1412,7 +1426,7 @@ def _analyze_single_image(part: dict, ai_model: str) -> dict:
         base_kwargs = dict(
             model=model_name,
             messages=[{"role": "user", "content": [
-                {"type": "text", "text": ANALYZE_PROMPT},
+                {"type": "text", "text": prompt},
                 {"type": "image_url", "image_url": {
                     # タグの小さな文字を読むため detail=high（旧: low は512px相当に縮小され誤読の原因だった）
                     "url": f"data:{part['mime_type']};base64,{part['base64']}",
@@ -1441,7 +1455,7 @@ def _analyze_single_image(part: dict, ai_model: str) -> dict:
 
     if ai_model == "gemini":
         if not gemini_model: raise Exception("Gemini APIキーが未設定です。")
-        contents = [ANALYZE_PROMPT, {"mime_type": part["mime_type"], "data": part["data"]}]
+        contents = [prompt, {"mime_type": part["mime_type"], "data": part["data"]}]
         try:
             response = gemini_model.generate_content(
                 contents,
@@ -1490,7 +1504,7 @@ def _attach_variant_warnings(items: list):
             top = max(variants, key=lambda v: v["seen_count"])
             warnings.append(f"過去実績と価格が不一致（実績: ¥{top['unit_price']:,}）")
         if warnings:
-            it["warnings"] = warnings
+            it["warnings"] = (it.get("warnings") or []) + warnings
 
 def analyze_images_internal(jid: str, image_parts: list, ai_model: str):
     """画像を1枚ずつ並列解析する。
@@ -1498,8 +1512,8 @@ def analyze_images_internal(jid: str, image_parts: list, ai_model: str):
     - 無音欠落防止: 失敗画像は failed_images として返し、フロントで再試行できる
     """
     try:
-        db_update_job(jid, 'processing')
         n = len(image_parts)
+        db_update_job(jid, 'processing', result={"progress": {"done": 0, "total": n, "item_count": 0, "live_items": []}})
         results = [None] * n
         failed = {}
 
@@ -1507,7 +1521,7 @@ def analyze_images_internal(jid: str, image_parts: list, ai_model: str):
             last_err = None
             for attempt in range(2):  # 失敗時は1回だけ自動リトライ
                 try:
-                    item = _analyze_single_image(image_parts[idx], ai_model)
+                    item = _analyze_single_image(image_parts[idx], ai_model, master_codes)
                     item["quantity"] = 1
                     item["source_image_no"] = idx
                     return idx, item, None
@@ -1516,19 +1530,65 @@ def analyze_images_internal(jid: str, image_parts: list, ai_model: str):
                     time.sleep(0.8 * (attempt + 1))
             return idx, None, str(last_err)
 
+        # 学習マスタの既知品番を取得してAIに照合させる（読み取り精度向上ループ）
+        master_codes = []
+        try:
+            if DATABASE_URL and psycopg2:
+                with db_conn() as conn, conn.cursor() as cur:
+                    cur.execute(
+                        """SELECT code FROM product_variants
+                           GROUP BY code
+                           ORDER BY SUM(seen_count) DESC, MAX(last_seen_at) DESC
+                           LIMIT 200"""
+                    )
+                    master_codes = [str(r["code"]) for r in cur.fetchall()]
+        except Exception as e:
+            logger.warning("master codes fetch failed: %s", e)
+
         from concurrent.futures import ThreadPoolExecutor, as_completed
         max_workers = 1 if ai_model == "vision" else min(4, max(1, n))
         with ThreadPoolExecutor(max_workers=max_workers) as ex:
             futures = [ex.submit(run_one, i) for i in range(n)]
+            done_count = 0
             for fut in as_completed(futures):
                 idx, item, err = fut.result()
+                done_count += 1
                 if item is not None:
                     results[idx] = item
                 else:
                     failed[idx] = err or "unknown error"
                     logger.warning("Image %d analyze failed (%s): %s", idx, ai_model, err)
+                # リアルタイム進捗: 1枚終わるごとに進捗と読み取り済み明細をジョブへ書き込む（ポーリングで順次表示）
+                try:
+                    live = [{"code": str(r.get("code") or "-"), "size": str(r.get("size") or ""), "unit_price": r.get("unit_price") or 0} for r in results if r is not None][:30]
+                    db_update_job(jid, 'processing', result={"progress": {"done": done_count, "total": n, "failed": len(failed), "item_count": len(live), "live_items": live}})
+                except Exception as pe:
+                    logger.warning("progress update failed: %s", pe)
 
         items_data = [it for it in results if it is not None]
+
+        # 品番の見間違い自動補正: 紛らわしい文字（O/0・I/1・B/8等）を正規化してマスタと照合
+        try:
+            if master_codes:
+                def _confusable(s):
+                    s = str(s or "").upper()
+                    for a, b in (("O", "0"), ("I", "1"), ("L", "1"), ("B", "8"), ("S", "5"), ("Z", "2"), ("-", ""), (" ", "")):
+                        s = s.replace(a, b)
+                    return s
+                master_set = {c.upper() for c in master_codes}
+                norm_map = {}
+                for mc in master_codes:
+                    norm_map.setdefault(_confusable(mc), mc)
+                for it in items_data:
+                    code = str(it.get("code") or "").strip()
+                    if not code or code == "-" or code.upper() in master_set:
+                        continue
+                    cand = norm_map.get(_confusable(code))
+                    if cand and cand.upper() != code.upper():
+                        it["warnings"] = (it.get("warnings") or []) + ["品番をマスタ表記に自動補正: %s → %s" % (code, cand)]
+                        it["code"] = cand
+        except Exception as e:
+            logger.warning("code auto-correct skipped: %s", e)
 
         # 学習型マスタとの突合検証（価格不一致などの警告付与）
         try:
@@ -1572,6 +1632,68 @@ async def enqueue_analyze(bt: BackgroundTasks, username: Annotated[str, Depends(
         image_parts.append({"mime_type": file.content_type or "image/jpeg", "data": data, "base64": base64.b64encode(data).decode()})
     bt.add_task(analyze_images_internal, jid, image_parts, ai_model)
     return {"job_id": jid, "status": "pending"}
+
+# ==================== サーバー同期下書き API ====================
+@app.get("/api/drafts")
+def list_drafts(username: Annotated[str, Depends(authenticate)], limit: int = 10):
+    """サーバー同期下書きの一覧（更新が新しい順）"""
+    limit = max(1, min(limit, 30))
+    with db_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """SELECT id, customer_name, doc_type, item_count, total_amount,
+                      to_char(updated_at AT TIME ZONE 'Asia/Tokyo', 'MM/DD HH24:MI') as updated_label
+               FROM drafts ORDER BY updated_at DESC LIMIT %s""",
+            (limit,)
+        )
+        return [dict(r) for r in cur.fetchall()]
+
+@app.get("/api/drafts/{draft_id}")
+def get_draft(draft_id: int, username: Annotated[str, Depends(authenticate)]):
+    with db_conn() as conn, conn.cursor() as cur:
+        cur.execute("SELECT id, payload FROM drafts WHERE id=%s", (draft_id,))
+        row = cur.fetchone()
+    if not row:
+        raise HTTPException(404, "下書きが見つかりません（別の端末で削除された可能性があります）")
+    return dict(row)
+
+@app.post("/api/drafts")
+async def upsert_draft(request: Request, username: Annotated[str, Depends(authenticate)]):
+    """下書きのサーバー保存（idがあれば更新、なければ新規作成してidを返す）"""
+    body = await request.json()
+    draft_id = body.get("id")
+    payload = body.get("payload") or {}
+    customer_name = str(body.get("customer_name") or "")[:80]
+    doc_type = str(body.get("doc_type") or "delivery")[:20]
+    try:
+        item_count = int(body.get("item_count") or 0)
+    except Exception:
+        item_count = 0
+    try:
+        total_amount = int(body.get("total_amount") or 0)
+    except Exception:
+        total_amount = 0
+    with db_transaction() as conn, conn.cursor() as cur:
+        if draft_id:
+            cur.execute(
+                """UPDATE drafts SET customer_name=%s, doc_type=%s, item_count=%s,
+                          total_amount=%s, payload=%s, updated_at=NOW() WHERE id=%s RETURNING id""",
+                (customer_name, doc_type, item_count, total_amount, json.dumps(payload), draft_id)
+            )
+            row = cur.fetchone()
+            if row:
+                return {"id": row["id"]}
+        cur.execute(
+            """INSERT INTO drafts (customer_name, doc_type, item_count, total_amount, payload)
+               VALUES (%s, %s, %s, %s, %s) RETURNING id""",
+            (customer_name, doc_type, item_count, total_amount, json.dumps(payload))
+        )
+        return {"id": cur.fetchone()["id"]}
+
+@app.delete("/api/drafts/{draft_id}")
+def delete_draft(draft_id: int, username: Annotated[str, Depends(authenticate)]):
+    with db_transaction() as conn, conn.cursor() as cur:
+        cur.execute("DELETE FROM drafts WHERE id=%s", (draft_id,))
+        return {"deleted": cur.rowcount}
 
 # ==================== 学習型商品マスタ API ====================
 @app.get("/api/products")

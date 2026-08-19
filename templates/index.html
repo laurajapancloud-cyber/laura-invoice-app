@@ -5011,6 +5011,10 @@
           <input type="file" id="file-input" accept="image/*" multiple>
         </div>
         <div class="thumb-row" id="thumbs"></div>
+        <div id="live-analyze" style="display:none; margin-top:12px; padding:10px 12px; border:1px solid rgba(201,169,97,0.35); border-radius:10px;">
+          <div id="live-analyze-head" style="font-size:12px; color:var(--text-muted); margin-bottom:6px;"></div>
+          <div id="live-analyze-rows" style="display:flex; flex-direction:column; gap:3px; font-size:12.5px;"></div>
+        </div>
         <button class="btn btn-gold" id="btn-analyze" disabled style="margin-top:14px">
           <div class="spinner" id="sp1"></div><span id="btn-analyze-text">AIでデータを抽出する</span>
         </button>
@@ -6369,6 +6373,7 @@
           } else if (job.status === 'failed') {
             this.failJob(job, job.error);
           } else {
+            try { if (job.callbacks.onProgress) job.callbacks.onProgress(job.result, job); } catch (_op) { }
             job.pollCount = (job.pollCount || 0) + 1;
             // 2.5sから徐々に間隔を広げる（最大10s）: サーバー負荷と電池消費を抑える
             const delay = Math.min(this.pollingInterval * Math.pow(1.3, job.pollCount - 1), 10000);
@@ -6420,7 +6425,10 @@
         if (strip && stripText) {
           if (job.status === 'pending' || job.status === 'processing') {
             strip.style.display = 'block';
-            stripText.textContent = `${this.getJobLabel(job.type)}中...`;
+            const _pg = job.result && job.result.progress;
+            stripText.textContent = (_pg && _pg.total)
+              ? this.getJobLabel(job.type) + '中... ' + _pg.done + '/' + _pg.total + '枚（読み取り' + (_pg.item_count || 0) + '点）'
+              : this.getJobLabel(job.type) + '中...';
           } else if (job.status === 'done') {
             stripText.textContent = `${this.getJobLabel(job.type)}が完了しました`;
             setTimeout(() => strip.style.display = 'none', 1800);
@@ -6440,13 +6448,14 @@
         }
         const iconMap = { analyze: svgUse('i-ai'), generate: svgUse('i-download'), lock: svgUse('i-lock'), drive_upload: svgUse('i-cloud') };
         const icon = iconMap[job.type] || svgUse('i-settings');
-        const progress = job.status === 'done' ? 100 : job.status === 'processing' ? 60 : 10;
+        const _pgm = job.result && job.result.progress;
+        const progress = job.status === 'done' ? 100 : (_pgm && _pgm.total) ? Math.max(12, Math.round(_pgm.done / _pgm.total * 92)) : job.status === 'processing' ? 60 : 10;
         el.className = `job-item job-${job.status}`;
         el.innerHTML = `
           <div class="job-icon">${icon}</div>
           <div class="job-info">
             <div class="job-name">${this.getJobLabel(job.type)}</div>
-            <div class="job-status-text">${this.getStatusLabel(job.status)}</div>
+            <div class="job-status-text">${(_pgm && _pgm.total && job.status !== 'done' && job.status !== 'failed') ? (_pgm.done + '/' + _pgm.total + '枚 解析済み') : this.getStatusLabel(job.status)}</div>
             <div class="job-progress-mini"><div class="job-progress-mini-fill" style="width:${progress}%"></div></div>
           </div>
         `;
@@ -7445,6 +7454,22 @@
 
         if (typeof ensureNotifyPermission === 'function') ensureNotifyPermission();
         jobManager.enqueue('analyze', '/api/jobs/analyze', fd, {
+          onProgress: (res) => {
+            try {
+              const pg = res && res.progress;
+              if (!pg || !pg.total) return;
+              const box = $('live-analyze');
+              if (box) {
+                box.style.display = 'block';
+                $('live-analyze-head').textContent = 'AI解析中... ' + pg.done + '/' + pg.total + '枚完了' + (pg.failed ? '（' + pg.failed + '枚失敗）' : '');
+                const rows = (pg.live_items || []).map(it => '<div>✓ <b>' + escapeHtml(String(it.code || '-')) + '</b>' + (it.size ? ' / ' + escapeHtml(String(it.size)) : '') + (it.unit_price ? ' / ¥' + Number(it.unit_price).toLocaleString() : '') + '</div>').join('');
+                $('live-analyze-rows').innerHTML = rows || '<div style="color:var(--text-muted)">読み取り中...</div>';
+              }
+              if ($('gen-overlay') && $('gen-overlay').classList.contains('active') && $('gen-status')) {
+                $('gen-status').textContent = 'AIがデータを抽出中... ' + pg.done + '/' + pg.total + '枚完了';
+              }
+            } catch (_lp) { }
+          },
           onSuccess: (data) => {
             const allItems = normalizeAnalyzedItems(data.items || []);
 
@@ -7513,6 +7538,7 @@
               selectedFileThumbs = [];
             }
             renderThumbs();
+            if ($('live-analyze')) $('live-analyze').style.display = 'none';
 
             $('drop-area').style.display = '';
             $('btn-analyze').style.display = 'none';
@@ -7532,6 +7558,7 @@
             }, 300);
           },
           onError: (err) => {
+            if ($('live-analyze')) $('live-analyze').style.display = 'none';
             toast('解析に失敗しました: ' + err, 'err');
             $('btn-analyze').disabled = false;
           }
@@ -7617,6 +7644,57 @@
       bar.style.display = (visible && window.innerWidth <= 1023) ? 'flex' : 'none';
     }
 
+    // ===== サーバー同期下書き（マルチ端末・複数下書き） =====
+    let currentDraftId = null;
+    let draftSyncTimer = null;
+    function scheduleDraftSync(draft) {
+      clearTimeout(draftSyncTimer);
+      draftSyncTimer = setTimeout(() => syncDraftToServer(draft), 1500);
+    }
+    async function syncDraftToServer(draft) {
+      try {
+        const items = draft.items || [];
+        const total = items.reduce((s, it) => s + (parseInt(it.unit_price) || 0) * (parseInt(it.quantity) || 0), 0);
+        const r = await fetch('/api/drafts', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: currentDraftId,
+            customer_name: draft.customer_name || draft.manual_customer || '',
+            doc_type: draft.doc_type || 'delivery',
+            item_count: items.length,
+            total_amount: total,
+            payload: draft
+          })
+        });
+        if (r.ok) {
+          const d = await r.json();
+          if (d && d.id) currentDraftId = d.id;
+        }
+      } catch (_e) { /* オフライン時は localStorage が保険になる */ }
+    }
+    window.openServerDraft = async function (id) {
+      try {
+        const r = await fetch('/api/drafts/' + id);
+        if (!r.ok) throw new Error();
+        const d = await r.json();
+        const payload = d.payload || {};
+        currentDraftId = d.id;
+        payload.server_draft_id = d.id;
+        applyDraft(payload);
+        document.querySelector('.tab[data-tab="create"]')?.click();
+      } catch (_e) { toast('下書きを開けませんでした（削除済みの可能性）', 'err'); refreshTodayCard(); }
+    };
+    window.deleteServerDraft = async function (id, ev) {
+      if (ev) ev.stopPropagation();
+      if (!confirm('この下書きを削除しますか？')) return;
+      try {
+        await fetch('/api/drafts/' + id, { method: 'DELETE' });
+        if (currentDraftId === id) currentDraftId = null;
+        toast('下書きを削除しました', 'ok');
+      } catch (_e) { }
+      refreshTodayCard();
+    };
+
     // ===== Autosave =====
     let autosaveTimer = null;
     function scheduleAutosave() {
@@ -7637,9 +7715,11 @@
           doc_type: currentDocType,
           items: extractedItems,
           currentEditingInvId,
+          server_draft_id: currentDraftId,
           updated_at: new Date().toISOString()
         };
         localStorage.setItem('laura-draft', JSON.stringify(draft));
+        scheduleDraftSync(draft);
         const ss = $('statusbar-saved');
         if (ss) ss.textContent = `下書き保存: ${new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}`;
       } catch (e) { console.warn('autosave failed', e); }
@@ -7655,6 +7735,10 @@
         localStorage.removeItem('laura-draft');
         return;
       }
+      applyDraft(draft);
+    }
+    function applyDraft(draft) {
+      currentDraftId = draft.server_draft_id || currentDraftId || null;
       currentDocType = draft.doc_type || 'delivery';
       currentEditingInvId = draft.currentEditingInvId || null;
       extractedItems = draft.items || [];
@@ -7775,6 +7859,7 @@
           openPreviewModal(d, payload);
 
           localStorage.removeItem('laura-draft');
+          try { if (currentDraftId) { fetch('/api/drafts/' + currentDraftId, { method: 'DELETE' }); currentDraftId = null; } } catch (_dd) { }
           toast('保存しました', 'ok');
           haptic('success');
           updateMobileActionBar();
@@ -7848,6 +7933,7 @@
       $('sp2').style.display = 'none';
       $('preview-title').textContent = '✎ 読み取り結果（タップで修正可能）';
       localStorage.removeItem('laura-draft');
+      currentDraftId = null; // 次の自動保存から新しい下書きとして扱う
 
       // フォーム入力をクリア
       if ($('inp-customer-code')) $('inp-customer-code').value = '';
@@ -8574,11 +8660,29 @@
       if (!card) return;
       try {
         const chips = [];
-        let draft = null;
-        try { draft = JSON.parse(localStorage.getItem('laura-draft') || 'null'); } catch (_d) { }
-        if (draft && draft.items && draft.items.length) {
-          const tm = draft.updated_at ? new Date(draft.updated_at).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }) : '';
-          chips.push('<button class="btn btn-sm" onclick="restoreDraftIfExists(true)"><svg class="icon" aria-hidden="true"><use href="#i-pencil"></use></svg>下書きの続きから（' + draft.items.length + '点' + (tm ? '・' + tm : '') + '）</button>');
+        const dtLabel = { delivery: '納品', return: '返品', prov_delivery: '仮納品', prov_return: '仮返品', statement: '明細表' };
+        let serverDraftsOk = false;
+        try {
+          const rd = await fetch('/api/drafts?limit=5');
+          if (rd.ok) {
+            const drafts = await rd.json();
+            serverDraftsOk = true;
+            (drafts || []).forEach(d => {
+              const name = d.customer_name ? escapeHtml(String(d.customer_name)).replace(/ 御中$/, '') : '取引先未設定';
+              chips.push('<span style="display:inline-flex; align-items:center; gap:2px;">'
+                + '<button class="btn btn-sm" onclick="openServerDraft(' + d.id + ')"><svg class="icon" aria-hidden="true"><use href="#i-pencil"></use></svg>'
+                + name + '・' + (d.updated_label || '') + '・' + (dtLabel[d.doc_type] || d.doc_type) + '・' + (d.item_count || 0) + '点</button>'
+                + '<button class="btn btn-sm" title="下書きを削除" onclick="deleteServerDraft(' + d.id + ', event)" style="padding:4px 8px;">✕</button></span>');
+            });
+          }
+        } catch (_sd) { }
+        if (!serverDraftsOk) {
+          let draft = null;
+          try { draft = JSON.parse(localStorage.getItem('laura-draft') || 'null'); } catch (_d) { }
+          if (draft && draft.items && draft.items.length) {
+            const tm = draft.updated_at ? new Date(draft.updated_at).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }) : '';
+            chips.push('<button class="btn btn-sm" onclick="restoreDraftIfExists(true)"><svg class="icon" aria-hidden="true"><use href="#i-pencil"></use></svg>下書きの続きから（' + draft.items.length + '点' + (tm ? '・' + tm : '') + '）</button>');
+          }
         }
         let rows = [];
         try {
