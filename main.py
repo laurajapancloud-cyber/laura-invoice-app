@@ -133,6 +133,11 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
 STORAGE_BUCKET = "invoices"
 
+# 適格請求書発行事業者 登録番号（例: T1234567890123）。設定すると帳票に印字されます。
+INVOICE_REG_NO = os.getenv("INVOICE_REGISTRATION_NUMBER", "")
+# リバースプロキシ配下で Host ヘッダを信頼できない場合の正規オリジン（例: https://laura.example.com）
+CANONICAL_ORIGIN = os.getenv("CANONICAL_ORIGIN", "").rstrip("/")
+
 supabase_client: Optional["SupabaseClient"] = None
 if SUPABASE_URL and SUPABASE_SERVICE_KEY and create_client:
     supabase_client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
@@ -258,6 +263,7 @@ if DATABASE_URL and psycopg2 and pool:
         db_pool = pool.ThreadedConnectionPool(
             1, 20, DATABASE_URL,
             cursor_factory=RealDictCursor,
+            options="-c timezone=Asia/Tokyo",
             keepalives=1,
             keepalives_idle=30,
             keepalives_interval=10,
@@ -294,9 +300,9 @@ def get_db():
                 except Exception:
                     pass
         # 3回試しても駄目なら新規接続でフォールバック
-        return psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+        return psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor, options="-c timezone=Asia/Tokyo")
     else:
-        return psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+        return psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor, options="-c timezone=Asia/Tokyo")
 
 def require_db():
     conn = get_db()
@@ -360,6 +366,8 @@ def init_db():
     conn = get_db()
     if not conn: return
     with conn.cursor() as cur:
+        # 複数ワーカー/インスタンスの同時起動で DDL が競合しないよう advisory lock を取得
+        cur.execute("SELECT pg_advisory_lock(74201)")
         # Users table
         cur.execute("""
             CREATE TABLE IF NOT EXISTS users (
@@ -409,6 +417,7 @@ def init_db():
         cur.execute("ALTER TABLE invoices ADD COLUMN IF NOT EXISTS customer_code TEXT;")
         cur.execute("ALTER TABLE invoices ADD COLUMN IF NOT EXISTS issue_date DATE;")
         cur.execute("ALTER TABLE invoices ADD COLUMN IF NOT EXISTS client_excel_storage_path TEXT;")
+        cur.execute("ALTER TABLE invoices ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP WITH TIME ZONE;")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_invoices_doc_type ON invoices(doc_type);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_invoices_user ON invoices(user_id);")
 
@@ -447,6 +456,36 @@ def init_db():
                 current_seq INTEGER NOT NULL DEFAULT 1,
                 PRIMARY KEY (doc_type, yyyymm)
             );
+            -- 学習型商品マスタ: 確定伝票の実績から自動蓄積し、AI読み取りの検証とサジェストに使う
+            CREATE TABLE IF NOT EXISTS product_variants (
+                id SERIAL PRIMARY KEY,
+                code TEXT NOT NULL,
+                color TEXT NOT NULL DEFAULT '',
+                size TEXT NOT NULL DEFAULT '',
+                unit_price INTEGER NOT NULL DEFAULT 0,
+                seen_count INTEGER NOT NULL DEFAULT 1,
+                last_seen_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (code, color, size, unit_price)
+            );
+            CREATE INDEX IF NOT EXISTS idx_product_variants_code ON product_variants(code);
+            -- 監査ログ: 誰がいつ何をしたか
+            CREATE TABLE IF NOT EXISTS audit_log (
+                id SERIAL PRIMARY KEY,
+                action TEXT NOT NULL,
+                invoice_id INTEGER,
+                invoice_number TEXT,
+                actor TEXT,
+                detail JSONB,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE INDEX IF NOT EXISTS idx_audit_log_invoice ON audit_log(invoice_id);
+            -- ログインセッション（端末ごとに失効できるランダムトークン）
+            CREATE TABLE IF NOT EXISTS sessions (
+                token_hash TEXT PRIMARY KEY,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+                revoked_at TIMESTAMP WITH TIME ZONE
+            );
         """)
         
         # Initial users if empty
@@ -459,11 +498,17 @@ def init_db():
         if cur.fetchone()['count'] == 0:
             cur.executemany("INSERT INTO customers (name, discount_rate) VALUES (%s, %s)", [
                 ("株式会社 タム 御中", 35),
-                ("株式会社 サンプル ���中", 40),
+                ("株式会社 サンプル 御中", 40),
             ])
     try:
         conn.commit()
     finally:
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT pg_advisory_unlock(74201)")
+            conn.commit()
+        except Exception as e:
+            logger.warning("advisory unlock failed: %s", e)
         release_db(conn)
 
 def generate_invoice_number(doc_type='delivery'):
@@ -541,11 +586,33 @@ def db_get_job(jid: str):
         if row['result'] and isinstance(row['result'], str): row['result'] = json.loads(row['result'])
     return row
 
+def _recover_stale_jobs():
+    """再起動で孤児化した pending/processing ジョブを failed に確定させる。
+    （BackgroundTasks はプロセス内実行のため、再起動時点で実行中ジョブは消滅している）"""
+    conn = get_db()
+    if not conn: return
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE jobs SET status='failed', error='サーバー再起動により処理が中断されました。もう一度実行してください。', updated_at=NOW() "
+                "WHERE status IN ('pending', 'processing')"
+            )
+            n = cur.rowcount
+            conn.commit()
+            if n:
+                logger.warning("Recovered %d stale job(s) on startup", n)
+    finally:
+        release_db(conn)
+
 # Initialize DB on startup
 try:
     init_db()
 except Exception as e:
     logger.error("DB Init Failed: %s", e)
+try:
+    _recover_stale_jobs()
+except Exception as e:
+    logger.error("Stale job recovery failed: %s", e)
 
 # ==================== Local Font Setup (PDF高速化) ====================
 FONT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "static", "fonts"))
@@ -690,10 +757,13 @@ _EXTRA_ALLOWED_ORIGINS = {
 @app.middleware("http")
 async def origin_check_middleware(request: Request, call_next):
     if request.method in _STATE_CHANGING_METHODS:
-        # 自分自身が想定するオリジン（プロキシ経由対応のため Host + scheme から再構築）
-        forwarded_proto = request.headers.get("x-forwarded-proto") or request.url.scheme
-        host = request.headers.get("host", "")
-        same_origin = f"{forwarded_proto}://{host}".rstrip("/") if host else None
+        # 自分自身が想定するオリジン。CANONICAL_ORIGIN 設定時は Host ヘッダを信頼しない
+        if CANONICAL_ORIGIN:
+            same_origin = CANONICAL_ORIGIN
+        else:
+            forwarded_proto = request.headers.get("x-forwarded-proto") or request.url.scheme
+            host = request.headers.get("host", "")
+            same_origin = f"{forwarded_proto}://{host}".rstrip("/") if host else None
 
         origin = (request.headers.get("origin") or "").rstrip("/")
         referer = request.headers.get("referer") or ""
@@ -731,28 +801,104 @@ if not _credentials_configured and not DEV_MODE:
     logger.error("APP_USERNAME / APP_PASSWORD が未設定です。本番起動を拒否します。"
                  " ローカル開発で test/test ログインを許可するには DEV_MODE=true を設定してください。")
 
+import threading
+
+_SESSION_MAX_AGE_SEC = 60 * 60 * 24 * 30  # 旧: 365日 → 30日に短縮
+
 def _set_session_cookie(resp, token: str):
     resp.set_cookie(
         key="laura_session",
         value=token,
-        max_age=60*60*24*365,
+        max_age=_SESSION_MAX_AGE_SEC,
         httponly=True,
         secure=True,
         samesite="lax"
     )
 
-def get_session_token():
+def _hash_token(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
+
+def get_legacy_session_token():
+    """旧方式の共有固定トークン。DBが使えない環境のフォールバック専用。"""
     if _credentials_configured:
         return hashlib.sha256(f"{APP_USERNAME}:{APP_PASSWORD}:laurajapan".encode()).hexdigest()
     # DEV_MODE時のみ使用される固定トークン
     return hashlib.sha256(b"laura-dev-mode-token").hexdigest()
 
+_sessions_enabled = bool(DATABASE_URL and psycopg2)
+
+# セッション検証の短期キャッシュ（毎リクエストのDB往復を削減。TTL経過後に再検証）
+_session_cache: Dict[str, float] = {}
+_session_cache_lock = threading.Lock()
+_SESSION_CACHE_TTL = 60.0
+
+def create_session() -> str:
+    """端末ごとのランダムセッショントークンを発行してDBへ記録する。"""
+    if not _sessions_enabled:
+        return get_legacy_session_token()
+    token = secrets.token_urlsafe(32)
+    try:
+        with db_conn() as conn, conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO sessions (token_hash, expires_at) VALUES (%s, NOW() + INTERVAL '30 days')",
+                (_hash_token(token),)
+            )
+            # ついでに期限切れセッションを掃除
+            cur.execute("DELETE FROM sessions WHERE expires_at < NOW() - INTERVAL '7 days'")
+            conn.commit()
+        return token
+    except Exception as e:
+        logger.error("Session create failed, falling back to legacy token: %s", e)
+        return get_legacy_session_token()
+
+def revoke_session(token: str):
+    if not token:
+        return
+    with _session_cache_lock:
+        _session_cache.pop(token, None)
+    if not _sessions_enabled:
+        return
+    try:
+        with db_conn() as conn, conn.cursor() as cur:
+            cur.execute("UPDATE sessions SET revoked_at=NOW() WHERE token_hash=%s", (_hash_token(token),))
+            conn.commit()
+    except Exception as e:
+        logger.warning("Session revoke failed: %s", e)
+
+def _is_valid_session(token: str) -> bool:
+    # 旧固定トークン（移行期間・DB無し環境の互換）
+    if secrets.compare_digest(token, get_legacy_session_token()):
+        return True
+    if not _sessions_enabled:
+        return False
+    now = time.time()
+    with _session_cache_lock:
+        exp = _session_cache.get(token)
+        if exp and exp > now:
+            return True
+    try:
+        with db_conn() as conn, conn.cursor() as cur:
+            cur.execute(
+                "SELECT 1 FROM sessions WHERE token_hash=%s AND revoked_at IS NULL AND expires_at > NOW()",
+                (_hash_token(token),)
+            )
+            ok = cur.fetchone() is not None
+    except Exception as e:
+        logger.warning("Session lookup failed: %s", e)
+        return False
+    if ok:
+        with _session_cache_lock:
+            _session_cache[token] = now + _SESSION_CACHE_TTL
+            if len(_session_cache) > 512:
+                for k in [k for k, v in list(_session_cache.items()) if v <= now]:
+                    _session_cache.pop(k, None)
+    return ok
+
 def authenticate(token: Annotated[str, Depends(cookie_sec)]):
     if not _credentials_configured and not DEV_MODE:
         # 認証情報が未設定で DEV_MODE でもない場合は全リクエストを拒否
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Auth not configured")
-    valid_token = get_session_token()
-    if not token or not secrets.compare_digest(token, valid_token):
+    if not token or not _is_valid_session(token):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
     return APP_USERNAME or "dev"
 
@@ -795,10 +941,14 @@ async def login_post(request: Request, username: str = Form(...), password: str 
     if not _credentials_configured:
         if not DEV_MODE:
             return templates.TemplateResponse(request=request, name="login.html", context={"error": "サーバー設定エラー: 認証情報が未設定です"})
-        # DEV_MODE: test/test のみ許可
+        # DEV_MODE: test/test のみ許可（ローカルホスト以外では拒否して本番事故を防ぐ）
+        host_only = (request.headers.get("host", "").split(":")[0] or "").lower()
+        if host_only not in {"localhost", "127.0.0.1", "0.0.0.0", "::1"}:
+            logger.error("DEV_MODE login attempted on non-local host: %r", host_only)
+            return templates.TemplateResponse(request=request, name="login.html", context={"error": "DEV_MODEログインはローカル環境でのみ使用できます"})
         if username == "test" and password == "test":
             resp = RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
-            _set_session_cookie(resp, get_session_token())
+            _set_session_cookie(resp, create_session())
             return resp
         return templates.TemplateResponse(request=request, name="login.html", context={"error": "IDまたはパスワードが間違っています"})
 
@@ -807,13 +957,16 @@ async def login_post(request: Request, username: str = Form(...), password: str 
 
     if is_correct_username and is_correct_password:
         resp = RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
-        _set_session_cookie(resp, get_session_token())
+        _set_session_cookie(resp, create_session())
         return resp
     else:
         return templates.TemplateResponse(request=request, name="login.html", context={"error": "IDまたはパスワードが間違っています"})
 
 @app.get("/logout")
-async def logout():
+async def logout(token: Annotated[str, Depends(cookie_sec)] = None):
+    # この端末のセッションのみ失効させる（他端末には影響しない）
+    if token:
+        revoke_session(token)
     resp = RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
     resp.delete_cookie("laura_session")
     return resp
@@ -835,8 +988,32 @@ async def get_sw():
     return FileResponse("sw.js", media_type="application/javascript", headers={"Service-Worker-Allowed": "/"})
 
 @app.get("/health")
-async def health():
-    return {"status": "alive", "time": get_jst_now().isoformat()}
+async def health(deep: bool = False):
+    info = {"status": "alive", "time": get_jst_now().isoformat()}
+    if deep:
+        db_ok = False
+        try:
+            conn = get_db()
+            if conn:
+                try:
+                    with conn.cursor() as cur:
+                        cur.execute("SELECT 1")
+                    db_ok = True
+                finally:
+                    release_db(conn)
+        except Exception:
+            db_ok = False
+        info["db"] = db_ok
+        info["storage"] = bool(supabase_client)
+        info["ai"] = {
+            "gemini": bool(gemini_model),
+            "openai": bool(openai_client),
+            "azure": bool(azure_client),
+            "vision": bool(vision_client),
+        }
+        if not db_ok:
+            info["status"] = "degraded"
+    return info
 
 # ==================== Dashboard API ====================
 import threading
@@ -847,9 +1024,7 @@ _DASHBOARD_TTL = 60
 
 def _compute_dashboard(user_id: Optional[int]):
     with db_conn() as conn, conn.cursor() as cur:
-        try:
-            cur.execute("SET TIME ZONE 'Asia/Tokyo'")
-        except: pass
+        # タイムゾーンは接続オプション (-c timezone=Asia/Tokyo) で設定済み
         
         now = get_jst_now()
         month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
@@ -870,6 +1045,7 @@ def _compute_dashboard(user_id: Optional[int]):
             FROM invoices
             WHERE created_at >= %(last_month_start)s
               AND doc_type IN ('delivery', 'return')
+              AND deleted_at IS NULL
             GROUP BY period, doc_type
         """, {"month_start": month_start, "last_month_start": last_month_start, "uid": user_id})
         rows = cur.fetchall()
@@ -941,7 +1117,7 @@ def _compute_dashboard(user_id: Optional[int]):
         cur.execute(
             """SELECT to_char(created_at, 'YYYY-MM') as month, doc_type,
                       COUNT(*) as cnt, COALESCE(SUM(total_grand_total),0) as total
-               FROM invoices WHERE doc_type IN ('delivery', 'return') GROUP BY month, doc_type ORDER BY month DESC LIMIT 60"""
+               FROM invoices WHERE doc_type IN ('delivery', 'return') AND deleted_at IS NULL GROUP BY month, doc_type ORDER BY month DESC LIMIT 60"""
         )
         monthly_raw = cur.fetchall()
         monthly_map = {}
@@ -962,7 +1138,7 @@ def _compute_dashboard(user_id: Optional[int]):
         # 全期間の取引先別売上トップ5（正式な納品と返品のみ、返品をマイナスで加算）
         cur.execute(
             """SELECT customer_name, doc_type, SUM(total_grand_total) as total
-               FROM invoices WHERE doc_type IN ('delivery', 'return') GROUP BY customer_name, doc_type"""
+               FROM invoices WHERE doc_type IN ('delivery', 'return') AND deleted_at IS NULL GROUP BY customer_name, doc_type"""
         )
         cust_raw = cur.fetchall()
         cust_map = {}
@@ -984,7 +1160,7 @@ def _compute_dashboard(user_id: Optional[int]):
         cur.execute(
             """SELECT ii.code, SUM(ii.quantity) as qty
                FROM invoice_items ii JOIN invoices i ON ii.invoice_id = i.id
-               WHERE i.doc_type IN ('delivery', 'return')
+               WHERE i.doc_type IN ('delivery', 'return') AND i.deleted_at IS NULL
                GROUP BY ii.code ORDER BY qty DESC LIMIT 5"""
         )
         top_items = cur.fetchall()
@@ -1147,132 +1323,229 @@ def delete_customer(cid: int, username: Annotated[str, Depends(authenticate)]):
 
 
 # ==================== AI Analysis API ====================
-def analyze_images_internal(jid: str, image_parts: list, ai_model: str):
-    try:
-        db_update_job(jid, 'processing')
-        prompt = """
+# ==================== AI 解析 ====================
+ANALYZE_PROMPT = """
 あなたはアパレルブランドのデータ入力アシスタントです。
-【重要指示】
-1. 画像の前に「--- 画像 X ---」という番号を付与しています。送信された画像の枚数と、出力するJSON配列の要素数は【必ず一致】させてください。全く同じ画像でも省略は厳禁です。
-2. 出力データの `source_image_no` には、対象画像の X の数値をそのまま入れてください。
-3. 金額は必ず「本体価格（税抜）」を抽出してください。
-
-スキーマ: [{"code": "品番", "color": "カラー", "size": "サイズ", "unit_price": 本体価格の数値, "quantity": 1, "source_image_no": 画像番号}]
+商品タグ（下げ札）の画像1枚から、以下の項目を抽出してください。
+- code: 品番（英数字・ハイフン。例 "AB123-45"）
+- color: カラー番号または名称
+- size: サイズ表記
+- unit_price: 本体価格（税抜）の数値。「本体」「＋税」表記があればその金額を優先
+- quantity: 常に 1
+読み取れない項目は "-"（unit_price は 0）としてください。
+必ず単一のJSONオブジェクトだけを返してください。
 """.strip()
 
-        raw_text = ""
-        if ai_model == "vision":
-            if not vision_client: raise Exception("Cloud VisionのJSONキーが未設定です。")
-            items_data = []
-            for i, part in enumerate(image_parts):
-                image = vision.Image(content=part["data"])
-                response = vision_client.text_detection(image=image)
-                if response.error.message: raise Exception(f"Vision Error: {response.error.message}")
-                raw_text = response.text_annotations[0].description if response.text_annotations else ""
-                
-                code_match = re.search(r'[A-Za-z0-9]+-[A-Za-z0-9]+', raw_text)
-                col_match = re.search(r'(?i)col(?:or)?[\s\.:]*(\d{1,3})', raw_text)
-                sz_match = re.search(r'(?i)size[\s\\.:]*([\w]+)', raw_text)
-                if not sz_match: sz_match = re.search(r'\b(3[68]|4[02468]|50)\b', raw_text)
-                price_match = re.search(r'[¥￥]\s*([\d,]+)', raw_text)
-                if not price_match: price_match = re.search(r'\b(\d{1,3}(?:,\d{3})+)\b', raw_text)
-                unit_price = 0
-                if price_match:
-                    try: unit_price = int(price_match.group(1).replace(',', ''))
-                    except: pass
-                items_data.append({
-                    "code": code_match.group(0) if code_match else "-",
-                    "color": col_match.group(1) if col_match else "-",
-                    "size": sz_match.group(1) if sz_match else "-",
-                    "unit_price": unit_price,
-                    "quantity": 1,
-                    "source_image_no": i,
-                })
+_ANALYZE_SCHEMA_PROPS = {
+    "code": {"type": "string"},
+    "color": {"type": "string"},
+    "size": {"type": "string"},
+    "unit_price": {"type": "integer"},
+    "quantity": {"type": "integer"},
+}
 
+def extract_json_object(text: str):
+    """AIレスポンスから単一のJSONオブジェクトを抽出する"""
+    if not text:
+        raise ValueError("empty response")
+    text = text.strip()
+    text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\s*```$", "", text)
+    start = text.find("{")
+    end = text.rfind("}")
+    if start != -1 and end != -1 and end >= start:
+        text = text[start:end + 1]
+    data = json.loads(text)
+    if isinstance(data, list):
+        data = data[0] if data else {}
+    if not isinstance(data, dict):
+        raise ValueError("unexpected JSON shape")
+    return data
 
-        elif ai_model in ["azure", "openai"]:
-            CHUNK_SIZE = 20
-            items_data = []
-            
-            client = azure_client if ai_model == "azure" else openai_client
-            if not client: raise Exception(f"{ai_model.capitalize()} OpenAIのキー/エンドポイントが未設定です。")
-            model_name = "gpt-4o" if ai_model == "azure" else "gpt-4o-mini"
-            max_tokens_param = {"max_completion_tokens": 4000} if ai_model == "azure" else {"max_tokens": 4000}
+def _analyze_single_image(part: dict, ai_model: str) -> dict:
+    """画像1枚を解析して item dict を返す（失敗時は例外を送出）"""
+    if ai_model == "vision":
+        if not vision_client: raise Exception("Cloud VisionのJSONキーが未設定です。")
+        image = vision.Image(content=part["data"])
+        response = vision_client.text_detection(image=image)
+        if response.error.message: raise Exception(f"Vision Error: {response.error.message}")
+        raw_text = response.text_annotations[0].description if response.text_annotations else ""
+        code_match = re.search(r'[A-Za-z0-9]+-[A-Za-z0-9]+', raw_text)
+        col_match = re.search(r'(?i)col(?:or)?[\s\.:]*(\d{1,3})', raw_text)
+        sz_match = re.search(r'(?i)size[\s\\.:]*([\w]+)', raw_text)
+        if not sz_match: sz_match = re.search(r'\b(3[68]|4[02468]|50)\b', raw_text)
+        price_match = re.search(r'[¥￥]\s*([\d,]+)', raw_text)
+        if not price_match: price_match = re.search(r'\b(\d{1,3}(?:,\d{3})+)\b', raw_text)
+        unit_price = 0
+        if price_match:
+            try: unit_price = int(price_match.group(1).replace(',', ''))
+            except Exception: pass
+        return {
+            "code": code_match.group(0) if code_match else "-",
+            "color": col_match.group(1) if col_match else "-",
+            "size": sz_match.group(1) if sz_match else "-",
+            "unit_price": unit_price,
+            "quantity": 1,
+        }
 
-            for i in range(0, len(image_parts), CHUNK_SIZE):
-                chunk = image_parts[i:i + CHUNK_SIZE]
-                content_list = [{"type": "text", "text": prompt}]
-                for idx, part in enumerate(chunk):
-                    global_idx = i + idx
-                    content_list.append({"type": "text", "text": f"--- 画像 {global_idx} ---"})
-                    content_list.append({
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:{part['mime_type']};base64,{part['base64']}",
-                            "detail": "low"
-                        }
-                    })
-                
+    if ai_model in ("azure", "openai"):
+        client = azure_client if ai_model == "azure" else openai_client
+        if not client: raise Exception(f"{ai_model.capitalize()} OpenAIのキー/エンドポイントが未設定です。")
+        model_name = "gpt-4o" if ai_model == "azure" else "gpt-4o-mini"
+        max_tokens_param = {"max_completion_tokens": 500} if ai_model == "azure" else {"max_tokens": 500}
+        base_kwargs = dict(
+            model=model_name,
+            messages=[{"role": "user", "content": [
+                {"type": "text", "text": ANALYZE_PROMPT},
+                {"type": "image_url", "image_url": {
+                    # タグの小さな文字を読むため detail=high（旧: low は512px相当に縮小され誤読の原因だった）
+                    "url": f"data:{part['mime_type']};base64,{part['base64']}",
+                    "detail": "high",
+                }},
+            ]}],
+            temperature=0,
+            **max_tokens_param,
+        )
+        try:
+            # Structured Outputs（スキーマ保証）
+            response = client.chat.completions.create(
+                response_format={"type": "json_schema", "json_schema": {"name": "tag_item", "strict": True, "schema": {
+                    "type": "object", "properties": _ANALYZE_SCHEMA_PROPS,
+                    "required": list(_ANALYZE_SCHEMA_PROPS.keys()), "additionalProperties": False,
+                }}},
+                **base_kwargs,
+            )
+        except Exception:
+            # Structured Outputs 未対応のモデル/デプロイでは JSON モードにフォールバック
+            response = client.chat.completions.create(
+                response_format={"type": "json_object"},
+                **base_kwargs,
+            )
+        return extract_json_object((response.choices[0].message.content or "").strip())
+
+    if ai_model == "gemini":
+        if not gemini_model: raise Exception("Gemini APIキーが未設定です。")
+        contents = [ANALYZE_PROMPT, {"mime_type": part["mime_type"], "data": part["data"]}]
+        try:
+            response = gemini_model.generate_content(
+                contents,
+                generation_config={
+                    "temperature": 0,
+                    "response_mime_type": "application/json",
+                },
+            )
+        except TypeError:
+            # 古いSDKは generation_config のキーに未対応の場合がある
+            response = gemini_model.generate_content(contents)
+        return extract_json_object(response.text.strip())
+
+    raise Exception(f"未対応のAIモデルです: {ai_model}")
+
+def _attach_variant_warnings(items: list):
+    """学習型商品マスタ（過去の確定伝票実績）と突合し、価格不一致などの警告を付与する"""
+    if not (DATABASE_URL and psycopg2):
+        return
+    codes = sorted({str(it.get("code") or "").strip().upper() for it in items
+                    if it.get("code") and str(it.get("code")).strip() not in ("", "-")})
+    if not codes:
+        return
+    with db_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT code, color, size, unit_price, seen_count FROM product_variants WHERE UPPER(code) = ANY(%s)",
+            (codes,)
+        )
+        rows = cur.fetchall()
+    by_code = {}
+    for r in rows:
+        by_code.setdefault(str(r["code"]).upper(), []).append(dict(r))
+    for it in items:
+        code = str(it.get("code") or "").strip().upper()
+        variants = by_code.get(code)
+        if not variants:
+            continue
+        known_prices = sorted({v["unit_price"] for v in variants})
+        it["known_prices"] = known_prices
+        try:
+            up = int(it.get("unit_price") or 0)
+        except Exception:
+            up = 0
+        warnings = []
+        if known_prices and up not in known_prices:
+            top = max(variants, key=lambda v: v["seen_count"])
+            warnings.append(f"過去実績と価格が不一致（実績: ¥{top['unit_price']:,}）")
+        if warnings:
+            it["warnings"] = warnings
+
+def analyze_images_internal(jid: str, image_parts: list, ai_model: str):
+    """画像を1枚ずつ並列解析する。
+    - 番号ずれ防止: source_image_no はサーバー側で付与（AI出力に依存しない）
+    - 無音欠落防止: 失敗画像は failed_images として返し、フロントで再試行できる
+    """
+    try:
+        db_update_job(jid, 'processing')
+        n = len(image_parts)
+        results = [None] * n
+        failed = {}
+
+        def run_one(idx: int):
+            last_err = None
+            for attempt in range(2):  # 失敗時は1回だけ自動リトライ
                 try:
-                    response = client.chat.completions.create(
-                        model=model_name,
-                        messages=[{"role": "user", "content": content_list}],
-                        **max_tokens_param
-                    )
-                    raw_text = response.choices[0].message.content.strip()
-                    chunk_data = extract_json_array(raw_text)
-                    if not isinstance(chunk_data, list): chunk_data = [chunk_data]
-                    items_data.extend(chunk_data)
+                    item = _analyze_single_image(image_parts[idx], ai_model)
+                    item["quantity"] = 1
+                    item["source_image_no"] = idx
+                    return idx, item, None
                 except Exception as e:
-                    logger.warning("Chunk parsing failed (%s, offset %d): %s", ai_model, i, e)
+                    last_err = e
+                    time.sleep(0.8 * (attempt + 1))
+            return idx, None, str(last_err)
 
-        elif ai_model == "gemini":
-            CHUNK_SIZE = 20
-            items_data = []
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        max_workers = 1 if ai_model == "vision" else min(4, max(1, n))
+        with ThreadPoolExecutor(max_workers=max_workers) as ex:
+            futures = [ex.submit(run_one, i) for i in range(n)]
+            for fut in as_completed(futures):
+                idx, item, err = fut.result()
+                if item is not None:
+                    results[idx] = item
+                else:
+                    failed[idx] = err or "unknown error"
+                    logger.warning("Image %d analyze failed (%s): %s", idx, ai_model, err)
 
-            for i in range(0, len(image_parts), CHUNK_SIZE):
-                chunk = image_parts[i:i + CHUNK_SIZE]
-                contents = [prompt]
-                for idx, part in enumerate(chunk):
-                    global_idx = i + idx
-                    contents.append(f"--- 画像 {global_idx} ---")
-                    contents.append({"mime_type": part["mime_type"], "data": part["data"]})
-                
-                try:
-                    response = gemini_model.generate_content(contents)
-                    raw_text = response.text.strip()
-                    chunk_data = extract_json_array(raw_text)
-                    if not isinstance(chunk_data, list): chunk_data = [chunk_data]
-                    items_data.extend(chunk_data)
-                except Exception as e:
-                    logger.warning("Chunk parsing failed (gemini, offset %d): %s", i, e)
-        
-        chunk_data = items_data  # normalize variable name for the rest of the function
-        
+        items_data = [it for it in results if it is not None]
+
+        # 学習型マスタとの突合検証（価格不一致などの警告付与）
+        try:
+            _attach_variant_warnings(items_data)
+        except Exception as e:
+            logger.warning("variant validation skipped: %s", e)
+
         # Record usage
         try:
             with db_conn() as conn, conn.cursor() as cur:
-                cur.execute("INSERT INTO api_usage (ai_model, image_count) VALUES (%s, %s)", (ai_model, len(image_parts)))
+                cur.execute("INSERT INTO api_usage (ai_model, image_count) VALUES (%s, %s)", (ai_model, n))
                 conn.commit()
         except Exception as e:
             logger.warning("api_usage log failed: %s", e)
-        
-        db_update_job(jid, 'done', result={"items": chunk_data})
+
+        result = {"items": items_data, "requested_images": n, "analyzed_images": len(items_data)}
+        if failed:
+            result["partial"] = True
+            result["failed_images"] = sorted(failed.keys())
+            result["failed_reasons"] = {str(k): v for k, v in failed.items()}
+
+        if items_data:
+            db_update_job(jid, 'done', result=result)
+        else:
+            first_err = next(iter(failed.values()), "不明なエラー")
+            db_update_job(jid, 'failed', error=f"全{n}枚の解析に失敗しました: {first_err}")
     except Exception as e:
         db_update_job(jid, 'failed', error=str(e))
 
 @app.post("/analyze-images")
-async def analyze_images(request: Request, username: Annotated[str, Depends(authenticate)], files: List[UploadFile] = File(...), ai_model: str = Form("gemini")):
-    jid = db_create_job('analyze', {"ai_model": ai_model, "file_count": len(files)})
-    image_parts = []
-    for file in files:
-        data = await file.read()
-        image_parts.append({"mime_type": file.content_type or "image/jpeg", "data": data, "base64": base64.b64encode(data).decode()})
-    # AI 呼び出しは同期的に長時間ブロックするのでイベントループから外す
-    await run_in_threadpool(analyze_images_internal, jid, image_parts, ai_model)
-    job = db_get_job(jid)
-    if job['status'] == 'failed': raise HTTPException(500, job['error'])
-    return JSONResponse(job['result'])
+async def analyze_images(username: Annotated[str, Depends(authenticate)]):
+    """旧同期API（廃止）。長時間ブロックしプロキシタイムアウトの原因となるため 410 を返す。"""
+    raise HTTPException(status_code=410, detail="このAPIは廃止されました。/api/jobs/analyze をご利用ください。")
 
 @app.post("/api/jobs/analyze")
 async def enqueue_analyze(bt: BackgroundTasks, username: Annotated[str, Depends(authenticate)], files: List[UploadFile] = File(...), ai_model: str = Form("gemini")):
@@ -1283,6 +1556,36 @@ async def enqueue_analyze(bt: BackgroundTasks, username: Annotated[str, Depends(
         image_parts.append({"mime_type": file.content_type or "image/jpeg", "data": data, "base64": base64.b64encode(data).decode()})
     bt.add_task(analyze_images_internal, jid, image_parts, ai_model)
     return {"job_id": jid, "status": "pending"}
+
+# ==================== 学習型商品マスタ API ====================
+@app.get("/api/products")
+def get_product_variants(username: Annotated[str, Depends(authenticate)], code: str = "", limit: int = 20):
+    """確定伝票から自動蓄積した品番実績（サジェスト・検証用）"""
+    code = (code or "").strip()
+    if not code:
+        return []
+    limit = max(1, min(limit, 50))
+    with db_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """SELECT code, color, size, unit_price, seen_count,
+                      to_char(last_seen_at, 'YYYY-MM-DD') as last_seen
+               FROM product_variants
+               WHERE UPPER(code) LIKE UPPER(%s)
+               ORDER BY seen_count DESC, last_seen_at DESC LIMIT %s""",
+            (code + "%", limit)
+        )
+        rows = [dict(r) for r in cur.fetchall()]
+    return rows
+
+def _audit(cur, action: str, invoice_id=None, invoice_number=None, actor=None, detail: dict = None):
+    """監査ログを記録する（失敗しても業務処理は止めない）"""
+    try:
+        cur.execute(
+            "INSERT INTO audit_log (action, invoice_id, invoice_number, actor, detail) VALUES (%s,%s,%s,%s,%s)",
+            (action, invoice_id, invoice_number, actor, json.dumps(detail or {}, ensure_ascii=False))
+        )
+    except Exception as e:
+        logger.warning("audit log failed (%s): %s", action, e)
 
 # ==================== Product Detail Sheet Logic ====================
 SIZE_COLUMNS = ["44", "46", "48", "50", "52"]
@@ -1925,7 +2228,7 @@ def build_invoice_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
     top_thick = Side(style='medium', color='1F2937')
     for i, (label, val) in enumerate([
         ("小計", invoice_data.get("total_net_amount", 0)),
-        ("消費税", invoice_data.get("total_tax_amount", 0)),
+        ("消費税(10%)", invoice_data.get("total_tax_amount", 0)),
         ("合計金額", invoice_data.get("total_grand_total", 0)),
     ]):
         rr = last_r + i
@@ -2015,7 +2318,7 @@ def build_client_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
     ws["F3"].alignment = Alignment(horizontal="right", vertical="center")
 
     ws.merge_cells("F4:G4")
-    ws["F4"] = f"株式会社 ラウラジャパン"
+    ws["F4"] = "株式会社 ラウラジャパン" + (f"（登録番号: {INVOICE_REG_NO}）" if INVOICE_REG_NO else "")
     ws["F4"].font = FONT_BODY
     ws["F4"].alignment = Alignment(horizontal="right", vertical="center")
 
@@ -2167,41 +2470,66 @@ def build_single_file(kind: str, invoice_data: dict) -> bytes:
     raise ValueError(f"Unsupported file kind: {kind}")
 
 def assemble_invoice_data(inv_info: dict, items_input: list, discount_rate: int, doc_type='delivery') -> dict:
-    """生成用データ準備"""
+    """生成用データ準備（検証 + 金額計算）
+    消費税は明細ごとではなく税抜合計に対して一度だけ端数処理する
+    （適格請求書の「税率ごとに端数処理1回」ルール。フロントの表示計算とも一致）。
+    """
     processed = []
-    total_net = total_tax = total_grand = 0
+    total_net = 0
     # 掛け率が0（手動入力等）の場合は、掛け率なし（100%）として計算
     rate = (discount_rate / 100.0) if discount_rate > 0 else 1.0
-    
-    # 追加: 返品系なら数量と金額をマイナスにするための係数
+
+    # 返品系なら数量と金額をマイナスにするための係数
     sign = -1 if doc_type in ['return', 'prov_return'] else 1
 
-    for it in items_input:
+    errors = []
+    for row_no, it in enumerate(items_input, start=1):
         up = it.get("unit_price", 0)
-        if isinstance(up, str): up = int(up.replace(',','').replace('¥','').strip() or '0')
-        
-        # 変更: 絶対値にしてから sign（1 または -1）を掛ける
-        qty = abs(int(it.get("quantity") or 1)) or 1
-        qty = qty * sign
-        
-        # Pythonの int() は0方向に切り捨てるため、マイナスでも正しく計算される
+        try:
+            if isinstance(up, str): up = int(up.replace(',', '').replace('¥', '').replace('￥', '').strip() or '0')
+            up = int(up)
+        except Exception:
+            errors.append(f"{row_no}行目: 単価「{it.get('unit_price')}」を数値にできません")
+            continue
+        if up < 0:
+            errors.append(f"{row_no}行目: 単価がマイナスです")
+            continue
+
+        try:
+            qty_raw = int(it.get("quantity") if it.get("quantity") is not None else 1)
+        except Exception:
+            errors.append(f"{row_no}行目: 数量「{it.get('quantity')}」を数値にできません")
+            continue
+        if qty_raw == 0:
+            errors.append(f"{row_no}行目: 数量が0です")
+            continue
+        qty = abs(qty_raw) * sign
+
+        # Pythonの int() は0方向に切り捨てるため、マイナスでも正負対称に計算される
         net = int(up * rate * qty)
-        tax = int(net * 0.1)
-        grand = net + tax
-        
+
         processed.append({
             "code": it.get("code") or "-", "color": it.get("color") or "-", "size": it.get("size") or "-",
-            "unit_price": up, "quantity": qty, "net_amount": net, "tax_amount": tax, "grand_total": grand
+            "unit_price": up, "quantity": qty, "net_amount": net,
         })
-        total_net += net; total_tax += tax; total_grand += grand
-    
+        total_net += net
+
+    if errors:
+        raise ValueError("入力エラー: " + " / ".join(errors[:5]) + (f" ほか{len(errors)-5}件" if len(errors) > 5 else ""))
+    if not processed:
+        raise ValueError("明細が1件もありません")
+
+    # 消費税(10%)は税抜合計に対して一度だけ切り捨て（0方向丸め）
+    total_tax = int(total_net * 0.1)
+    total_grand = total_net + total_tax
+
     issue_date_str = inv_info.get("issue_date")
     if issue_date_str:
         try:
             # フロントから来た 'YYYY-MM-DD' を変換
             dt = datetime.datetime.strptime(str(issue_date_str), "%Y-%m-%d")
             date_formatted = f"{dt.year}年{dt.month}月{dt.day}日"
-        except:
+        except Exception:
             date_formatted = str(issue_date_str)
     else:
         # 従来通り、指定がなければ作成日・ロック日を使用
@@ -2216,6 +2544,7 @@ def assemble_invoice_data(inv_info: dict, items_input: list, discount_rate: int,
         "total_net_amount": total_net, "total_tax_amount": total_tax, "total_grand_total": total_grand,
         "user_name": inv_info.get("user_name", ""),
         "issuer": "株式会社 ラウラジャパン", "date": date_formatted,
+        "registration_no": INVOICE_REG_NO,
         "doc_type": doc_type,
         "doc_title_main": titles["main"],
         "doc_title_detail": titles["detail"],
@@ -2233,6 +2562,8 @@ class DocumentRequest(BaseModel):
     items: List[Dict[str, Any]]
     doc_type: Optional[str] = "delivery"
     user_id: Optional[int] = None
+    # 二重発行ガードを承知の上で保存する場合に true（フロントの確認ダイアログ経由）
+    force: Optional[bool] = False
 
 @app.post("/api/preview")
 def preview_documents(username: Annotated[str, Depends(authenticate)], payload: DocumentRequest):
@@ -2264,14 +2595,13 @@ def _save_invoice_record(payload: "DocumentRequest"):
     """伝票レコードを INSERT/UPDATE して (inv_id, invoice_number, inv_data) を返す共通処理"""
     doc_type = payload.doc_type or "delivery"
     with db_conn() as conn, conn.cursor() as cur:
+        invoice_number = None
         if payload.invoice_id:
             cur.execute("SELECT invoice_number, status FROM invoices WHERE id = %s", (payload.invoice_id,))
             row = cur.fetchone()
             if not row: raise Exception("Invoice not found")
             if row["status"] == "locked": raise Exception("確定済みの伝票は編集できません。")
             invoice_number = row["invoice_number"]
-        else:
-            invoice_number = generate_invoice_number_safe(cur, doc_type)
 
         user_name = ""
         if payload.user_id:
@@ -2280,9 +2610,24 @@ def _save_invoice_record(payload: "DocumentRequest"):
             if u_row: user_name = u_row["name"]
 
         inv_data = assemble_invoice_data(
-            {"invoice_number": invoice_number, "customer_name": payload.customer_name, "customer_code": payload.customer_code, "issue_date": payload.issue_date, "user_name": user_name},
+            {"invoice_number": invoice_number or "PENDING", "customer_name": payload.customer_name, "customer_code": payload.customer_code, "issue_date": payload.issue_date, "user_name": user_name},
             payload.items, payload.discount_rate, doc_type,
         )
+
+        if not payload.invoice_id:
+            if not payload.force:
+                # 二重発行ガード: 直近3分以内に同一取引先・同種別・同金額・同点数の伝票があれば中断
+                cur.execute("""
+                    SELECT invoice_number FROM invoices
+                    WHERE customer_name=%s AND doc_type=%s AND item_count=%s AND total_grand_total=%s
+                      AND deleted_at IS NULL AND created_at > NOW() - INTERVAL '3 minutes'
+                    ORDER BY id DESC LIMIT 1
+                """, (payload.customer_name, doc_type, len(inv_data["items"]), inv_data["total_grand_total"]))
+                dup = cur.fetchone()
+                if dup:
+                    raise Exception(f"重複の可能性: 直近に同内容の伝票（{dup['invoice_number']}）が作成されています。")
+            invoice_number = generate_invoice_number_safe(cur, doc_type)
+            inv_data["invoice_number"] = invoice_number
 
         if payload.invoice_id:
             cur.execute("""
@@ -2303,6 +2648,23 @@ def _save_invoice_record(payload: "DocumentRequest"):
         for item in inv_data["items"]:
             cur.execute("INSERT INTO invoice_items (invoice_id, code, color, size, unit_price, quantity, net_amount) VALUES (%s,%s,%s,%s,%s,%s,%s)",
                          (inv_id, item["code"], item["color"], item["size"], item["unit_price"], item["quantity"], item["net_amount"]))
+
+        # 学習型商品マスタへ実績を蓄積（AI読み取りの検証・サジェストに使用）
+        for item in inv_data["items"]:
+            code = str(item.get("code") or "").strip()
+            if not code or code == "-":
+                continue
+            try:
+                cur.execute("""
+                    INSERT INTO product_variants (code, color, size, unit_price)
+                    VALUES (%s, %s, %s, %s)
+                    ON CONFLICT (code, color, size, unit_price)
+                    DO UPDATE SET seen_count = product_variants.seen_count + 1, last_seen_at = NOW()
+                """, (code.upper(), str(item.get("color") or "").strip(), str(item.get("size") or "").strip(), int(item.get("unit_price") or 0)))
+            except Exception as e:
+                logger.warning("variant upsert failed for %s: %s", code, e)
+
+        _audit(cur, "save", inv_id, invoice_number, user_name or None, {"doc_type": doc_type, "grand_total": inv_data["total_grand_total"], "items": len(inv_data["items"])})
         conn.commit()
     return inv_id, invoice_number, inv_data
 
@@ -2365,6 +2727,7 @@ def lock_invoice_internal(jid: str, inv_id: int, bt: Optional[BackgroundTasks] =
             if not cur.fetchone():
                 db_update_job(jid, 'done', result={"status": "already_locked"})
                 return
+            _audit(cur, "lock", inv_id)
             conn.commit()
 
         with _dashboard_lock:
@@ -2405,6 +2768,7 @@ async def enqueue_lock(bt: BackgroundTasks, inv_id: int, username: Annotated[str
 async def unlock_invoice(inv_id: int, username: Annotated[str, Depends(authenticate)]):
     with db_conn() as conn, conn.cursor() as cur:
         cur.execute("UPDATE invoices SET status='draft', locked_at=NULL WHERE id=%s", (inv_id,))
+        _audit(cur, "unlock", inv_id, None, username)
         conn.commit()
     return {"status": "draft"}
 
@@ -2481,7 +2845,7 @@ def get_history(
             to_char(i.created_at, 'YYYY-MM-DD\"T\"HH24:MI:SS') as created_at
             FROM invoices i
             LEFT JOIN users u ON i.user_id = u.id
-            WHERE 1=1
+            WHERE i.deleted_at IS NULL
         """
         params = []
         if doc_type and doc_type != 'all':
@@ -2786,25 +3150,14 @@ def get_history_items(inv_id: int, username: Annotated[str, Depends(authenticate
 
 @app.delete("/api/history/{inv_id}")
 def delete_history(inv_id: int, username: Annotated[str, Depends(authenticate)]):
+    """論理削除: レコードと生成ファイルは保持し、一覧・集計から除外する（誤削除復旧・監査のため）"""
     with db_conn() as conn, conn.cursor() as cur:
-        cur.execute("SELECT pdf_storage_path, excel_storage_path, detail_pdf_storage_path, detail_excel_storage_path, client_excel_storage_path FROM invoices WHERE id = %s", (inv_id,))
+        cur.execute("SELECT id, invoice_number FROM invoices WHERE id = %s AND deleted_at IS NULL", (inv_id,))
         row = cur.fetchone()
         if not row: raise HTTPException(404, "Invoice not found")
-        
-        # 確定済みであっても削除を許可する（403回避）
-        
-        if STORAGE_BUCKET and supabase_client:
-            for col in ['pdf_storage_path', 'excel_storage_path', 'detail_pdf_storage_path', 'detail_excel_storage_path', 'client_excel_storage_path']:
-                path = row.get(col)
-                if not path:
-                    continue
-                try:
-                    supabase_client.storage.from_(STORAGE_BUCKET).remove([path])
-                except Exception as e:
-                    logger.warning("Failed cleanup for %s (%s): %s", inv_id, col, e)
 
-        cur.execute("DELETE FROM invoice_items WHERE invoice_id = %s", (inv_id,))
-        cur.execute("DELETE FROM invoices WHERE id = %s", (inv_id,))
+        cur.execute("UPDATE invoices SET deleted_at=NOW(), status='deleted' WHERE id = %s", (inv_id,))
+        _audit(cur, "delete", inv_id, row.get("invoice_number"), username)
         conn.commit()
     return {"status": "ok"}
 
@@ -2878,6 +3231,15 @@ def get_jobs(username: Annotated[str, Depends(authenticate)], limit: int = 20):
 def get_job_status(job_id: str, username: Annotated[str, Depends(authenticate)]):
     job = db_get_job(job_id)
     if not job: raise HTTPException(404, "Job not found")
+    # 孤児ジョブ検出: 10分以上 pending/processing のまま更新が無ければ失敗として確定させる
+    if job.get('status') in ('pending', 'processing'):
+        try:
+            upd = job.get('updated_at') or job.get('created_at')
+            if upd is not None and (get_jst_now() - to_jst(upd)).total_seconds() > 600:
+                db_update_job(job['id'], 'failed', error='処理が中断された可能性があります。もう一度実行してください。')
+                job = db_get_job(job['id']) or job
+        except Exception as e:
+            logger.warning("stale job check failed: %s", e)
     return job
 
 @app.get("/api/history/{inv_id}/meta")

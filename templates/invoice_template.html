@@ -82,7 +82,7 @@
             <div class="customer">{{ customer_name }}</div>
             <div class="issuer">
                 <p>{{ date }}</p>
-                <p>{{ issuer }}</p>
+                <p>{{ issuer }}</p>{% if registration_no %}<p>登録番号: {{ registration_no }}</p>{% endif %}
                 {% if user_name %}<p>担当: {{ user_name }}</p>{% endif %}
             </div>
         </div>
@@ -115,7 +115,7 @@
         </table>
 
         <div class="total-section">
-            <p>小計: ¥{{ "{:,}".format(total_net_amount) }}</p>
+            <p>小計（10%対象・税抜）: ¥{{ "{:,}".format(total_net_amount) }}</p>
             <p>消費税(10%): ¥{{ "{:,}".format(total_tax_amount) }}</p>
             <p class="grand-total">合計金額: ¥{{ "{:,}".format(total_grand_total) }}</p>
         </div>

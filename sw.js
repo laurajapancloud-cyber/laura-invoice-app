@@ -1,45 +1,49 @@
-const CACHE_NAME = 'laura-v7';
+const CACHE_NAME = 'laura-v8';
+// ローカル資産のみプリキャッシュ（CDN依存を排除。CDNが不通だと install 全体が失敗していた）
 const ASSETS_TO_CACHE = [
   '/static/icons/icon-192.png',
   '/static/icons/icon-512.png',
   '/static/icons/maskable-512.png',
   '/static/icons/apple-touch-icon.png',
-  'https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js',
-  'https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700;800&family=Noto+Sans+JP:wght@300;400;500;700&display=swap'
+  '/static/vendor/xlsx.full.min.js',
+  '/static/vendor/alpine.min.js',
 ];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(ASSETS_TO_CACHE);
-    })
+    caches.open(CACHE_NAME).then((cache) =>
+      // 1件の失敗でインストール全体が失敗しないよう個別に追加
+      Promise.allSettled(ASSETS_TO_CACHE.map((url) => cache.add(url)))
+    )
   );
-  self.skipWaiting();
+  // NOTE: skipWaiting() は廃止。作業中のタブの資産をデプロイ途中で差し替えない。
+  // 新バージョンは全タブを閉じた後に有効化される。
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
+    caches.keys().then((cacheNames) =>
+      Promise.all(
         cacheNames.map((cacheName) => {
           if (cacheName !== CACHE_NAME) {
             return caches.delete(cacheName);
           }
         })
-      );
-    })
+      )
+    ).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
 self.addEventListener('fetch', (event) => {
+  if (event.request.method !== 'GET') return;
   const url = new URL(event.request.url);
+  if (url.origin !== self.location.origin) return; // 外部リソースには介入しない
 
-  // API calls and HTML Navigation: Network-first
+  // API と HTML ナビゲーション: Network-first
   if (url.pathname.startsWith('/api/') || event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request).then(response => {
-        // Only cache HTML responses if they are successful 200 OK (don't cache redirects)
+        // 成功した 200 OK のHTMLのみキャッシュ（リダイレクトはキャッシュしない）
         if (event.request.mode === 'navigate' && response.status === 200) {
           const resClone = response.clone();
           caches.open(CACHE_NAME).then(cache => cache.put(event.request, resClone));
@@ -50,17 +54,17 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Static Assets: Cache-first
+  // 静的資産: Stale-While-Revalidate（表示は即時、裏で更新。古い資産が永久に残る問題を解消）
   event.respondWith(
-    caches.match(event.request).then((response) => {
-      return response || fetch(event.request).then((fetchResponse) => {
-        return caches.open(CACHE_NAME).then((cache) => {
-          if (event.request.method === 'GET') {
-            cache.put(event.request, fetchResponse.clone());
-          }
-          return fetchResponse;
-        });
-      });
+    caches.match(event.request).then((cached) => {
+      const fetchAndUpdate = fetch(event.request).then((fetchResponse) => {
+        if (fetchResponse && fetchResponse.status === 200) {
+          const clone = fetchResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+        }
+        return fetchResponse;
+      }).catch(() => cached);
+      return cached || fetchAndUpdate;
     })
   );
 });

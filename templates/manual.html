@@ -1001,7 +1001,7 @@
 
                     <ul class="feature-list">
                         <li><span class="badge">POINT 01</span><b>背番号認識：</b>大量の同じタグを撮影しても、AIが1枚ずつ識別して重複なくデータ化します。</li>
-                        <li><span class="badge">POINT 02</span><b>チャンク処理：</b>100枚以上の画像でも、20枚ずつの自動分割処理により安定して解析可能です。</li>
+                        <li><span class="badge">POINT 02</span><b>並列解析：</b>1回につき最大30枚。1枚ずつ並列で解析するため、画像の取り違えや読み飛ばしが起きません。</li>
                         <li><span class="badge">POINT 03</span><b>マルチデバイス対応：</b>スマホで撮影 → そのままアップロードでデスクから現場まで一気通貫。</li>
                     </ul>
 
@@ -1043,7 +1043,7 @@
                         <li>プレビュー画面で <b style="font-family:'JetBrains Mono',monospace">× -1点</b>
                             のように表示され、合計金額もマイナスになります。</li>
                         <li>数値が <b style="color:#ee6b6b">赤字</b> で表示されるなど、視覚的に返品であることが分かりやすくなっています。</li>
-                        <li><b>Math.truncロジック</b> により、消費税計算も1円の狂いなく正確に行われます。</li>
+                        <li><b>Math.truncロジック</b> により、消費税は税抜合計に対して一度だけ端数処理（切り捨て）されます。</li>
                     </ul>
 
                     <div class="callout callout-info">

@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>LAURA JAPAN | Invoice System</title>
   <!-- ライブラリ・フォントは自己ホスト（オフライン信頼性 / CSP強化 / 体感速度向上）。
        初回のみ static 配下に資産を配置してください（同梱の fetch_assets.sh を実行）。 -->
@@ -192,6 +192,7 @@
       font-family: 'Inter', 'Noto Sans JP', sans-serif;
       color: var(--text-primary);
       min-height: 100vh;
+      min-height: 100dvh;
       font-size: 14px;
       line-height: 1.55;
       font-feature-settings: 'tnum' 1, 'palt' 1;
@@ -1942,7 +1943,9 @@
           "sidebar main"
           "sidebar statusbar";
         min-height: 100vh;
+        min-height: 100dvh;
         height: 100vh;
+        height: 100dvh;
         overflow: hidden;
       }
 
@@ -2873,7 +2876,7 @@
       display: none;
     }
 
-    @media (max-width: 768px) {
+    @media (max-width: 1023px) {
       .mobile-action-bar {
         position: fixed;
         bottom: calc(72px + env(safe-area-inset-bottom));
@@ -3307,7 +3310,7 @@
     }
 
     .cam-footer {
-      padding: 40px 20px 60px;
+      padding: 40px 20px calc(60px + env(safe-area-inset-bottom));
       display: flex;
       align-items: center;
       justify-content: space-around;
@@ -3352,6 +3355,23 @@
       border-radius: 20px;
       font-weight: 700;
       font-size: 14px;
+    }
+
+    /* 横向き撮影対応: シャッター列を右側に配置 */
+    @media (orientation: landscape) and (max-height: 500px) {
+      .cam-footer {
+        position: absolute;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        left: auto;
+        width: 132px;
+        flex-direction: column;
+        justify-content: center;
+        gap: 24px;
+        padding: 20px calc(16px + env(safe-area-inset-right)) 20px 16px;
+        background: linear-gradient(to left, rgba(0, 0, 0, 0.8), transparent);
+      }
     }
 
     .cam-flash {
@@ -3588,7 +3608,7 @@
     }
 
     /* ---- Bottom sheet (mobile modal) ---- */
-    @media (max-width: 768px) {
+    @media (max-width: 1023px) {
       .modal-overlay.modal-as-sheet {
         align-items: flex-end !important;
       }
@@ -4411,6 +4431,16 @@
   </div>
 
   <!-- 連続撮影用オーバーレイ -->
+  <!-- バーコード読取テスト（β）オーバーレイ -->
+  <div id="bc-overlay" class="cam-overlay" style="display:none;">
+    <div class="cam-header">
+      <div class="cam-counter" id="bc-status">0 件</div>
+      <button class="cam-close" onclick="stopBarcodeScan()">✕</button>
+    </div>
+    <video id="bc-video" class="cam-video" autoplay playsinline muted></video>
+    <div id="bc-results" style="position:absolute; left:0; right:0; bottom:0; max-height:45%; overflow-y:auto; background:rgba(0,0,0,0.82); color:#9f9; font-family:monospace; font-size:12px; padding:12px 16px calc(16px + env(safe-area-inset-bottom)); line-height:1.7;"></div>
+  </div>
+
   <div id="cam-overlay" class="cam-overlay">
     <video id="cam-video" autoplay playsinline></video>
     <div id="cam-flash" class="cam-flash"></div>
@@ -4799,6 +4829,7 @@
           <input type="file" id="file-input" accept="image/*" multiple>
         </div>
         <div class="thumb-row" id="thumbs"></div>
+        <button class="btn btn-outline" id="btn-barcode-scan" style="margin-top:12px; font-size:12px;">▎▏ バーコード読取テスト（β・中身の確認用）</button>
         <button class="btn btn-gold" id="btn-analyze" disabled style="margin-top:14px">
           <div class="spinner" id="sp1"></div><span id="btn-analyze-text">AIでデータを抽出する</span>
         </button>
@@ -5386,7 +5417,7 @@
       </div>
     </div>
     <div class="card">
-      <div class="card-title">セキュリテ���</div>
+      <div class="card-title">セキュリティ</div>
       <div style="text-align:center; padding: 10px 0;">
         <a href="/logout" class="btn btn-outline"
           style="display:inline-block; text-decoration:none; padding: 10px 24px;">システムからログアウト</a>
@@ -5895,7 +5926,7 @@
       if (!frame) return;
       const container = frame.parentElement;
 
-      if (window.innerWidth <= 768) {
+      if (window.innerWidth <= 1023) {
         const containerWidth = container.clientWidth;
         const targetWidth = 520; // ★限界まで絞って大きく表示 (520px)
         const docHeight = 740;  // 幅に合わせてA4比率(1:1.41)で高さを調整
@@ -6127,7 +6158,10 @@
           } else if (job.status === 'failed') {
             this.failJob(job, job.error);
           } else {
-            setTimeout(() => this.poll(jid), this.pollingInterval);
+            job.pollCount = (job.pollCount || 0) + 1;
+            // 2.5sから徐々に間隔を広げる（最大10s）: サーバー負荷と電池消費を抑える
+            const delay = Math.min(this.pollingInterval * Math.pow(1.3, job.pollCount - 1), 10000);
+            setTimeout(() => this.poll(jid), delay);
           }
         } catch (e) {
           job.retryCount++;
@@ -6177,7 +6211,7 @@
             strip.style.display = 'block';
             stripText.textContent = `${this.getJobLabel(job.type)}中...`;
           } else if (job.status === 'done') {
-            stripText.textContent = `${this.getJobLabel(job.type)}が完了���ました`;
+            stripText.textContent = `${this.getJobLabel(job.type)}が完了しました`;
             setTimeout(() => strip.style.display = 'none', 1800);
           } else if (job.status === 'failed') {
             stripText.textContent = `${this.getJobLabel(job.type)}に失敗しました`;
@@ -6233,7 +6267,7 @@
         steps = ['画像最適化', 'サーバー送信', 'AIデータ抽出', '完了'];
       } else if (mode === 'drive') {
         title = 'UPLOADING TO DRIVE';
-        steps = ['Drive接続', '認証チェック', 'データ転送', '完���'];
+        steps = ['Drive接続', '認証チェック', 'データ転送', '完了'];
       }
 
       $('gen-overlay').querySelector('.gen-sub').textContent = title;
@@ -7047,17 +7081,45 @@
       } else {
         $('btn-analyze-text').textContent = 'AIでデータを抽出する';
       }
+      // objectURL で即時・順序どおりに描画（旧: FileReader全件再読込は遅く、完了順でDOMに並び表示順が狂う）
       selectedFiles.forEach((f, i) => {
-        const r = new FileReader();
-        r.onload = e => {
-          selectedFileThumbs[i] = e.target.result;
-          const d = document.createElement('div');
-          d.className = 'thumb-item';
-          d.innerHTML = `<img class="thumb-img" src="${e.target.result}"><button class="thumb-x" onclick="rmFile(${i})">✕</button>`;
-          c.appendChild(d);
-        };
-        r.readAsDataURL(f);
+        if (!thumbUrlMap.has(f)) thumbUrlMap.set(f, URL.createObjectURL(f));
+        const d = document.createElement('div');
+        d.className = 'thumb-item';
+        d.innerHTML = `<img class="thumb-img" src="${thumbUrlMap.get(f)}"><button class="thumb-x" onclick="rmFile(${i})">✕</button>`;
+        c.appendChild(d);
       });
+      // 使われなくなった objectURL を解放
+      const aliveSet = new Set(selectedFiles);
+      thumbUrlMap.forEach((url, f) => { if (!aliveSet.has(f)) { URL.revokeObjectURL(url); thumbUrlMap.delete(f); } });
+      // 解析後の「元画像」表示用に軽量サムネイルを一度だけ生成
+      selectedFiles.forEach((f) => {
+        if (thumbDataMap.has(f)) return;
+        thumbDataMap.set(f, null); // 生成中マーク
+        makeSmallThumb(f).then(url => {
+          thumbDataMap.set(f, url);
+          const idx = selectedFiles.indexOf(f);
+          if (idx !== -1) selectedFileThumbs[idx] = url;
+        }).catch(() => { thumbDataMap.delete(f); });
+      });
+      // インデックスを最新の並びに合わせて再構築
+      selectedFiles.forEach((f, i) => {
+        const u = thumbDataMap.get(f);
+        if (u) selectedFileThumbs[i] = u;
+      });
+    }
+    const thumbUrlMap = new Map(); // File -> objectURL（一覧表示用）
+    const thumbDataMap = new Map(); // File -> dataURL（解析後の元画像表示用・軽量）
+    async function makeSmallThumb(file, max = 320) {
+      const bmp = await createImageBitmap(file);
+      const scale = Math.min(1, max / Math.max(bmp.width, bmp.height));
+      const cv = document.createElement('canvas');
+      cv.width = Math.round(bmp.width * scale);
+      cv.height = Math.round(bmp.height * scale);
+      cv.getContext('2d').drawImage(bmp, 0, 0, cv.width, cv.height);
+      const url = cv.toDataURL('image/jpeg', 0.7);
+      if (bmp.close) bmp.close();
+      return url;
     }
     function rmFile(i) {
       selectedFiles.splice(i, 1);
@@ -7076,9 +7138,17 @@
 
     async function compressImageFile(file, maxSize = 1600, quality = 0.75) {
       if (!file.type.startsWith('image/')) return file;
-      if (file.size <= 600 * 1024) return file; // すでに十分小さい画像はそのまま返す
+      // JPEG/PNG/WebP 以外（HEIC等）はサイズに関わらず必ずJPEGへ再エンコードする
+      // （旧実装は600KB以下のHEICを素通しし、サーバー側AIが読めず解析失敗の原因になっていた）
+      const safeTypes = ['image/jpeg', 'image/png', 'image/webp'];
+      if (safeTypes.includes(file.type) && file.size <= 600 * 1024) return file;
 
-      const imageBitmap = await createImageBitmap(file);
+      let imageBitmap;
+      try {
+        imageBitmap = await createImageBitmap(file);
+      } catch (e) {
+        throw new Error(`画像「${file.name}」(${file.type || '不明'}) を変換できませんでした。HEIC形式の場合はJPEGで撮影・選択してください。`);
+      }
       let width = imageBitmap.width;
       let height = imageBitmap.height;
 
@@ -7115,6 +7185,8 @@
         size: String(it.size || '').replace(/\s*[（(].*?[)）]/g, '').trim(),
         unit_price: Number(it.unit_price || 0),
         quantity: Number(it.quantity || 1),
+        warnings: it.warnings || [],
+        known_prices: it.known_prices || [],
         source_image_no: it.source_image_no ?? index,
         source_image_index: it.source_image_no ?? index,
         source_image_thumb: selectedFileThumbs[it.source_image_no ?? index],
@@ -7134,12 +7206,16 @@
         const fd = new FormData();
         fd.append('ai_model', ai);
 
-        // 画像の圧縮
-        const compressedFiles = [];
-        for (let i = 0; i < total; i++) {
-          const compressed = await compressImageFile(selectedFiles[i]);
-          compressedFiles.push(compressed);
-        }
+        // 画像の圧縮（4並列。1枚ずつの直列処理から高速化）
+        const compressedFiles = new Array(total);
+        let nextIdx = 0;
+        const workers = Array.from({ length: Math.min(4, total) }, async () => {
+          while (nextIdx < total) {
+            const i = nextIdx++;
+            compressedFiles[i] = await compressImageFile(selectedFiles[i]);
+          }
+        });
+        await Promise.all(workers);
 
         compressedFiles.forEach((f, i) => fd.append('files', f, `img_${i}.jpg`));
 
@@ -7166,6 +7242,7 @@
               } else {
                 merged[key] = {
                   code: it.code, color: it.color, size: it.size, unit_price: up, quantity: qty,
+                  warnings: it.warnings || [], known_prices: it.known_prices || [],
                   source_count: 1, source_images: [sourceImage]
                 };
               }
@@ -7200,8 +7277,16 @@
               }
             });
 
-            selectedFiles = [];
-            selectedFileThumbs = [];
+            if (data.partial && Array.isArray(data.failed_images) && data.failed_images.length) {
+              // 解析に失敗した画像は選択状態のまま残し、そのまま再抽出できるようにする
+              const failedSet = new Set(data.failed_images);
+              selectedFiles = selectedFiles.filter((_, idx) => failedSet.has(idx));
+              selectedFileThumbs = selectedFileThumbs.filter((_, idx) => failedSet.has(idx));
+              toast(`⚠ ${data.failed_images.length}枚の解析に失敗しました。残った画像でもう一度「抽出」を押してください。`, 'warn', 9000);
+            } else {
+              selectedFiles = [];
+              selectedFileThumbs = [];
+            }
             renderThumbs();
 
             $('drop-area').style.display = '';
@@ -7210,7 +7295,12 @@
 
             renderPreview();
             $('btn-analyze').disabled = false;
-            toast('AI解析が完了しました', 'ok');
+            const warnCount = extractedItems.filter(it => (it.warnings || []).length > 0).length;
+            if (warnCount > 0) {
+              toast(`AI解析が完了しました（⚠ ${warnCount}件が過去実績と不一致。単価をご確認ください）`, 'warn', 9000);
+            } else {
+              toast('AI解析が完了しました', 'ok');
+            }
 
             setTimeout(() => {
               window.scrollTo({ top: $('preview-card').offsetTop - 20, behavior: 'smooth' });
@@ -7299,7 +7389,7 @@
       const visible = createPageActive && ($('preview-card').style.display !== 'none');
       bar.classList.toggle('visible', visible);
       document.body.classList.toggle('has-mobile-action-bar', visible);
-      bar.style.display = (visible && window.innerWidth <= 768) ? 'flex' : 'none';
+      bar.style.display = (visible && window.innerWidth <= 1023) ? 'flex' : 'none';
     }
 
     // ===== Autosave =====
@@ -7370,9 +7460,30 @@
       renderPreview();
     });
 
+    let forceNextGenerate = false;
     async function generateInvoice() {
       syncInputs();
       if (!extractedItems.length) return toast('商品がありません', 'err');
+
+      // 発行前バリデーション（旧実装は不正値を黙って補正して保存していた）
+      const blockers = [];
+      const rowWarnings = [];
+      extractedItems.forEach((it, i) => {
+        const q = parseInt(it.quantity);
+        const up = parseInt(it.unit_price);
+        const codeStr = String(it.code || '').trim();
+        if (!q || q <= 0) blockers.push(`${i + 1}行目: 数量が0または不正です`);
+        if (!codeStr || codeStr === '-') rowWarnings.push(`${i + 1}行目: 品番が未入力`);
+        if (!up || up <= 0) rowWarnings.push(`${i + 1}行目: 単価が0円`);
+      });
+      if (blockers.length) {
+        toast(blockers[0] + '（数量を修正してください）', 'err');
+        return;
+      }
+      if (rowWarnings.length) {
+        const msg = rowWarnings.slice(0, 6).join('\n') + (rowWarnings.length > 6 ? `\n…ほか${rowWarnings.length - 6}件` : '');
+        if (!confirm(`確認が必要な行があります:\n\n${msg}\n\nこのまま保存しますか？`)) return;
+      }
 
       $('btn-generate').disabled = true;
 
@@ -7385,8 +7496,10 @@
         issue_date: $('inp-issue-date') ? $('inp-issue-date').value : "",
         items: extractedItems,
         doc_type: currentDocType,
-        user_id: currentUser?.id
+        user_id: currentUser?.id,
+        force: forceNextGenerate
       };
+      forceNextGenerate = false;
 
       jobManager.enqueue('generate', '/api/jobs/generate', payload, {
         onSuccess: async (result) => {
@@ -7427,8 +7540,15 @@
           await loadHistory();
         },
         onError: (err) => {
-          toast('保存に失敗しました: ' + err, 'err');
           $('btn-generate').disabled = false;
+          if (String(err).includes('重複の可能性')) {
+            if (confirm(String(err) + '\n\n重複ではないことを確認しました。このまま保存しますか？')) {
+              forceNextGenerate = true;
+              generateInvoice();
+            }
+            return;
+          }
+          toast('保存に失敗しました: ' + err, 'err');
         }
       });
     }
@@ -7889,8 +8009,10 @@
       document.querySelector('.statusbar').style.display = 'flex';
     }
 
-    // Health ping
-    setInterval(() => { fetch('/health').catch(() => { }); }, 5 * 60 * 1000);
+    // Health ping（タブが表示中のときだけ。バックグラウンドの無駄な通信・電池消費を防ぐ）
+    setInterval(() => {
+      if (document.visibilityState === 'visible') fetch('/health').catch(() => { });
+    }, 5 * 60 * 1000);
 
 
   </script>
@@ -8007,7 +8129,8 @@
         shutterBuffer = await audioCtx.decodeAudioData(arrayBuffer);
       } catch (e) { console.error("Shutter load error:", e); }
     }
-    loadShutterSound();
+    // 初回のユーザー操作後に読み込む（iOSはユーザー操作前のAudioContext生成が制限されるため）
+    document.addEventListener('pointerdown', () => { if (!shutterBuffer) loadShutterSound(); }, { once: true });
 
     function playShutterSound() {
       if (!shutterBuffer) return;
@@ -8070,6 +8193,10 @@
         return;
       }
       const video = $('cam-video');
+      if (!video.videoWidth || !video.videoHeight) {
+        toast('カメラ準備中です。少し待ってからもう一度タップしてください。', 'warn');
+        return;
+      }
       const canvas = document.createElement('canvas');
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
@@ -8093,6 +8220,76 @@
         }
       }, 'image/jpeg', 0.85);
     });
+
+    // ===== バーコード読取テスト（β） =====
+    // 下げ札のバーコードに実際何が入っているか（形式・生データ）を現場で確認するためのツール。
+    // 品番が取れることが確認できれば「スキャン=品番確定、AI=価格・サイズ補完」のハイブリッド方式に発展可能。
+    let bcStream = null;
+    let bcTimer = null;
+    let bcDetector = null;
+    const bcFound = new Map();
+
+    function bcEscapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+    }
+
+    async function startBarcodeScan() {
+      if (!('BarcodeDetector' in window)) {
+        toast('このブラウザはバーコード読取（BarcodeDetector）非対応です。iOS 17以降のSafariかAndroid Chromeでお試しください。', 'warn', 6000);
+        return;
+      }
+      try {
+        const formats = await BarcodeDetector.getSupportedFormats();
+        bcDetector = new BarcodeDetector({ formats });
+        bcStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } },
+          audio: false
+        });
+        const v = $('bc-video');
+        v.srcObject = bcStream;
+        await v.play();
+        bcFound.clear();
+        $('bc-results').innerHTML = '<div style="color:#ccc;">タグのバーコードにかざしてください…（読み取れた生データを表示します）</div>';
+        $('bc-status').textContent = '0 件';
+        const ov = $('bc-overlay');
+        ov.classList.add('active');
+        ov.style.display = 'flex';
+        bcTimer = setInterval(scanBarcodeFrame, 300);
+      } catch (e) {
+        toast('カメラを起動できませんでした: ' + (e.message || e), 'err');
+        stopBarcodeScan();
+      }
+    }
+
+    async function scanBarcodeFrame() {
+      const v = $('bc-video');
+      if (!bcDetector || !v.videoWidth) return;
+      try {
+        const codes = await bcDetector.detect(v);
+        for (const b of codes) {
+          const key = `${b.format}:${b.rawValue}`;
+          if (bcFound.has(key)) continue;
+          bcFound.set(key, b);
+          if (navigator.vibrate) navigator.vibrate(60);
+          const div = document.createElement('div');
+          div.innerHTML = `<span style="color:#6cf;">[${bcEscapeHtml(b.format)}]</span> ${bcEscapeHtml(b.rawValue)}`;
+          $('bc-results').appendChild(div);
+          $('bc-status').textContent = `${bcFound.size} 件`;
+        }
+      } catch (e) { /* フレーム単位の失敗は無視 */ }
+    }
+
+    function stopBarcodeScan() {
+      if (bcTimer) { clearInterval(bcTimer); bcTimer = null; }
+      if (bcStream) { bcStream.getTracks().forEach(t => t.stop()); bcStream = null; }
+      const ov = $('bc-overlay');
+      if (ov) { ov.classList.remove('active'); ov.style.display = 'none'; }
+      if (bcFound.size) {
+        console.log('Barcode scan results:', Array.from(bcFound.values()).map(b => ({ format: b.format, rawValue: b.rawValue })));
+      }
+    }
+
+    $('btn-barcode-scan')?.addEventListener('click', startBarcodeScan);
 
   </script>
 </body>
