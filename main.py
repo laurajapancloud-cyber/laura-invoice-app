@@ -3228,6 +3228,18 @@ def upload_drive_internal(jid: str, inv_id: int):
     except Exception as e:
         db_update_job(jid, 'failed', error=str(e))
 
+
+@app.post("/api/history/{inv_id}/restore")
+def restore_invoice(inv_id: int, username: Annotated[str, Depends(authenticate)]):
+    """削除した伝票を元に戻す（Undoトースト用）。statusはdraftに戻る。"""
+    with db_transaction() as conn, conn.cursor() as cur:
+        cur.execute(
+            "UPDATE invoices SET deleted_at=NULL, status=%s WHERE id = %s AND status=%s",
+            ("draft", inv_id, "deleted"),
+        )
+        restored = cur.rowcount
+    return {"status": "ok", "restored": restored}
+
 @app.post("/api/history/{inv_id}/upload-drive")
 def upload_to_drive(inv_id: int, username: Annotated[str, Depends(authenticate)]):
     jid = db_create_job('drive_upload', {"invoice_id": inv_id})
