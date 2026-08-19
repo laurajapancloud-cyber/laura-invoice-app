@@ -5605,7 +5605,7 @@
       <input type="text" id="prod-search" placeholder="品番の頭文字で検索..."
         style="width:100%; padding:10px 12px; font-size:13px; background:var(--bg-input); border:1px solid var(--border); border-radius:8px; color:var(--text-primary); margin-bottom:10px;">
       <div id="prod-list" style="display:flex; flex-direction:column; gap:6px; max-height:320px; overflow-y:auto;">
-        <div style="font-size:12px; color:var(--text-muted); padding:8px;">品番の頭文字を入力すると学習済みデータを表示します</div>
+        <div style="font-size:12px; color:var(--text-muted); padding:8px;">品番の一部を入力すると学習済みデータを表示します（確定済み伝票から自動蓄積）</div>
       </div>
     </div>
 
@@ -7948,7 +7948,7 @@
         const bc = $('bar-chart');
         bc.innerHTML = '';
         if (d.monthly.length) {
-          const maxVal = Math.max(...d.monthly.map(m => Math.max(m.delivery || 0, m.return || 0)), 1);
+          const maxVal = Math.max(...d.monthly.map(m => (m.delivery || 0) + (m.return || 0)), 1);
           [...d.monthly].reverse().forEach(m => {
             const col = document.createElement('div');
             col.className = 'bar-col';
@@ -7956,10 +7956,11 @@
             col.dataset.month = m.month;
             col.style.cursor = 'pointer';
             col.setAttribute('role', 'button');
-            const hD = Math.max(2, Math.round((m.delivery || 0) / maxVal * 100));
-            const hR = Math.max(0, Math.round((m.return || 0) / maxVal * 100));
+            const barMax = (window.matchMedia && window.matchMedia('(min-width: 1024px)').matches) ? 150 : 80;
+            const hD = Math.max(3, Math.round((m.delivery || 0) / maxVal * barMax));
+            const hR = Math.max(0, Math.round((m.return || 0) / maxVal * barMax));
             col.innerHTML = `
-              <div style="display:flex; flex-direction:column; align-items:center; gap:2px;">
+              <div style="display:flex; flex-direction:column; align-items:center; justify-content:flex-end; gap:2px; width:100%;">
                 <div class="bar" style="height:${hD}px; background:var(--green); opacity:0.7; border-radius:3px 3px 0 0;"></div>
                 ${hR > 0 ? `<div style="height:${hR}px; width:100%; background:var(--red); opacity:0.6; border-radius:0 0 3px 3px;"></div>` : ''}
               </div>
@@ -8697,7 +8698,7 @@
       const box = $('prod-list');
       if (!box) return;
       if (!q || !q.trim()) {
-        box.innerHTML = '<div style="font-size:12px; color:var(--text-muted); padding:8px;">品番の頭文字を入力すると学習済みデータを表示します</div>';
+        box.innerHTML = '<div style="font-size:12px; color:var(--text-muted); padding:8px;">品番の一部を入力すると学習済みデータを表示します（確定済み伝票から自動蓄積）</div>';
         return;
       }
       try {

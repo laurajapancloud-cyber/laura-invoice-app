@@ -511,6 +511,22 @@ def init_db():
             logger.warning("advisory unlock failed: %s", e)
         release_db(conn)
 
+    # 既存の確定済み伝票を学習マスタへ一括反映（冪等・失敗時はスキップ）
+    try:
+        with db_conn() as _bfc, _bfc.cursor() as _bfcur:
+            _bfcur.execute("""
+                INSERT INTO product_variants (code, color, size, unit_price)
+                SELECT DISTINCT UPPER(TRIM(ii.code)), COALESCE(TRIM(ii.color), ''), COALESCE(TRIM(ii.size), ''), COALESCE(ii.unit_price, 0)
+                FROM invoice_items ii
+                JOIN invoices i ON i.id = ii.invoice_id
+                WHERE i.status = 'locked' AND i.deleted_at IS NULL
+                  AND COALESCE(TRIM(ii.code), '') NOT IN ('', '-')
+                ON CONFLICT (code, color, size, unit_price) DO NOTHING
+            """)
+            _bfc.commit()
+    except Exception as _bfe:
+        logger.warning("product_variants backfill skipped: %s", _bfe)
+
 def generate_invoice_number(doc_type='delivery'):
     with db_conn() as conn, conn.cursor() as cur:
         res = generate_invoice_number_safe(cur, doc_type)
@@ -1572,7 +1588,7 @@ def get_product_variants(username: Annotated[str, Depends(authenticate)], code: 
                FROM product_variants
                WHERE UPPER(code) LIKE UPPER(%s)
                ORDER BY seen_count DESC, last_seen_at DESC LIMIT %s""",
-            (code + "%", limit)
+            ("%" + code + "%", limit)
         )
         rows = [dict(r) for r in cur.fetchall()]
     return rows
@@ -2751,6 +2767,21 @@ def lock_invoice_internal(jid: str, inv_id: int, bt: Optional[BackgroundTasks] =
                 return
             _audit(cur, "lock", inv_id)
             conn.commit()
+
+        # 確定時に学習マスタ（product_variants）へ実績を反映
+        try:
+            with db_conn() as conn2, conn2.cursor() as cur2:
+                cur2.execute("""
+                    INSERT INTO product_variants (code, color, size, unit_price)
+                    SELECT DISTINCT UPPER(TRIM(ii.code)), COALESCE(TRIM(ii.color), ''), COALESCE(TRIM(ii.size), ''), COALESCE(ii.unit_price, 0)
+                    FROM invoice_items ii
+                    WHERE ii.invoice_id = %s AND COALESCE(TRIM(ii.code), '') NOT IN ('', '-')
+                    ON CONFLICT (code, color, size, unit_price)
+                    DO UPDATE SET seen_count = product_variants.seen_count + 1, last_seen_at = NOW()
+                """, (inv_id,))
+                conn2.commit()
+        except Exception as le:
+            logger.warning("variant learn on lock failed: %s", le)
 
         with _dashboard_lock:
             _dashboard_cache.clear()
