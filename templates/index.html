@@ -10,7 +10,7 @@
   <script defer src="/static/vendor/xlsx.full.min.js"></script>
   <script defer src="/static/vendor/alpine.min.js"></script>
   <link rel="icon"
-    href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📄</text></svg>">
+    href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23c9a961%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22><path d=%22M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z%22/><polyline points=%2214 2 14 8 20 8%22/><line x1=%228%22 y1=%2213%22 x2=%2216%22 y2=%2213%22/><line x1=%228%22 y1=%2217%22 x2=%2213%22 y2=%2217%22/></svg>">
   <link rel="manifest" href="/manifest.json">
   <meta name="theme-color" content="#c9a961">
   <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
@@ -114,6 +114,147 @@
       flex: 0 0 auto
     }
 
+    .card-title .icon {
+      width: 17px;
+      height: 17px;
+      color: var(--gold);
+    }
+
+    .preview-tab .icon {
+      width: 13px;
+      height: 13px;
+      vertical-align: -2px;
+      margin-right: 4px;
+    }
+
+    .btn .icon {
+      width: 14px;
+      height: 14px;
+      vertical-align: -2px;
+      margin-right: 5px;
+    }
+
+    .upload-icon .icon {
+      width: 42px;
+      height: 42px;
+    }
+
+    .empty-state-icon .icon {
+      width: 44px;
+      height: 44px;
+    }
+
+    .job-icon .icon {
+      width: 18px;
+      height: 18px;
+    }
+
+    /* 取込フローステップ（モバイルのみ表示） */
+    .flow-steps {
+      display: none;
+      align-items: center;
+      gap: 6px;
+      margin: 0 0 14px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .flow-step {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--border-subtle);
+      background: var(--bg-card);
+      white-space: nowrap;
+    }
+
+    .flow-step .fs-num {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg-input);
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    .flow-step.active {
+      border-color: var(--border-strong);
+      color: var(--gold-bright);
+      background: var(--gold-soft);
+    }
+
+    .flow-step.active .fs-num {
+      background: var(--gold);
+      color: #111;
+      font-weight: 700;
+    }
+
+    .flow-step.done {
+      color: var(--green);
+    }
+
+    .flow-step.done .fs-num {
+      background: rgba(131, 197, 111, 0.2);
+      color: var(--green);
+    }
+
+    .flow-sep {
+      flex: 0 0 12px;
+      height: 1px;
+      background: var(--border);
+    }
+
+    @media (max-width: 1023px) {
+      .flow-steps {
+        display: flex;
+      }
+    }
+
+    /* PC 2ペイン: 左=設定・取込 / 右=読み取り結果を常時表示 */
+    @media (min-width: 1280px) {
+      #page-create.active {
+        max-width: 1200px;
+        display: grid;
+        grid-template-columns: 430px minmax(0, 1fr);
+        gap: 20px;
+        align-items: start;
+      }
+
+      #page-create.active > .card {
+        margin-bottom: 0;
+      }
+
+      #page-create.active > #preview-card {
+        grid-column: 2;
+        grid-row: 1 / span 2;
+        position: sticky;
+        top: 80px;
+        max-height: calc(100dvh - 110px);
+        overflow-y: auto;
+      }
+
+      #page-create.active > #dl-section {
+        grid-column: 1 / -1;
+      }
+
+      /* 解析前（結果非表示）は従来の1カラムにフォールバック */
+      #page-create.active:has(> #preview-card[style*="display:none"]),
+      #page-create.active:has(> #preview-card[style*="display: none"]) {
+        display: block;
+        max-width: 600px;
+      }
+    }
+
+    .cmdk-item-icon .icon {
+      width: 14px;
+      height: 14px;
+    }
+
     .sidebar-tab-icon .icon {
       width: 20px;
       height: 20px
@@ -160,7 +301,7 @@
 
       --text-primary: #f7f4ec;
       --text-secondary: #c8c0b2;
-      --text-muted: #a59c8a;
+      --text-muted: #b3ab9b;
 
       --border: rgba(232, 196, 104, 0.18);
       --border-strong: rgba(232, 196, 104, 0.38);
@@ -458,9 +599,9 @@
       color: var(--gold);
       border: 1px solid var(--gold);
       border-radius: 50%;
-      width: 22px;
-      height: 22px;
-      font-size: 10px;
+      width: 28px;
+      height: 28px;
+      font-size: 13px;
       cursor: pointer;
       display: flex;
       align-items: center;
@@ -4353,6 +4494,24 @@
 <body>
   <svg width="0" height="0" style="position:absolute;overflow:hidden" aria-hidden="true" focusable="false">
     <defs>
+      <symbol id="i-folder" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></symbol>
+      <symbol id="i-unlock" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></symbol>
+      <symbol id="i-doc" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></symbol>
+      <symbol id="i-table" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></symbol>
+      <symbol id="i-list" viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></symbol>
+      <symbol id="i-crest" viewBox="0 0 24 24"><path d="M6 3h12l4 6-10 12L2 9z"/><path d="M2 9h20"/><path d="M12 21 8 9l4-6 4 6z"/></symbol>
+      <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></symbol>
+      <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></symbol>
+      <symbol id="i-eye" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></symbol>
+      <symbol id="i-package" viewBox="0 0 24 24"><line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></symbol>
+      <symbol id="i-return" viewBox="0 0 24 24"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></symbol>
+      <symbol id="i-ai" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></symbol>
+      <symbol id="i-lock" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+      <symbol id="i-trophy" viewBox="0 0 24 24"><path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 4h10v6a5 5 0 0 1-10 0z"/><path d="M17 5h3a1 1 0 0 1 1 1 5 5 0 0 1-5 5"/><path d="M7 5H4a1 1 0 0 0-1 1 5 5 0 0 0 5 5"/></symbol>
+      <symbol id="i-trend" viewBox="0 0 24 24"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></symbol>
+      <symbol id="i-user" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></symbol>
+      <symbol id="i-camera" viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></symbol>
+      <symbol id="i-scan" viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" y1="8" x2="7" y2="16"/><line x1="11" y1="8" x2="11" y2="16"/><line x1="15" y1="8" x2="15" y2="16"/><line x1="19" y1="8" x2="19" y2="16"/></symbol>
       <symbol id="i-scissors" viewBox="0 0 24 24">
         <circle cx="6" cy="6" r="3" />
         <circle cx="6" cy="18" r="3" />
@@ -4448,7 +4607,7 @@
       <div class="cam-header">
         <div class="cam-counter" id="cam-counter">0 枚</div>
         <div style="display:flex; gap:12px; align-items:center; pointer-events:auto;">
-          <div class="cam-done" onclick="stopCamera(); $('file-input').click()">📁 ライブラリ</div>
+          <div class="cam-done" onclick="stopCamera(); $('file-input').click()"><svg class="icon" aria-hidden="true" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"><use href="#i-folder"></use></svg>ライブラリ</div>
           <div class="cam-done" onclick="stopCamera()">キャンセル</div>
         </div>
       </div>
@@ -4467,42 +4626,42 @@
   <div id="modal-preview" class="modal-overlay modal-as-sheet">
     <div class="modal-content">
       <div class="modal-header">
-        <div style="font-weight:700; color:var(--gold-bright)" id="modal-title">📄 ドキュメントプレビュー</div>
+        <div style="font-weight:700; color:var(--gold-bright)" id="modal-title"><svg class="icon" aria-hidden="true"><use href="#i-doc"></use></svg> ドキュメントプレビュー</div>
         <div style="display:flex; gap:8px">
           <button class="btn btn-blue btn-sm" id="modal-btn-drive" style="display:none">
-            <div class="spinner" id="modal-sp-drive"></div> ☁️ Drive保存
+            <div class="spinner" id="modal-sp-drive"></div> <svg class="icon" aria-hidden="true"><use href="#i-cloud"></use></svg>Drive保存
           </button>
           <button class="btn btn-outline btn-sm" onclick="closePreviewModal()">✕ 閉じる</button>
         </div>
       </div>
       <div class="modal-body">
         <div class="preview-tabs" data-target-prefix="m-ppane-">
-          <div class="preview-tab active" data-ptab="pdf">📄 納品書</div>
-          <div class="preview-tab" data-ptab="excel">📊 Excel表</div>
-          <div class="preview-tab" data-ptab="detail">📋 明細表</div>
-          <div class="preview-tab" data-ptab="summary">⚜ 概要</div>
+          <div class="preview-tab active" data-ptab="pdf"><svg class="icon" aria-hidden="true"><use href="#i-doc"></use></svg>納品書</div>
+          <div class="preview-tab" data-ptab="excel"><svg class="icon" aria-hidden="true"><use href="#i-table"></use></svg>Excel表</div>
+          <div class="preview-tab" data-ptab="detail"><svg class="icon" aria-hidden="true"><use href="#i-list"></use></svg>明細表</div>
+          <div class="preview-tab" data-ptab="summary"><svg class="icon" aria-hidden="true"><use href="#i-crest"></use></svg>概要</div>
         </div>
 
         <div class="preview-pane active" id="m-ppane-pdf" style="overflow: hidden;">
           <iframe id="modal-pdf-frame" class="pdf-preview-frame"></iframe>
           <div class="preview-actions">
-            <button class="btn btn-red btn-dl-pdf">📄 PDF保存</button>
+            <button class="btn btn-red btn-dl-pdf"><svg class="icon" aria-hidden="true"><use href="#i-doc"></use></svg>PDF保存</button>
           </div>
         </div>
 
         <div class="preview-pane" id="m-ppane-excel">
           <div id="excel-preview-grid" class="excel-preview-container"></div>
           <div class="preview-actions">
-            <button class="btn btn-green btn-dl-xl" title="バーコード付き">📊 会社控Excel</button>
-            <button class="btn btn-green btn-dl-client-xl" title="掛率なし・PDFレイアウト">📊 提出用Excel</button>
+            <button class="btn btn-green btn-dl-xl" title="バーコード付き"><svg class="icon" aria-hidden="true"><use href="#i-table"></use></svg>会社控Excel</button>
+            <button class="btn btn-green btn-dl-client-xl" title="掛率なし・PDFレイアウト"><svg class="icon" aria-hidden="true"><use href="#i-table"></use></svg>提出用Excel</button>
           </div>
         </div>
 
         <div class="preview-pane" id="m-ppane-detail" style="overflow: hidden;">
           <iframe id="modal-detail-frame" class="pdf-preview-frame"></iframe>
           <div class="preview-actions">
-            <button class="btn btn-red btn-dl-dpdf">📄 PDF保存</button>
-            <button class="btn btn-green btn-dl-dxl">📊 Excel保存</button>
+            <button class="btn btn-red btn-dl-dpdf"><svg class="icon" aria-hidden="true"><use href="#i-doc"></use></svg>PDF保存</button>
+            <button class="btn btn-green btn-dl-dxl"><svg class="icon" aria-hidden="true"><use href="#i-table"></use></svg>Excel保存</button>
           </div>
         </div>
 
@@ -4684,8 +4843,15 @@
   <main id="app-main">
     <!-- ========== TAB 1: CREATE ========== -->
     <div class="page active" id="page-create">
+      <div class="flow-steps" id="flow-steps" aria-hidden="true">
+        <div class="flow-step active" data-step="1"><span class="fs-num">1</span>撮影・取込</div>
+        <div class="flow-sep"></div>
+        <div class="flow-step" data-step="2"><span class="fs-num">2</span>確認・修正</div>
+        <div class="flow-sep"></div>
+        <div class="flow-step" data-step="3"><span class="fs-num">3</span>保存完了</div>
+      </div>
       <div class="card">
-        <div class="card-title">⚜ 伝票設定</div>
+        <div class="card-title"><svg class="icon" aria-hidden="true"><use href="#i-crest"></use></svg>伝票設定</div>
         <div
           style="display:flex; gap:6px; margin-bottom:20px; padding:4px; background:var(--bg-input); border-radius:10px;">
           <button class="doctype-btn active" data-type="delivery">納品</button>
@@ -4773,7 +4939,7 @@
 
             <div style="position: relative;">
               <input type="text" class="custom-select-input" x-model="search" @focus="open = true; $el.select()"
-                placeholder="🔍 検索または選択..." autocomplete="off">
+                placeholder="検索または選択..." autocomplete="off">
               <button type="button" x-show="search !== ''" @click.stop="selectCustomer('manual')"
                 style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 16px;">
                 ✕
@@ -4784,6 +4950,10 @@
               <div class="custom-select-item" @click="selectCustomer('manual')"
                 style="color: var(--gold); font-weight: bold;">
                 -- 手動入力 --
+              </div>
+              <div class="custom-select-item" x-show="search.trim().length > 0"
+                @click="window.quickAddCustomer(search.trim())" style="color: var(--green);">
+                ＋ 「<span x-text="search.trim()"></span>」を取引先として登録
               </div>
               <template x-for="c in filteredCustomers" :key="c.id">
                 <div class="custom-select-item" @click="selectCustomer(c)"
@@ -4823,13 +4993,12 @@
 
       <div class="card">
         <div class="upload-area" id="drop-area">
-          <div class="upload-icon">📸</div>
+          <div class="upload-icon" style="filter:none; color:var(--gold)"><svg class="icon" aria-hidden="true"><use href="#i-camera"></use></svg></div>
           <div class="upload-text">タグを撮影 / ライブラリから選択</div>
           <div class="upload-sub">複数選択・大量一括処理に対応</div>
           <input type="file" id="file-input" accept="image/*" multiple>
         </div>
         <div class="thumb-row" id="thumbs"></div>
-        <button class="btn btn-outline" id="btn-barcode-scan" style="margin-top:12px; font-size:12px;">▎▏ バーコード読取テスト（β・中身の確認用）</button>
         <button class="btn btn-gold" id="btn-analyze" disabled style="margin-top:14px">
           <div class="spinner" id="sp1"></div><span id="btn-analyze-text">AIでデータを抽出する</span>
         </button>
@@ -4846,11 +5015,11 @@
         @resize.window.debounce.100ms="isDesktop = window.innerWidth >= 1024">
         <div class="card-title" id="preview-title"
           style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
-          <span>✎ 読み取り結果（タップで修正可能）</span>
+          <span><svg class="icon" aria-hidden="true"><use href="#i-pencil"></use></svg> 読み取り結果（タップで修正可能）</span>
           <button class="btn btn-outline"
             style="font-size:12px; padding:6px 12px; border-color:var(--gold); color:var(--gold);"
             onclick="window.scrollTo({top:$('drop-area').offsetTop - 20, behavior:'smooth'})">
-            ➕ さらに追加撮影する
+            <svg class="icon" aria-hidden="true"><use href="#i-plus"></use></svg>さらに追加撮影する
           </button>
         </div>
 
@@ -5033,7 +5202,7 @@
             <div class="spinner" id="sp2"></div>最終データを確定して保存
           </button>
           <button class="btn btn-blue" id="btn-preview-only" style="margin-top:10px; width:100%">
-            👁 プレビューを確認
+            <svg class="icon" aria-hidden="true"><use href="#i-eye"></use></svg>プレビューを確認
           </button>
         </div>
       </div>
@@ -5045,24 +5214,24 @@
           <div class="success-meta">伝票が作成され、履歴に保存されました</div>
 
           <div class="preview-tabs" data-target-prefix="ppane-">
-            <div class="preview-tab active" data-ptab="pdf">📄 納品書</div>
-            <div class="preview-tab" data-ptab="detail">📋 明細表</div>
-            <div class="preview-tab" data-ptab="summary">⚜ 概要</div>
+            <div class="preview-tab active" data-ptab="pdf"><svg class="icon" aria-hidden="true"><use href="#i-doc"></use></svg>納品書</div>
+            <div class="preview-tab" data-ptab="detail"><svg class="icon" aria-hidden="true"><use href="#i-list"></use></svg>明細表</div>
+            <div class="preview-tab" data-ptab="summary"><svg class="icon" aria-hidden="true"><use href="#i-crest"></use></svg>概要</div>
           </div>
 
           <div class="preview-pane active" id="ppane-pdf">
             <iframe id="pdf-frame" class="pdf-preview-frame"></iframe>
             <div class="preview-actions">
-              <button class="btn btn-red" onclick="downloadBlob('pdf')">📄 PDF保存</button>
-              <button class="btn btn-green" onclick="downloadBlob('excel')">📊 Excel保存</button>
+              <button class="btn btn-red" onclick="downloadBlob('pdf')"><svg class="icon" aria-hidden="true"><use href="#i-doc"></use></svg>PDF保存</button>
+              <button class="btn btn-green" onclick="downloadBlob('excel')"><svg class="icon" aria-hidden="true"><use href="#i-table"></use></svg>Excel保存</button>
             </div>
           </div>
 
           <div class="preview-pane" id="ppane-detail">
             <iframe id="detail-frame" class="pdf-preview-frame"></iframe>
             <div class="preview-actions">
-              <button class="btn btn-red" onclick="downloadBlob('detail-pdf')">📄 PDF保存</button>
-              <button class="btn btn-green" onclick="downloadBlob('detail-excel')">📊 Excel保存</button>
+              <button class="btn btn-red" onclick="downloadBlob('detail-pdf')"><svg class="icon" aria-hidden="true"><use href="#i-doc"></use></svg>PDF保存</button>
+              <button class="btn btn-green" onclick="downloadBlob('detail-excel')"><svg class="icon" aria-hidden="true"><use href="#i-table"></use></svg>Excel保存</button>
             </div>
           </div>
 
@@ -5074,7 +5243,7 @@
             ✦ この内容で確定して保存（固定化）
           </button>
           <button class="btn btn-blue" id="btn-drive" style="margin-top:10px; width:100%">
-            <div class="spinner" id="sp3"></div> ☁️ Google Driveに4ファイル保存
+            <div class="spinner" id="sp3"></div> <svg class="icon" aria-hidden="true"><use href="#i-cloud"></use></svg>Google Driveに4ファイル保存
           </button>
 
           <button class="btn btn-dark" id="btn-new" style="margin-top:10px; width:100%">＋ 新しい伝票を作成する</button>
@@ -5086,7 +5255,7 @@
     <div class="page" id="page-history" x-data="{ isDesktop: window.innerWidth >= 1024 }"
       @resize.window.debounce.100ms="isDesktop = window.innerWidth >= 1024">
       <div class="card">
-        <div class="card-title">⌘ 伝票履歴</div>
+        <div class="card-title"><svg class="icon" aria-hidden="true"><use href="#i-history"></use></svg>伝票履歴</div>
         <div class="search-bar-wrap" style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom:14px">
           <div class="hist-search-field">
             <svg class="icon hist-search-icon" aria-hidden="true">
@@ -5118,7 +5287,7 @@
             @click="$store.app.selectedInvoiceIds = []">解除</button>
           <button class="btn btn-gold btn-sm" style="margin-left: auto;"
             :disabled="$store.app.selectedInvoiceIds.length === 0" @click="$store.app.downloadCompanyCopy()">
-            📗 まとめて控え保存
+            <svg class="icon" aria-hidden="true"><use href="#i-book"></use></svg>まとめて控え保存
           </button>
         </div>
 
@@ -5137,7 +5306,7 @@
           </template>
           <template x-if="!$store.app.isLoadingHistory && !$store.app.history.length">
             <div class="empty-state">
-              <div class="empty-state-icon">📒</div>
+              <div class="empty-state-icon" style="filter:none"><svg class="icon" aria-hidden="true"><use href="#i-history"></use></svg></div>
               <div class="empty-state-title">履歴がまだありません</div>
               <div class="empty-state-desc">タグの撮影 → AI解析 → 確定で<br>ここに伝票が並びます。</div>
               <button class="btn btn-gold" type="button"
@@ -5249,7 +5418,7 @@
     <!-- ========== TAB 3: DASHBOARD ========== -->
     <div class="page" id="page-dashboard">
       <div class="card">
-        <div class="card-title">⚜ 今月の実績</div>
+        <div class="card-title"><svg class="icon" aria-hidden="true"><use href="#i-crest"></use></svg>今月の実績</div>
         <div class="stat-grid">
           <div class="stat-box">
             <div class="stat-val" id="dash-inv-cnt">0</div>
@@ -5265,7 +5434,7 @@
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:16px;">
           <div
             style="padding:12px; background:rgba(46,94,62,0.15); border-radius:10px; border:1px solid rgba(46,94,62,0.3);">
-            <div style="font-size:11px; color:var(--green); letter-spacing:0.08em; margin-bottom:4px;">📦 納品</div>
+            <div style="font-size:11px; color:var(--green); letter-spacing:0.08em; margin-bottom:4px;"><svg class="icon" aria-hidden="true" style="width:12px;height:12px;vertical-align:-2px"><use href="#i-package"></use></svg> 納品</div>
             <div style="display:flex; justify-content:space-between; align-items:baseline;">
               <span id="dash-delivery-cnt" style="font-size:22px; font-weight:700; color:var(--text-primary);">0</span>
               <span id="dash-delivery-amt" style="font-size:14px; color:var(--text-secondary);">¥0</span>
@@ -5273,7 +5442,7 @@
           </div>
           <div
             style="padding:12px; background:rgba(200,51,46,0.12); border-radius:10px; border:1px solid rgba(200,51,46,0.3);">
-            <div style="font-size:11px; color:var(--red); letter-spacing:0.08em; margin-bottom:4px;">↩ 返品</div>
+            <div style="font-size:11px; color:var(--red); letter-spacing:0.08em; margin-bottom:4px;"><svg class="icon" aria-hidden="true" style="width:12px;height:12px;vertical-align:-2px"><use href="#i-return"></use></svg> 返品</div>
             <div style="display:flex; justify-content:space-between; align-items:baseline;">
               <span id="dash-return-cnt" style="font-size:22px; font-weight:700; color:var(--text-primary);">0</span>
               <span id="dash-return-amt" style="font-size:14px; color:var(--red);">-¥0</span>
@@ -5283,22 +5452,22 @@
       </div>
       <div class="card" id="dash-top-card" style="display:grid; grid-template-columns:1fr 1fr; gap:20px">
         <div>
-          <div class="card-title" style="font-size:14px">🏆 取引先TOP5（純売上）</div>
+          <div class="card-title" style="font-size:14px"><svg class="icon" aria-hidden="true"><use href="#i-trophy"></use></svg>取引先TOP5（純売上）</div>
           <div id="dash-top-customers" style="font-size:13px; color:var(--text-secondary)"></div>
         </div>
         <div>
-          <div class="card-title" style="font-size:14px">📦 人気品番TOP5</div>
+          <div class="card-title" style="font-size:14px"><svg class="icon" aria-hidden="true"><use href="#i-package"></use></svg>人気品番TOP5</div>
           <div id="dash-top-items" style="font-size:13px; color:var(--text-secondary)"></div>
         </div>
       </div>
       <div class="card">
-        <div class="card-title">📈 月別推移（納品 / 返品）</div>
+        <div class="card-title"><svg class="icon" aria-hidden="true"><use href="#i-trend"></use></svg>月別推移（納品 / 返品）</div>
         <div class="bar-chart" id="bar-chart">
           <div class="empty-state">データがありません</div>
         </div>
       </div>
       <div class="card">
-        <div class="card-title">🤖 AI利用状況（今月）</div>
+        <div class="card-title"><svg class="icon" aria-hidden="true"><use href="#i-ai"></use></svg>AI利用状況（今月）</div>
         <div id="usage-list">
           <div class="empty-state">まだ利用がありません</div>
         </div>
@@ -5308,9 +5477,9 @@
     <!-- ========== TAB 4: SETTINGS ========== -->
     <div class="page" id="page-settings" x-data>
       <div class="card">
-        <div class="card-title">⚜ 取引先マスタ</div>
+        <div class="card-title"><svg class="icon" aria-hidden="true"><use href="#i-crest"></use></svg>取引先マスタ</div>
         <div style="margin-bottom:12px; display:flex; gap:8px; align-items:center;">
-          <input type="text" id="cust-search" placeholder="🔍 店名・コードで検索..."
+          <input type="text" id="cust-search" placeholder="店名・コードで検索..."
             style="flex:1; padding:8px 12px; font-size:13px; background:var(--bg-input); border:1px solid var(--border); border-radius:8px; color:var(--text-primary);"
             oninput="filterCustomerList(this.value)">
         </div>
@@ -5330,7 +5499,7 @@
                 <div style="display:flex; align-items:center; gap:10px">
                   <span style="font-size:12px; color:var(--text-muted)" x-text="c.discount_rate + '%'"></span>
                   <button @click="startEditCust(c)" title="編集"
-                    style="background:none; border:none; color:var(--gold); cursor:pointer; font-size:14px">✏️</button>
+                    style="background:none; border:none; color:var(--gold); cursor:pointer; font-size:14px"><svg class="icon" aria-hidden="true" style="width:14px;height:14px;vertical-align:-2px"><use href="#i-pencil"></use></svg></button>
                   <button @click="delCust(c.id)" title="削除"
                     style="background:none; border:none; color:var(--red); cursor:pointer; font-size:16px">×</button>
                 </div>
@@ -5404,7 +5573,7 @@
       </div>
     </div>
     <div class="card">
-      <div class="card-title">⚜ 表示設定</div>
+      <div class="card-title"><svg class="icon" aria-hidden="true"><use href="#i-crest"></use></svg>表示設定</div>
       <div style="display:flex; justify-content:space-between; align-items:center; gap:14px; padding:6px 2px;">
         <div style="min-width:0">
           <div style="font-weight:600; color:var(--text-primary)">テーマ</div>
@@ -5417,7 +5586,27 @@
       </div>
     </div>
     <div class="card">
-      <div class="card-title">セキュリティ</div>
+      <div class="card-title"><svg class="icon" aria-hidden="true"><use href="#i-package"></use></svg>商品マスタ（学習済み品番）</div>
+      <p style="font-size:12px; color:var(--text-muted); margin-bottom:10px; line-height:1.6;">
+        伝票を確定するたびに「品番 × カラー × サイズ × 単価」の実績が自動で蓄積され、AI読み取りの検証（価格違い警告など）に使われます。誤って学習されたデータはここから削除できます。
+      </p>
+      <input type="text" id="prod-search" placeholder="品番の頭文字で検索..."
+        style="width:100%; padding:10px 12px; font-size:13px; background:var(--bg-input); border:1px solid var(--border); border-radius:8px; color:var(--text-primary); margin-bottom:10px;">
+      <div id="prod-list" style="display:flex; flex-direction:column; gap:6px; max-height:320px; overflow-y:auto;">
+        <div style="font-size:12px; color:var(--text-muted); padding:8px;">品番の頭文字を入力すると学習済みデータを表示します</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><svg class="icon" aria-hidden="true"><use href="#i-scan"></use></svg>開発ツール</div>
+      <p style="font-size:12px; color:var(--text-muted); margin-bottom:10px; line-height:1.6;">
+        下げ札バーコードに実際に何が入っているか（形式・生データ）を現場で確認するためのテスト機能です。
+      </p>
+      <button class="btn btn-outline" id="btn-barcode-scan" style="font-size:12px;"><svg class="icon" aria-hidden="true"><use href="#i-scan"></use></svg>バーコード読取テスト（β）</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><svg class="icon" aria-hidden="true"><use href="#i-lock"></use></svg>セキュリティ</div>
       <div style="text-align:center; padding: 10px 0;">
         <a href="/logout" class="btn btn-outline"
           style="display:inline-block; text-decoration:none; padding: 10px 24px;">システムからログアウト</a>
@@ -5447,7 +5636,7 @@
   <!-- ===== Mobile Bottom Action Bar ===== -->
   <div class="mobile-action-bar" id="mobile-action-bar">
     <button class="btn btn-outline" onclick="document.getElementById('btn-add-row').click()">＋ 行追加</button>
-    <button class="btn btn-blue" onclick="document.getElementById('btn-preview-only').click()">👁 確認</button>
+    <button class="btn btn-blue" onclick="document.getElementById('btn-preview-only').click()"><svg class="icon" aria-hidden="true"><use href="#i-eye"></use></svg>確認</button>
     <button class="btn btn-gold" onpointerdown="event.preventDefault(); generateInvoice()"
       onclick="generateInvoice()">保存</button>
   </div>
@@ -5892,8 +6081,8 @@
         b.classList.add('active');
         currentDocType = b.dataset.type;
         const titles = TYPE_TITLES[currentDocType];
-        document.querySelectorAll('.preview-tab[data-ptab="pdf"]').forEach(t => t.innerText = `📄 ${titles.main}`);
-        document.querySelectorAll('.preview-tab[data-ptab="detail"]').forEach(t => t.innerText = `📋 ${titles.detail.replace(' ', '')}`);
+        document.querySelectorAll('.preview-tab[data-ptab="pdf"]').forEach(t => t.innerHTML = `${svgUse('i-doc')}${titles.main}`);
+        document.querySelectorAll('.preview-tab[data-ptab="detail"]').forEach(t => t.innerHTML = `${svgUse('i-list')}${titles.detail.replace(' ', '')}`);
 
         // 追加: 種別を切り替えたらプレビューの金額（プラス・マイナス）を再描画
         if (extractedItems.length > 0 && $('preview-card').style.display !== 'none') {
@@ -6227,8 +6416,8 @@
           el.className = 'job-item';
           list.prepend(el);
         }
-        const iconMap = { analyze: '🤖', generate: '💾', lock: '🔒', drive_upload: '☁️' };
-        const icon = iconMap[job.type] || '⚙️';
+        const iconMap = { analyze: svgUse('i-ai'), generate: svgUse('i-download'), lock: svgUse('i-lock'), drive_upload: svgUse('i-cloud') };
+        const icon = iconMap[job.type] || svgUse('i-settings');
         const progress = job.status === 'done' ? 100 : job.status === 'processing' ? 60 : 10;
         el.className = `job-item job-${job.status}`;
         el.innerHTML = `
@@ -6353,7 +6542,7 @@
     function openPreviewModal(d, payload) {
       const isPreviewOnly = !!d.preview_only || !!d.html_preview || !d.id;
 
-      $('modal-title').textContent = `📄 ${d.invoice_number || 'PREVIEW'} - プレビュー`;
+      $('modal-title').innerHTML = `${svgUse('i-doc')} ${escapeHtml(d.invoice_number || 'PREVIEW')} - プレビュー`;
       $('modal-preview').style.display = 'flex';
 
       // ==========================================
@@ -6811,7 +7000,7 @@
 
         if (pane && isDesktop) {
           const lockBtn = d.status === 'locked'
-            ? `<button class="btn btn-outline btn-sm" onclick="unlockHist(${d.invoice_id})">🔓 解除</button>`
+            ? `<button class="btn btn-outline btn-sm" onclick="unlockHist(${d.invoice_id})"><svg class="icon" aria-hidden="true"><use href="#i-unlock"></use></svg>解除</button>`
             : `<button class="btn btn-gold btn-sm" id="dt-lock-${d.invoice_id}" data-lock-id="${d.invoice_id}">✦ 確定 (長押し)</button>`;
           const driveBtn = d.status === 'locked'
             ? `<button class="btn btn-blue btn-sm" onclick="uploadDrive(${d.invoice_id}, this)"><div class="spinner"></div>☁️ Drive</button>`
@@ -6835,23 +7024,23 @@
 							</div>
 						</div>
 						<div class="preview-tabs detail-tabs" data-target-prefix="dpane-">
-							<div class="preview-tab active" data-ptab="pdf">📄 ${titles.main}</div>
-							<div class="preview-tab" data-ptab="detail">📋 ${titles.detail.replace(' ', '')}</div>
+							<div class="preview-tab active" data-ptab="pdf"><svg class="icon" aria-hidden="true"><use href="#i-doc"></use></svg>${titles.main}</div>
+							<div class="preview-tab" data-ptab="detail"><svg class="icon" aria-hidden="true"><use href="#i-list"></use></svg>${titles.detail.replace(' ', '')}</div>
 							<div class="preview-tab" data-ptab="summary">⚜ 概要</div>
 						</div>
 						<div class="preview-pane active" id="dpane-pdf">
 							<iframe class="pdf-preview-frame" src="${d.pdf_preview_url || d.pdf_url}"></iframe>
 							<div class="preview-actions">
-								<button class="btn btn-red" onclick="dlFromServer('/api/history/${d.invoice_id}/pdf','${fPdf}')">📄 PDF保存</button>
-								<button class="btn btn-green" onclick="dlFromServer('/api/history/${d.invoice_id}/excel','${fXl}')" title="バーコード付き">📊 会社控Excel</button>
-								<button class="btn btn-green" onclick="dlFromServer('/api/history/${d.invoice_id}/client-excel','${fClientXl}')" title="掛率なし・PDFレイアウト">📊 提出用Excel</button>
+								<button class="btn btn-red" onclick="dlFromServer('/api/history/${d.invoice_id}/pdf','${fPdf}')"><svg class="icon" aria-hidden="true"><use href="#i-doc"></use></svg>PDF保存</button>
+								<button class="btn btn-green" onclick="dlFromServer('/api/history/${d.invoice_id}/excel','${fXl}')" title="バーコード付き"><svg class="icon" aria-hidden="true"><use href="#i-table"></use></svg>会社控Excel</button>
+								<button class="btn btn-green" onclick="dlFromServer('/api/history/${d.invoice_id}/client-excel','${fClientXl}')" title="掛率なし・PDFレイアウト"><svg class="icon" aria-hidden="true"><use href="#i-table"></use></svg>提出用Excel</button>
 							</div>
 						</div>
 						<div class="preview-pane" id="dpane-detail">
 							<iframe class="pdf-preview-frame" src="${d.detail_pdf_preview_url || d.detail_pdf_url}"></iframe>
 							<div class="preview-actions">
-								<button class="btn btn-red" onclick="dlFromServer('/api/history/${d.invoice_id}/detail-pdf','${fDpdf}')">📄 PDF保存</button>
-								<button class="btn btn-green" onclick="dlFromServer('/api/history/${d.invoice_id}/detail-excel','${fDxl}')">📊 Excel保存</button>
+								<button class="btn btn-red" onclick="dlFromServer('/api/history/${d.invoice_id}/detail-pdf','${fDpdf}')"><svg class="icon" aria-hidden="true"><use href="#i-doc"></use></svg>PDF保存</button>
+								<button class="btn btn-green" onclick="dlFromServer('/api/history/${d.invoice_id}/detail-excel','${fDxl}')"><svg class="icon" aria-hidden="true"><use href="#i-table"></use></svg>Excel保存</button>
 							</div>
 						</div>
 						<div class="preview-pane" id="dpane-summary">
@@ -6971,7 +7160,7 @@
         doc_type: currentDocType
       };
 
-      $('modal-title').textContent = `📄 ${dummyData.invoice_number} - プレビュー`;
+      $('modal-title').innerHTML = `${svgUse('i-doc')} ${escapeHtml(dummyData.invoice_number)} - プレビュー`;
       $('modal-preview').style.display = 'flex';
 
       // 概要タブとExcelタブ(ローカル)は即座に描画
@@ -7640,7 +7829,7 @@
         if (d.my_this_month && currentUser) {
           myStatsHtml = `
               <div class="card" style="border-color: var(--gold); background: linear-gradient(180deg, rgba(201,169,97,0.05) 0%, transparent 100%);">
-                <div class="card-title">👤 ${currentUser.name} さんの今月の実績</div>
+                <div class="card-title">${svgUse('i-user')} ${escapeHtml(currentUser.name)} さんの今月の実績</div>
                 <div style="display:flex; justify-content:space-around; text-align:center;">
                   <div>
                     <div style="font-size:12px; color:var(--text-secondary)">純売上</div>
@@ -7710,6 +7899,9 @@
             const col = document.createElement('div');
             col.className = 'bar-col';
             col.style.position = 'relative';
+            col.dataset.month = m.month;
+            col.style.cursor = 'pointer';
+            col.setAttribute('role', 'button');
             const hD = Math.max(2, Math.round((m.delivery || 0) / maxVal * 100));
             const hR = Math.max(0, Math.round((m.return || 0) / maxVal * 100));
             col.innerHTML = `
@@ -7893,8 +8085,8 @@
 
     const cmdkActions = [
       { id: 'tab-create', label: '新規作成へ移動', icon: '✂', meta: '⌘1', section: 'NAVIGATION', exec: () => document.querySelector('.tab[data-tab="create"]').click() },
-      { id: 'tab-history', label: '履歴へ移動', icon: '📒', meta: '⌘2', section: 'NAVIGATION', exec: () => document.querySelector('.tab[data-tab="history"]').click() },
-      { id: 'tab-dashboard', label: '分析へ移動', icon: '📊', meta: '⌘3', section: 'NAVIGATION', exec: () => document.querySelector('.tab[data-tab="dashboard"]').click() },
+      { id: 'tab-history', label: '履歴へ移動', icon: '<svg class="icon" aria-hidden="true"><use href="#i-history"></use></svg>', meta: '⌘2', section: 'NAVIGATION', exec: () => document.querySelector('.tab[data-tab="history"]').click() },
+      { id: 'tab-dashboard', label: '分析へ移動', icon: '<svg class="icon" aria-hidden="true"><use href="#i-chart"></use></svg>', meta: '⌘3', section: 'NAVIGATION', exec: () => document.querySelector('.tab[data-tab="dashboard"]').click() },
       { id: 'tab-settings', label: '設定へ移動', icon: '⚙', meta: '⌘4', section: 'NAVIGATION', exec: () => document.querySelector('.tab[data-tab="settings"]').click() },
       { id: 'new', label: '新しい伝票を作成', icon: '✦', meta: 'N', section: 'ACTIONS', exec: () => { document.querySelector('.tab[data-tab="create"]').click(); $('btn-new')?.click(); } },
       { id: 'reload', label: '履歴を再読込', icon: '↻', section: 'ACTIONS', exec: () => loadHistory() },
@@ -7919,7 +8111,7 @@
         ).slice(0, 8).map(inv => ({
           id: 'inv-' + inv.id,
           label: `${inv.invoice_number} — ${inv.customer_name}`,
-          icon: inv.status === 'locked' ? '🔒' : '📄',
+          icon: inv.status === 'locked' ? '<svg class="icon" aria-hidden="true"><use href="#i-lock"></use></svg>' : '<svg class="icon" aria-hidden="true"><use href="#i-doc"></use></svg>',
           meta: `¥${(inv.total_grand_total || 0).toLocaleString()}`,
           section: 'INVOICES',
           exec: () => { document.querySelector('.tab[data-tab="history"]').click(); setTimeout(() => quickPreview(inv.id), 200); }
@@ -8290,6 +8482,122 @@
     }
 
     $('btn-barcode-scan')?.addEventListener('click', startBarcodeScan);
+
+    // ===== UI v2: SVGアイコンヘルパー =====
+    const svgUse = (id) => `<svg class="icon" aria-hidden="true"><use href="#${id}"></use></svg>`;
+
+    // ===== UI v2: 取込フローステップ（モバイル） =====
+    function updateFlowSteps() {
+      const el = $('flow-steps');
+      if (!el) return;
+      let step = 1;
+      try {
+        const dl = $('dl-section');
+        if (dl && dl.style.display !== 'none') step = 3;
+        else if (typeof extractedItems !== 'undefined' && extractedItems.length) step = 2;
+      } catch (e) { }
+      el.querySelectorAll('.flow-step').forEach(s => {
+        const n = Number(s.dataset.step);
+        s.classList.toggle('active', n === step);
+        s.classList.toggle('done', n < step);
+      });
+    }
+    setInterval(updateFlowSteps, 800);
+    updateFlowSteps();
+
+    // ===== UI v2: PC明細テーブルでEnter→次の行の同じ列へ（IME確定は除外） =====
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' || e.isComposing) return;
+      const inp = e.target;
+      if (!(inp instanceof HTMLInputElement) || !inp.closest('.pc-item-table')) return;
+      e.preventDefault();
+      const cell = inp.closest('td');
+      const row = inp.closest('tr');
+      if (!cell || !row || !row.parentElement) return;
+      const idx = Array.from(row.cells).indexOf(cell);
+      const rows = Array.from(row.parentElement.querySelectorAll('tr'));
+      const next = rows[rows.indexOf(row) + (e.shiftKey ? -1 : 1)];
+      const target = next && next.cells[idx] ? next.cells[idx].querySelector('input') : null;
+      if (target) { target.focus(); if (target.select) target.select(); }
+    });
+
+    // ===== UI v2: 商品マスタ（学習済み品番）ビューア =====
+    async function searchProducts(q) {
+      const box = $('prod-list');
+      if (!box) return;
+      if (!q || !q.trim()) {
+        box.innerHTML = '<div style="font-size:12px; color:var(--text-muted); padding:8px;">品番の頭文字を入力すると学習済みデータを表示します</div>';
+        return;
+      }
+      try {
+        const res = await fetch('/api/products?code=' + encodeURIComponent(q.trim()) + '&limit=30');
+        if (!res.ok) throw new Error(res.status);
+        const rows = await res.json();
+        if (!rows.length) {
+          box.innerHTML = '<div style="font-size:12px; color:var(--text-muted); padding:8px;">該当する学習データがありません</div>';
+          return;
+        }
+        box.innerHTML = rows.map(r => `
+          <div style="display:flex; align-items:center; gap:10px; padding:8px 10px; border:1px solid var(--border-subtle); border-radius:8px; font-size:12px; flex-wrap:wrap;">
+            <span style="font-weight:700; min-width:80px;">${escapeHtml(r.code)}</span>
+            <span style="color:var(--text-secondary)">${escapeHtml(r.color || '-')} / ${escapeHtml(r.size || '-')}</span>
+            <span style="color:var(--gold-bright); font-weight:700; margin-left:auto;">¥${Number(r.unit_price || 0).toLocaleString()}</span>
+            <span style="color:var(--text-muted)">×${Number(r.seen_count || 0)}回</span>
+            <button onclick="deleteProduct('${encodeURIComponent(r.code)}','${encodeURIComponent(r.color || '')}','${encodeURIComponent(r.size || '')}',${Number(r.unit_price) || 0},this)"
+              style="background:none; border:1px solid rgba(224,97,87,0.4); color:var(--red); border-radius:6px; padding:4px 10px; font-size:11px; cursor:pointer; min-height:28px;">削除</button>
+          </div>`).join('');
+      } catch (e) {
+        box.innerHTML = '<div style="font-size:12px; color:var(--red); padding:8px;">読み込みに失敗しました</div>';
+      }
+    }
+    window.deleteProduct = async function (code, color, size, price, btn) {
+      if (!confirm('この学習データを削除しますか？\n（今後の価格違い警告・候補表示に使われなくなります）')) return;
+      try {
+        const res = await fetch(`/api/products?code=${code}&color=${color}&size=${size}&unit_price=${price}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error(res.status);
+        const row = btn.closest('div');
+        if (row) row.remove();
+        toast('学習データを削除しました');
+      } catch (e) { toast('削除に失敗しました', 'err'); }
+    };
+    $('prod-search')?.addEventListener('input', (e) => {
+      clearTimeout(window._prodSearchT);
+      window._prodSearchT = setTimeout(() => searchProducts(e.target.value), 300);
+    });
+
+    // ===== UI v2: 取引先クイック登録（取込画面から） =====
+    window.quickAddCustomer = async function (name) {
+      if (!name) return;
+      let rate = prompt('「' + name + '」の掛率(%)を入力してください', '35');
+      if (rate === null) return;
+      rate = parseInt(rate, 10);
+      if (isNaN(rate) || rate <= 0 || rate > 100) { toast('掛率は1～100の数字で入力してください', 'err'); return; }
+      const fd = new FormData();
+      fd.append('name', name);
+      fd.append('discount_rate', rate);
+      if (typeof currentUser !== 'undefined' && currentUser && currentUser.id) fd.append('user_id', currentUser.id);
+      try {
+        const res = await fetch('/api/customers', { method: 'POST', body: fd });
+        if (!res.ok) {
+          const d = await res.json().catch(() => ({}));
+          throw new Error(d.detail || ('HTTP ' + res.status));
+        }
+        if (typeof loadCustomers === 'function') await loadCustomers();
+        toast('取引先「' + name + '」を追加しました。一覧から選択してください');
+      } catch (e) { toast('登録に失敗しました: ' + (e.message || e), 'err'); }
+    };
+
+    // ===== UI v2: 分析グラフ→履歴ドリルダウン =====
+    $('bar-chart')?.addEventListener('click', (e) => {
+      const col = e.target.closest('.bar-col');
+      if (!col || !col.dataset.month) return;
+      document.querySelector('.tab[data-tab="history"]')?.click();
+      const mf = $('hist-month-filter') || document.querySelector('#page-history select[id*="month"]');
+      if (mf && Array.from(mf.options).some(o => o.value === col.dataset.month)) {
+        mf.value = col.dataset.month;
+        mf.dispatchEvent(new Event('change'));
+      }
+    });
 
   </script>
 </body>

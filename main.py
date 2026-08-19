@@ -1576,6 +1576,28 @@ def get_product_variants(username: Annotated[str, Depends(authenticate)], code: 
         )
         rows = [dict(r) for r in cur.fetchall()]
     return rows
+@app.delete("/api/products")
+def delete_product_variant(
+    username: Annotated[str, Depends(authenticate)],
+    code: str,
+    color: str = "",
+    size: str = "",
+    unit_price: int = 0,
+):
+    """学習済み品番実績（product_variants）の誤登録データを削除する"""
+    with db_transaction() as conn, conn.cursor() as cur:
+        cur.execute(
+            "DELETE FROM product_variants WHERE code=%s AND color=%s AND size=%s AND unit_price=%s",
+            (code, color, size, unit_price),
+        )
+        n = cur.rowcount
+        try:
+            _audit(cur, "product_variant_delete", actor=username,
+                   detail={"code": code, "color": color, "size": size, "unit_price": unit_price, "deleted": n})
+        except Exception as audit_err:
+            logger.warning("audit failed for product delete: %s", audit_err)
+    return {"deleted": n}
+
 
 def _audit(cur, action: str, invoice_id=None, invoice_number=None, actor=None, detail: dict = None):
     """監査ログを記録する（失敗しても業務処理は止めない）"""
