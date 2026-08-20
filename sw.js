@@ -1,4 +1,4 @@
-const CACHE_NAME = 'laura-v14';
+const CACHE_NAME = 'laura-v15';
 // ローカル資産のみプリキャッシュ（CDN依存を排除。CDNが不通だと install 全体が失敗していた）
 const ASSETS_TO_CACHE = [
   '/static/icons/icon-192.png',

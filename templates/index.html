@@ -2146,7 +2146,7 @@
       font-size: 13px;
       font-weight: 700;
       flex: 0 0 auto;
-      background: #171717;
+      background: var(--bg-input);
       border: 1px dashed rgba(120, 174, 232, 0.5);
       color: var(--text-secondary);
       border-radius: 8px;
@@ -2165,6 +2165,16 @@
     .prov-toggle:disabled {
       opacity: 0.35;
       cursor: not-allowed;
+    }
+
+    [data-theme="light"] .prov-toggle {
+      border-color: rgba(53, 103, 154, 0.55);
+    }
+
+    [data-theme="light"] .prov-toggle.active {
+      background: rgba(120, 174, 232, 0.22);
+      color: #35679a;
+      border-color: #35679a;
     }
 
     .user-pill {
@@ -4758,7 +4768,7 @@
         <div class="cam-counter" id="cam-counter">0 枚</div>
         <div style="display:flex; gap:12px; align-items:center; pointer-events:auto;">
           <div class="cam-done" onclick="stopCamera(); $('file-input').click()"><svg class="icon" aria-hidden="true" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"><use href="#i-folder"></use></svg>ライブラリ</div>
-          <div class="cam-done" onclick="stopCamera()">キャン���ル</div>
+          <div class="cam-done" onclick="stopCamera()">キャンセル</div>
         </div>
       </div>
       <div class="cam-body"></div>
@@ -5277,7 +5287,7 @@
                 </div>
               </div>
 
-              <!-- アコーディオンボデ�� -->
+              <!-- アコーディオンボディ -->
               <div x-show="expanded" style="margin-top: 16px; display: none;" x-transition>
                 <div style="height:1px; background:var(--border); margin:0 -16px 16px;"></div>
 
@@ -6173,7 +6183,7 @@
           filter.innerHTML = '<option value="">すべてのユーザー</option>' +
             allUsers.map(u => `<option value="${u.id}">${escapeHtml(u.name)}</option>`).join('');
 
-          // 初回のみ現在のユーザ���をデフォルト選択にする
+          // 初回のみ現在のユーザーをデフォルト選択にする
           if (!filter.dataset.init && currentUser) {
             filter.value = currentUser.id;
             filter.dataset.init = '1';
@@ -7121,7 +7131,7 @@
 
     async function delHist(id) {
       // 誤操作は Undo トーストで復元できるため確認ダイアログは省略。
-      // Optimistic UI: 即座にリストから消す。失敗時��リロードで戻す。
+      // Optimistic UI: 即座にリストから消す。失敗時はリロードで戻す。
       const store = Alpine.store('app');
       const before = (store.history || []).slice();
       store.history = before.filter(h => h.id !== id);
@@ -8025,7 +8035,7 @@
           updateMobileActionBar();
           // 保存と確定を一本化（案A）: 保存後そのまま確定し、Undoトーストで取り消せる
           lockHist(result.invoice_id, {
-            message: '伝票を保存して確定し��した',
+            message: '伝票を保存して確定しました',
             onError: () => toast('保存されましたが確定に失敗しました。履歴の「確定」からやり直せます', 'warn', 8000)
           });
           await loadHistory();
@@ -8334,7 +8344,7 @@
         if (t.classList.contains('active')) {
           document.querySelectorAll('.sidebar-tab').forEach(s => s.classList.remove('active'));
           document.querySelector(`.sidebar-tab[data-tab="${t.dataset.tab}"]`)?.classList.add('active');
-          // モバイル下タ��とも同期
+          // モバイル下タブとも同期
           document.querySelectorAll('.bn-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === t.dataset.tab));
           const tc = $('topbar-current');
           if (tc) tc.textContent = tabLabels[t.dataset.tab] || '';
