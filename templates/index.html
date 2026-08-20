@@ -1680,6 +1680,60 @@
       margin: 0;
     }
 
+    /* ===== v6: 統一ダウンロードメニュー ===== */
+    .dl-menu {
+      position: relative;
+      display: inline-block;
+    }
+
+    .dl-menu>summary {
+      list-style: none;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .dl-menu>summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .dl-menu-panel {
+      position: absolute;
+      right: 0;
+      top: calc(100% + 6px);
+      z-index: 6000;
+      min-width: 240px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-strong);
+      border-radius: 12px;
+      box-shadow: var(--shadow-md);
+      padding: 6px;
+    }
+
+    .dl-menu-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      padding: 10px 12px;
+      background: none;
+      border: none;
+      border-radius: 8px;
+      color: var(--text-primary);
+      font-size: 13px;
+      cursor: pointer;
+      text-align: left;
+    }
+
+    .dl-menu-item:hover {
+      background: var(--bg-input);
+    }
+
+    .dl-menu-sep {
+      height: 1px;
+      background: var(--border);
+      margin: 4px 8px;
+    }
+
     /* 概要のみ白寄り（帳票確認モード） */
     .summary-card {
       background: #f7f3ea;
@@ -2018,25 +2072,40 @@
       box-shadow: inset 0 -3px 0 var(--gold);
     }
 
-    .doctype-btn[data-type="return"].active {
+    .doctype-btn[data-base="return"].active {
       background: rgba(224, 97, 87, 0.18);
       color: #ff8b83;
       border-color: rgba(224, 97, 87, 0.55);
       box-shadow: inset 0 -3px 0 var(--red);
     }
 
-    .doctype-btn[data-type="prov_delivery"].active {
+    /* 仮伝票トグル（納品/返品と組み合わせて仮納品・仮返品になる） */
+    .prov-toggle {
+      margin: 0 !important;
+      min-height: 42px;
+      padding: 10px 14px;
+      font-size: 13px;
+      font-weight: 700;
+      flex: 0 0 auto;
+      background: #171717;
+      border: 1px dashed rgba(120, 174, 232, 0.5);
+      color: var(--text-secondary);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all .2s;
+    }
+
+    .prov-toggle.active {
       background: rgba(120, 174, 232, 0.18);
       color: #9dccff;
-      border-color: rgba(120, 174, 232, 0.55);
+      border-color: rgba(120, 174, 232, 0.75);
+      border-style: solid;
       box-shadow: inset 0 -3px 0 var(--blue);
     }
 
-    .doctype-btn[data-type="prov_return"].active {
-      background: rgba(168, 127, 184, 0.18);
-      color: #d9a8ea;
-      border-color: rgba(168, 127, 184, 0.55);
-      box-shadow: inset 0 -3px 0 #a87fb8;
+    .prov-toggle:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
     }
 
     .user-pill {
@@ -4614,7 +4683,7 @@
         <div class="cam-counter" id="cam-counter">0 枚</div>
         <div style="display:flex; gap:12px; align-items:center; pointer-events:auto;">
           <div class="cam-done" onclick="stopCamera(); $('file-input').click()"><svg class="icon" aria-hidden="true" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"><use href="#i-folder"></use></svg>ライブラリ</div>
-          <div class="cam-done" onclick="stopCamera()">キャンセル</div>
+          <div class="cam-done" onclick="stopCamera()">キャン���ル</div>
         </div>
       </div>
       <div class="cam-body"></div>
@@ -4633,9 +4702,10 @@
     <div class="modal-content">
       <div class="modal-header">
         <div style="font-weight:700; color:var(--gold-bright)" id="modal-title"><svg class="icon" aria-hidden="true"><use href="#i-doc"></use></svg> ドキュメントプレビュー</div>
-        <div style="display:flex; gap:8px">
+        <div style="display:flex; gap:8px; align-items:center;">
+          <span id="modal-dl-actions"></span>
           <button class="btn btn-blue btn-sm" id="modal-btn-drive" style="display:none">
-            <div class="spinner" id="modal-sp-drive"></div> <svg class="icon" aria-hidden="true"><use href="#i-cloud"></use></svg>Drive保存
+            <div class="spinner" id="modal-sp-drive"></div> <svg class="icon" aria-hidden="true"><use href="#i-cloud"></use></svg>Driveに保存
           </button>
           <button class="btn btn-outline btn-sm" onclick="closePreviewModal()">✕ 閉じる</button>
         </div>
@@ -4650,25 +4720,14 @@
 
         <div class="preview-pane active" id="m-ppane-pdf" style="overflow: hidden;">
           <iframe id="modal-pdf-frame" class="pdf-preview-frame"></iframe>
-          <div class="preview-actions">
-            <button class="btn btn-red btn-dl-pdf"><svg class="icon" aria-hidden="true"><use href="#i-doc"></use></svg>PDF保存</button>
-          </div>
         </div>
 
         <div class="preview-pane" id="m-ppane-excel">
           <div id="excel-preview-grid" class="excel-preview-container"></div>
-          <div class="preview-actions">
-            <button class="btn btn-green btn-dl-xl" title="バーコード付き"><svg class="icon" aria-hidden="true"><use href="#i-table"></use></svg>会社控Excel</button>
-            <button class="btn btn-green btn-dl-client-xl" title="掛率なし・PDFレイアウト"><svg class="icon" aria-hidden="true"><use href="#i-table"></use></svg>提出用Excel</button>
-          </div>
         </div>
 
         <div class="preview-pane" id="m-ppane-detail" style="overflow: hidden;">
           <iframe id="modal-detail-frame" class="pdf-preview-frame"></iframe>
-          <div class="preview-actions">
-            <button class="btn btn-red btn-dl-dpdf"><svg class="icon" aria-hidden="true"><use href="#i-doc"></use></svg>PDF保存</button>
-            <button class="btn btn-green btn-dl-dxl"><svg class="icon" aria-hidden="true"><use href="#i-table"></use></svg>Excel保存</button>
-          </div>
         </div>
 
         <div class="preview-pane" id="m-ppane-summary">
@@ -4860,17 +4919,16 @@
         <div class="flow-sep"></div>
         <div class="flow-step" data-step="2"><span class="fs-num">2</span>確認・修正</div>
         <div class="flow-sep"></div>
-        <div class="flow-step" data-step="3"><span class="fs-num">3</span>保存完了</div>
+        <div class="flow-step" data-step="3"><span class="fs-num">3</span>確定完了</div>
       </div>
       <div class="card">
         <div class="card-title"><svg class="icon" aria-hidden="true"><use href="#i-crest"></use></svg>伝票設定</div>
         <div
           style="display:flex; gap:6px; margin-bottom:20px; padding:4px; background:var(--bg-input); border-radius:10px;">
-          <button class="doctype-btn active" data-type="delivery">納品</button>
-          <button class="doctype-btn" data-type="return">返品</button>
-          <button class="doctype-btn" data-type="prov_delivery">仮納品</button>
-          <button class="doctype-btn" data-type="prov_return">仮返品</button>
-          <button class="doctype-btn" data-type="statement">明細表</button>
+          <button class="doctype-btn active" data-base="delivery">納品</button>
+          <button class="doctype-btn" data-base="return">返品</button>
+          <button class="doctype-btn" data-base="statement">明細表</button>
+          <button type="button" class="prov-toggle" id="prov-toggle" aria-pressed="false" title="仮伝票（仮納品・仮返品）として作成">仮</button>
         </div>
         <div class="form-row">
           <div class="form-group" style="max-width:140px;">
@@ -5156,7 +5214,7 @@
                   <div class="source-thumbs"
                     style="position: sticky; top: 50px; z-index: 10; background: var(--bg-card); padding: 8px; border-radius: 8px; border: 1px solid var(--border-strong); box-shadow: var(--shadow-md); margin-bottom: 14px; justify-content: center;">
                     <template x-for="src in item.source_images">
-                      <img class="source-thumb" :src="src.thumb" @click="openSourceImage(src.thumb)"
+                      <img class="source-thumb" :src="src.thumb" @click="openSourceImage(src)"
                         style="width: auto; height: 140px; object-fit: contain;">
                     </template>
                   </div>
@@ -5215,7 +5273,7 @@
 
         <div style="margin-top:18px">
           <button class="btn btn-gold" id="btn-generate" onclick="generateInvoice()">
-            <div class="spinner" id="sp2"></div>最終データを確定して保存
+            <div class="spinner" id="sp2"></div>✦ 保存して確定
           </button>
           <button class="btn btn-blue" id="btn-preview-only" style="margin-top:10px; width:100%">
             <svg class="icon" aria-hidden="true"><use href="#i-eye"></use></svg>プレビューを確認
@@ -5227,7 +5285,7 @@
         <div class="card success-card">
           <div class="success-icon">✦</div>
           <div class="success-num" id="inv-num-display"></div>
-          <div class="success-meta">伝票が作成され、履歴に保存されました</div>
+          <div class="success-meta">伝票を確定して履歴に保存しました（取り消しは表示中のトースト、または履歴の「解除」から）</div>
 
           <div class="preview-tabs" data-target-prefix="ppane-">
             <div class="preview-tab active" data-ptab="pdf"><svg class="icon" aria-hidden="true"><use href="#i-doc"></use></svg>納品書</div>
@@ -5237,29 +5295,19 @@
 
           <div class="preview-pane active" id="ppane-pdf">
             <iframe id="pdf-frame" class="pdf-preview-frame"></iframe>
-            <div class="preview-actions">
-              <button class="btn btn-red" onclick="downloadBlob('pdf')"><svg class="icon" aria-hidden="true"><use href="#i-doc"></use></svg>PDF保存</button>
-              <button class="btn btn-green" onclick="downloadBlob('excel')"><svg class="icon" aria-hidden="true"><use href="#i-table"></use></svg>Excel保存</button>
-            </div>
           </div>
 
           <div class="preview-pane" id="ppane-detail">
             <iframe id="detail-frame" class="pdf-preview-frame"></iframe>
-            <div class="preview-actions">
-              <button class="btn btn-red" onclick="downloadBlob('detail-pdf')"><svg class="icon" aria-hidden="true"><use href="#i-doc"></use></svg>PDF保存</button>
-              <button class="btn btn-green" onclick="downloadBlob('detail-excel')"><svg class="icon" aria-hidden="true"><use href="#i-table"></use></svg>Excel保存</button>
-            </div>
           </div>
 
           <div class="preview-pane" id="ppane-summary">
             <div id="summary-content"></div>
           </div>
 
-          <button class="btn btn-gold" id="btn-lock-final" style="margin-top:18px; width:100%">
-            ✦ この内容で確定して保存（固定化）
-          </button>
-          <button class="btn btn-blue" id="btn-drive" style="margin-top:10px; width:100%">
-            <div class="spinner" id="sp3"></div> <svg class="icon" aria-hidden="true"><use href="#i-cloud"></use></svg>Google Driveに4ファイル保存
+          <div id="dl-actions" style="margin-top:18px; display:flex; justify-content:center;"></div>
+          <button class="btn btn-blue" id="btn-drive" style="margin-top:10px; width:100%" title="PDF・Excelなど4ファイルをまとめてDriveへ保存します">
+            <div class="spinner" id="sp3"></div> <svg class="icon" aria-hidden="true"><use href="#i-cloud"></use></svg>Driveに保存
           </button>
 
           <button class="btn btn-dark" id="btn-new" style="margin-top:10px; width:100%">＋ 新しい伝票を作成する</button>
@@ -5369,7 +5417,7 @@
                   <div class="hist-amt" x-text="'¥' + (inv.total_grand_total || 0).toLocaleString()"></div>
                   <div>
                     <span :class="'status-badge status-' + (inv.status || 'draft')"
-                      x-text="inv.status === 'locked' ? '確定済' : '下書き'"></span>
+                      x-text="inv.status === 'locked' ? '確定済' : '未確定'"></span>
                   </div>
                 </div>
               </template>
@@ -5382,7 +5430,7 @@
                       <div class="hist-num">
                         <span x-text="inv.invoice_number"></span>
                         <span :class="'status-badge status-' + (inv.status || 'draft')"
-                          x-text="inv.status === 'locked' ? '確定済' : '下書き'"></span>
+                          x-text="inv.status === 'locked' ? '確定済' : '未確定'"></span>
                       </div>
                       <div class="hist-amt" x-text="'¥' + (inv.total_grand_total || 0).toLocaleString()"></div>
                     </div>
@@ -5400,18 +5448,17 @@
                     <div class="hist-actions-row">
                       <button class="btn btn-gold btn-sm" @click.stop="quickPreview(inv.id)">高速プレビュー</button>
                       <button x-show="inv.status !== 'locked'" class="btn btn-gold btn-sm"
-                        x-init="bindLongPress($el, () => lockHist(inv.id))" title="長押しで確定" @click.stop.prevent>確定
-                        (長押し)</button>
+                        @click.stop="lockHist(inv.id)">確定</button>
                       <button x-show="inv.status === 'locked'" class="btn btn-outline btn-sm"
                         @click.stop="unlockHist(inv.id)">解除</button>
                       <button x-show="inv.status === 'locked'" class="btn btn-blue btn-sm"
-                        @click.stop="uploadDrive(inv.id, $el)">保存 Drive</button>
+                        @click.stop="uploadDrive(inv.id, $el)">Driveに保存</button>
                       <button class="btn btn-outline btn-sm" @click.stop="downloadZip(inv.id)"
                         title="PDFとExcelが含まれています">ZIP (Excel含)</button>
                       <button x-show="inv.status !== 'locked'" class="btn btn-outline btn-sm"
                         @click.stop="editHist(inv.id)">編集</button>
-                      <button class="btn btn-red btn-sm" x-init="bindLongPress($el, () => delHist(inv.id))"
-                        title="長押しで削除" @click.stop.prevent>削除 (長押し)</button>
+                      <button class="btn btn-red btn-sm"
+                        @click.stop="delHist(inv.id)">削除</button>
                     </div>
                   </div>
                 </div>
@@ -5654,7 +5701,7 @@
     <button class="btn btn-outline" onclick="document.getElementById('btn-add-row').click()">＋ 行追加</button>
     <button class="btn btn-blue" onclick="document.getElementById('btn-preview-only').click()"><svg class="icon" aria-hidden="true"><use href="#i-eye"></use></svg>確認</button>
     <button class="btn btn-gold" onpointerdown="event.preventDefault(); generateInvoice()"
-      onclick="generateInvoice()">保存</button>
+      onclick="generateInvoice()">✦ 保存して確定</button>
   </div>
 
   <script>
@@ -6036,7 +6083,7 @@
           filter.innerHTML = '<option value="">すべてのユーザー</option>' +
             allUsers.map(u => `<option value="${u.id}">${escapeHtml(u.name)}</option>`).join('');
 
-          // 初回のみ現在のユーザーをデフォルト選択にする
+          // 初回のみ現在のユーザ���をデフォルト選択にする
           if (!filter.dataset.init && currentUser) {
             filter.value = currentUser.id;
             filter.dataset.init = '1';
@@ -6090,22 +6137,39 @@
 
 
 
-    // --- DocType Tab Listeners ---
+    // --- DocType (基本3種 + 仮トグル) ---
+    let docBase = 'delivery', docProv = false;
+    function computeDocType() {
+      return (docProv && (docBase === 'delivery' || docBase === 'return')) ? ('prov_' + docBase) : docBase;
+    }
+    function applyDocTypeUI() {
+      document.querySelectorAll('.doctype-btn').forEach(x => x.classList.toggle('active', x.dataset.base === docBase));
+      const pv = $('prov-toggle');
+      if (pv) {
+        const provAllowed = (docBase === 'delivery' || docBase === 'return');
+        pv.disabled = !provAllowed;
+        pv.classList.toggle('active', docProv && provAllowed);
+        pv.setAttribute('aria-pressed', (docProv && provAllowed) ? 'true' : 'false');
+      }
+      currentDocType = computeDocType();
+      const titles = TYPE_TITLES[currentDocType];
+      document.querySelectorAll('.preview-tab[data-ptab="pdf"]').forEach(t => t.innerHTML = `${svgUse('i-doc')}${titles.main}`);
+      document.querySelectorAll('.preview-tab[data-ptab="detail"]').forEach(t => t.innerHTML = `${svgUse('i-list')}${titles.detail.replace(' ', '')}`);
+      // 種別を切り替えたらプレビューの金額（プラス・マイナス）を再描画
+      if (extractedItems.length > 0 && $('preview-card').style.display !== 'none') {
+        renderPreview();
+      }
+    }
+    function setDocType(dt) {
+      docProv = String(dt || '').startsWith('prov_');
+      docBase = String(dt || 'delivery').replace(/^prov_/, '');
+      if (!['delivery', 'return', 'statement'].includes(docBase)) docBase = 'delivery';
+      applyDocTypeUI();
+    }
     document.querySelectorAll('.doctype-btn').forEach(b => {
-      b.addEventListener('click', () => {
-        document.querySelectorAll('.doctype-btn').forEach(x => x.classList.remove('active'));
-        b.classList.add('active');
-        currentDocType = b.dataset.type;
-        const titles = TYPE_TITLES[currentDocType];
-        document.querySelectorAll('.preview-tab[data-ptab="pdf"]').forEach(t => t.innerHTML = `${svgUse('i-doc')}${titles.main}`);
-        document.querySelectorAll('.preview-tab[data-ptab="detail"]').forEach(t => t.innerHTML = `${svgUse('i-list')}${titles.detail.replace(' ', '')}`);
-
-        // 追加: 種別を切り替えたらプレビューの金額（プラス・マイナス）を再描画
-        if (extractedItems.length > 0 && $('preview-card').style.display !== 'none') {
-          renderPreview();
-        }
-      });
+      b.addEventListener('click', () => { docBase = b.dataset.base; applyDocTypeUI(); });
     });
+    $('prov-toggle')?.addEventListener('click', () => { docProv = !docProv; applyDocTypeUI(); });
 
     document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
       document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
@@ -6405,7 +6469,7 @@
       }
 
       getJobLabel(type) {
-        const labels = { 'analyze': '画像解析', 'drive_upload': 'Drive保存', 'generate': '保存・生成', 'lock': '伝票確定' };
+        const labels = { 'analyze': '画像解析', 'drive_upload': 'Driveに保存', 'generate': '保存', 'lock': '伝票確定' };
         return labels[type] || type;
       }
     }
@@ -6461,7 +6525,7 @@
         `;
       },
       getJobLabel(type) {
-        const labels = { analyze: '画像解析', generate: '保存', lock: '伝票確定', drive_upload: 'Drive保存' };
+        const labels = { analyze: '画像解析', generate: '保存', lock: '伝票確定', drive_upload: 'Driveに保存' };
         return labels[type] || type;
       },
       getStatusLabel(status) {
@@ -6628,15 +6692,11 @@
       if (isPreviewOnly && !d.id) {
         const notice = `
           <div style="margin-bottom:14px; padding:12px 14px; border-radius:10px; background:rgba(201,169,97,0.12); border:1px solid rgba(201,169,97,0.35); color:var(--gold-bright); font-size:13px; line-height:1.6;">
-            これは確認用プレビューです。PDF / Excel保存は、伝票を保存後に利用できます。
+            これは確認用プレビューです。ダウンロードやDrive保存は、保存して確定した後に利用できます。
           </div>
         `;
         $('modal-summary-content').insertAdjacentHTML('afterbegin', notice);
       }
-
-      // ダウンロードボタンの表示制御
-      const dlBtns = ['.btn-dl-pdf', '.btn-dl-xl', '.btn-dl-client-xl', '.btn-dl-dpdf', '.btn-dl-dxl'].map(s => document.querySelector(s));
-      dlBtns.forEach(btn => { if (btn) btn.style.display = (isPreviewOnly && !d.id) ? 'none' : 'flex'; });
 
       setTimeout(() => {
         adjustIframeScale('modal-pdf-frame');
@@ -6651,23 +6711,9 @@
       const fDpdf = getFileName(d.doc_type, customer, dateISO, 'detail-pdf');
       const fDxl = getFileName(d.doc_type, customer, dateISO, 'detail-excel');
 
-      if (d.id) {
-        if (isNativeApp) {
-          document.querySelector('.btn-dl-pdf').onclick = () => dlFromServer(`/api/history/${d.id}/pdf`, fPdf);
-          document.querySelector('.btn-dl-xl').onclick = () => dlFromServer(`/api/history/${d.id}/excel`, fXl);
-          const btnClientXl = document.querySelector('.btn-dl-client-xl');
-          if (btnClientXl) btnClientXl.onclick = () => dlFromServer(`/api/history/${d.id}/client-excel`, fClientXl);
-          document.querySelector('.btn-dl-dpdf').onclick = () => dlFromServer(`/api/history/${d.id}/detail-pdf`, fDpdf);
-          document.querySelector('.btn-dl-dxl').onclick = () => dlFromServer(`/api/history/${d.id}/detail-excel`, fDxl);
-        } else {
-          document.querySelector('.btn-dl-pdf').onclick = () => dlFromServer(`/api/history/${d.id}/pdf`, fPdf);
-          document.querySelector('.btn-dl-xl').onclick = () => dlFromServer(`/api/history/${d.id}/excel`, fXl);
-          const btnClientXl = document.querySelector('.btn-dl-client-xl');
-          if (btnClientXl) btnClientXl.onclick = () => dlFromServer(`/api/history/${d.id}/client-excel`, fClientXl);
-          document.querySelector('.btn-dl-dpdf').onclick = () => dlFromServer(`/api/history/${d.id}/detail-pdf`, fDpdf);
-          document.querySelector('.btn-dl-dxl').onclick = () => dlFromServer(`/api/history/${d.id}/detail-excel`, fDxl);
-        }
-      }
+      // 統一ダウンロードメニュー（保存済みの伝票でのみ表示）
+      const mdlWrap = $('modal-dl-actions');
+      if (mdlWrap) mdlWrap.innerHTML = d.id ? dlMenuHtml(invoiceDlEntries(d.id, d.doc_type, customer, dateISO)) : '';
 
       const driveBtn = $('modal-btn-drive');
       driveBtn.style.display = d.id ? 'inline-flex' : 'none';
@@ -6956,8 +7002,8 @@
     }
 
     async function delHist(id) {
-      // 長押し UI で誤タップは抑止済み。確認ダイアログは省略してフローを軽くする。
-      // Optimistic UI: 即座にリストから消す。失敗時はリロードで戻す。
+      // 誤操作は Undo トーストで復元できるため確認ダイアログは省略。
+      // Optimistic UI: 即座にリストから消す。失敗時��リロードで戻す。
       const store = Alpine.store('app');
       const before = (store.history || []).slice();
       store.history = before.filter(h => h.id !== id);
@@ -6986,14 +7032,15 @@
       }
     }
 
-    async function lockHist(id) {
-      // 長押し UI で確認済み。確認ダイアログは省略。
+    async function lockHist(id, opts = {}) {
+      // 誤操作は Undo トーストで取り消せるため確認ダイアログは省略。
       haptic('medium');
       jobManager.enqueue('lock', `/api/jobs/lock/${id}`, {}, {
+        onError: opts.onError,
         onSuccess: () => {
           haptic('success');
           loadHistory();
-          undoToast('伝票を確定しました', async () => {
+          undoToast(opts.message || '伝票を確定しました', async () => {
             const rr = await fetch(`/api/history/${id}/unlock`, { method: 'POST' });
             if (!rr.ok) throw new Error('確定の解除に失敗しました');
             toast('確定を解除しました', 'ok');
@@ -7045,9 +7092,9 @@
         if (pane && isDesktop) {
           const lockBtn = d.status === 'locked'
             ? `<button class="btn btn-outline btn-sm" onclick="unlockHist(${d.invoice_id})"><svg class="icon" aria-hidden="true"><use href="#i-unlock"></use></svg>解除</button>`
-            : `<button class="btn btn-gold btn-sm" id="dt-lock-${d.invoice_id}" data-lock-id="${d.invoice_id}">✦ 確定 (長押し)</button>`;
+            : `<button class="btn btn-gold btn-sm" onclick="lockHist(${d.invoice_id})">✦ 確定</button>`;
           const driveBtn = d.status === 'locked'
-            ? `<button class="btn btn-blue btn-sm" onclick="uploadDrive(${d.invoice_id}, this)"><div class="spinner"></div>☁️ Drive</button>`
+            ? `<button class="btn btn-blue btn-sm" onclick="uploadDrive(${d.invoice_id}, this)"><div class="spinner"></div>${svgUse('i-cloud')}Driveに保存</button>`
             : '';
 
           pane.innerHTML = `
@@ -7063,7 +7110,7 @@
 								<button class="btn btn-outline btn-sm" onclick="editHist(${d.invoice_id})">✎ 編集</button>
 								${lockBtn}
 								${driveBtn}
-								<button class="btn btn-outline btn-sm" onclick="downloadZip(${d.invoice_id})" title="PDFとExcelが含まれています">ZIP (Excel含)</button>
+								${dlMenuHtml(invoiceDlEntries(d.invoice_id, d.doc_type, d.customer_name, d.locked_at || d.created_at, true))}
 								<button class="btn btn-red btn-sm" onclick="delHist(${d.invoice_id})">✕ 削除</button>
 							</div>
 						</div>
@@ -7074,18 +7121,9 @@
 						</div>
 						<div class="preview-pane active" id="dpane-pdf">
 							<iframe class="pdf-preview-frame" src="${d.pdf_preview_url || d.pdf_url}"></iframe>
-							<div class="preview-actions">
-								<button class="btn btn-red" onclick="dlFromServer('/api/history/${d.invoice_id}/pdf','${fPdf}')"><svg class="icon" aria-hidden="true"><use href="#i-doc"></use></svg>PDF保存</button>
-								<button class="btn btn-green" onclick="dlFromServer('/api/history/${d.invoice_id}/excel','${fXl}')" title="バーコード付き"><svg class="icon" aria-hidden="true"><use href="#i-table"></use></svg>会社控Excel</button>
-								<button class="btn btn-green" onclick="dlFromServer('/api/history/${d.invoice_id}/client-excel','${fClientXl}')" title="掛率なし・PDFレイアウト"><svg class="icon" aria-hidden="true"><use href="#i-table"></use></svg>提出用Excel</button>
-							</div>
 						</div>
 						<div class="preview-pane" id="dpane-detail">
 							<iframe class="pdf-preview-frame" src="${d.detail_pdf_preview_url || d.detail_pdf_url}"></iframe>
-							<div class="preview-actions">
-								<button class="btn btn-red" onclick="dlFromServer('/api/history/${d.invoice_id}/detail-pdf','${fDpdf}')"><svg class="icon" aria-hidden="true"><use href="#i-doc"></use></svg>PDF保存</button>
-								<button class="btn btn-green" onclick="dlFromServer('/api/history/${d.invoice_id}/detail-excel','${fDxl}')"><svg class="icon" aria-hidden="true"><use href="#i-table"></use></svg>Excel保存</button>
-							</div>
 						</div>
 						<div class="preview-pane" id="dpane-summary">
 							<div id="hist-summary-content"></div>
@@ -7099,9 +7137,6 @@
             doc_type: d.doc_type
           };
           renderSummaryView(payload, d, 'hist-summary-content');
-          // 重要操作の長押し化
-          const lockEl = document.querySelector(`[data-lock-id="${d.invoice_id}"]`);
-          if (lockEl) bindLongPress(lockEl, () => lockHist(d.invoice_id));
         } else {
           pdfData = d.pdf_base64 || null; excelData = d.excel_base64 || null;
           detailPdfData = d.detail_pdf_base64 || null; detailExcelData = d.detail_excel_base64 || null;
@@ -7145,8 +7180,7 @@
         const d = await r.json();
         currentEditingInvId = id;
         extractedItems = d.items;
-        currentDocType = d.doc_type || 'delivery';
-        document.querySelectorAll('.doctype-btn').forEach(b => b.classList.toggle('active', b.dataset.type === currentDocType));
+        setDocType(d.doc_type || 'delivery');
 
         $('inp-rate').value = d.discount_rate;
         if ($('inp-issue-date')) $('inp-issue-date').value = d.issue_date || new Date().toISOString().split('T')[0];
@@ -7360,13 +7394,21 @@
       renderThumbs();
     }
 
+    let _srcImgObjUrl = null;
     function openSourceImage(src) {
-      $('image-preview-img').src = src;
+      // 文字列（旧形式）と {thumb, fileRef} オブジェクトの両方を受け付ける
+      let url = (typeof src === 'string') ? src : (src && src.thumb);
+      if (src && typeof File !== 'undefined' && src.fileRef instanceof File) {
+        _srcImgObjUrl = URL.createObjectURL(src.fileRef);
+        url = _srcImgObjUrl;
+      }
+      $('image-preview-img').src = url || '';
       $('image-preview-overlay').style.display = 'flex';
     }
     function closeSourceImage() {
       $('image-preview-overlay').style.display = 'none';
       $('image-preview-img').src = '';
+      if (_srcImgObjUrl) { URL.revokeObjectURL(_srcImgObjUrl); _srcImgObjUrl = null; }
     }
 
     async function compressImageFile(file, maxSize = 1600, quality = 0.75) {
@@ -7423,6 +7465,7 @@
         source_image_no: it.source_image_no ?? index,
         source_image_index: it.source_image_no ?? index,
         source_image_thumb: selectedFileThumbs[it.source_image_no ?? index],
+        source_image_file: selectedFiles[it.source_image_no ?? index],
       }));
     }
 
@@ -7481,7 +7524,7 @@
               const qty = parseInt(it.quantity) || 1;
               const key = `${it.code}|${it.color}|${it.size}|${up}`;
 
-              const sourceImage = { index: it.source_image_index, thumb: it.source_image_thumb };
+              const sourceImage = { index: it.source_image_index, thumb: it.source_image_thumb, fileRef: it.source_image_file };
 
               if (merged[key]) {
                 merged[key].quantity += qty;
@@ -7739,10 +7782,9 @@
     }
     function applyDraft(draft) {
       currentDraftId = draft.server_draft_id || currentDraftId || null;
-      currentDocType = draft.doc_type || 'delivery';
+      setDocType(draft.doc_type || 'delivery');
       currentEditingInvId = draft.currentEditingInvId || null;
       extractedItems = draft.items || [];
-      document.querySelectorAll('.doctype-btn').forEach(b => b.classList.toggle('active', b.dataset.type === currentDocType));
       if ($('sel-customer')) $('sel-customer').value = draft.customer_select_value || 'manual';
       if ($('inp-manual-customer')) $('inp-manual-customer').value = draft.manual_customer || draft.customer_name || '';
 
@@ -7807,7 +7849,7 @@
       }
       if (rowWarnings.length) {
         const msg = rowWarnings.slice(0, 6).join('\n') + (rowWarnings.length > 6 ? `\n…ほか${rowWarnings.length - 6}件` : '');
-        if (!confirm(`確認が必要な行があります:\n\n${msg}\n\nこのまま保存しますか？`)) return;
+        if (!confirm(`確認が必要な行があります:\n\n${msg}\n\nこのまま確定保存しますか？`)) return;
       }
 
       $('btn-generate').disabled = true;
@@ -7856,19 +7898,24 @@
           $('dl-section').style.display = 'block';
 
           setupPreviews(payload, d);
-          openPreviewModal(d, payload);
+          const dlWrap = $('dl-actions');
+          if (dlWrap) dlWrap.innerHTML = dlMenuHtml(invoiceDlEntries(result.invoice_id, result.doc_type, payload.customer_name, null));
 
           localStorage.removeItem('laura-draft');
           try { if (currentDraftId) { fetch('/api/drafts/' + currentDraftId, { method: 'DELETE' }); currentDraftId = null; } } catch (_dd) { }
-          toast('保存しました', 'ok');
           haptic('success');
           updateMobileActionBar();
+          // 保存と確定を一本化（案A）: 保存後そのまま確定し、Undoトーストで取り消せる
+          lockHist(result.invoice_id, {
+            message: '伝票を保存して確定しました',
+            onError: () => toast('保存されましたが確定に失敗しました。履歴の「確定」からやり直せます', 'warn', 8000)
+          });
           await loadHistory();
         },
         onError: (err) => {
           $('btn-generate').disabled = false;
           if (String(err).includes('重複の可能性')) {
-            if (confirm(String(err) + '\n\n重複ではないことを確認しました。このまま保存しますか？')) {
+            if (confirm(String(err) + '\n\n重複ではないことを確認しました。このまま確定保存しますか？')) {
               forceNextGenerate = true;
               generateInvoice();
             }
@@ -7878,14 +7925,6 @@
         }
       });
     }
-
-    $('btn-lock-final')?.addEventListener('click', async () => {
-      if (!lastInvoiceId) return;
-      await lockHist(lastInvoiceId);
-      $('dl-section').style.display = 'none';
-      loadHistory();
-      document.querySelectorAll('.tab')[1].click();
-    });
 
     function downloadBlob(kind) {
       if (!lastInvoiceId) {
@@ -7909,6 +7948,46 @@
 
       dlFromServer(urlMap[kind], filenameMap[kind]);
     }
+
+    // ===== v6: 統一ダウンロードメニュー =====
+    function invoiceDlEntries(id, docType, customer, dateISO, withZip = false) {
+      const titles = TYPE_TITLES[docType] || TYPE_TITLES['delivery'];
+      const cust = customer || 'Unknown';
+      const detailLabel = (titles.detail || '明細表').replace(' ', '');
+      const entries = [
+        { url: `/api/history/${id}/pdf`, name: getFileName(docType, cust, dateISO, 'pdf'), label: `${titles.main} PDF`, icon: 'i-doc' },
+        { url: `/api/history/${id}/excel`, name: getFileName(docType, cust, dateISO, 'excel'), label: '会社控Excel（バーコード付）', icon: 'i-table' },
+        { url: `/api/history/${id}/client-excel`, name: getFileName(docType, cust, dateISO, 'excel').replace('.xlsx', '_提出用.xlsx'), label: '提出用Excel（掛率なし）', icon: 'i-table' },
+        { sep: true },
+        { url: `/api/history/${id}/detail-pdf`, name: getFileName(docType, cust, dateISO, 'detail-pdf'), label: `${detailLabel} PDF`, icon: 'i-doc' },
+        { url: `/api/history/${id}/detail-excel`, name: getFileName(docType, cust, dateISO, 'detail-excel'), label: `${detailLabel} Excel`, icon: 'i-table' },
+      ];
+      if (withZip) {
+        entries.push({ sep: true });
+        entries.push({ zipId: id, label: 'ZIP一括（PDF＋Excel）', icon: 'i-download' });
+      }
+      return entries;
+    }
+    function dlMenuHtml(entries, label = 'ダウンロード') {
+      const items = entries.map(e => {
+        if (e.sep) return '<div class="dl-menu-sep"></div>';
+        if (e.zipId != null) return `<button type="button" class="dl-menu-item" data-dl-zip="${e.zipId}">${svgUse(e.icon || 'i-download')}${escapeHtml(e.label)}</button>`;
+        return `<button type="button" class="dl-menu-item" data-dl-url="${escapeHtml(e.url)}" data-dl-name="${escapeHtml(e.name)}">${svgUse(e.icon || 'i-doc')}${escapeHtml(e.label)}</button>`;
+      }).join('');
+      return `<details class="dl-menu"><summary class="btn btn-gold btn-sm">${svgUse('i-download')}${escapeHtml(label)} ▾</summary><div class="dl-menu-panel">${items}</div></details>`;
+    }
+    document.addEventListener('click', (ev) => {
+      const t = ev.target;
+      const item = (t && t.closest) ? t.closest('.dl-menu-item') : null;
+      if (item) {
+        const menu = item.closest('details.dl-menu');
+        if (menu) menu.open = false;
+        if (item.dataset.dlZip) downloadZip(parseInt(item.dataset.dlZip, 10));
+        else dlFromServer(item.dataset.dlUrl, item.dataset.dlName);
+        return;
+      }
+      document.querySelectorAll('details.dl-menu[open]').forEach(m => { if (!m.contains(t)) m.open = false; });
+    });
 
     $('btn-new').addEventListener('click', () => {
       if ($('inp-issue-date')) $('inp-issue-date').value = new Date().toISOString().split('T')[0];
@@ -7948,7 +8027,7 @@
       if (window.Alpine) {
         Alpine.store('app').rate = 35;
       }
-      document.querySelector('.doctype-btn[data-type="delivery"]')?.click();
+      setDocType('delivery');
 
       updateMobileActionBar();
     });
@@ -8138,7 +8217,7 @@
         if (t.classList.contains('active')) {
           document.querySelectorAll('.sidebar-tab').forEach(s => s.classList.remove('active'));
           document.querySelector(`.sidebar-tab[data-tab="${t.dataset.tab}"]`)?.classList.add('active');
-          // モバイル下タブとも同期
+          // モバイル下タ��とも同期
           document.querySelectorAll('.bn-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === t.dataset.tab));
           const tc = $('topbar-current');
           if (tc) tc.textContent = tabLabels[t.dataset.tab] || '';
@@ -8706,7 +8785,8 @@
     let _pzScale = 1, _pzX = 0, _pzY = 0;
     function pzApply() { $('pz-img').style.transform = 'translate(' + _pzX + 'px,' + _pzY + 'px) scale(' + _pzScale + ')'; }
     window.pzZoom = function (f) { const st = $('pz-stage'); const cx = st.clientWidth / 2, cy = st.clientHeight / 2; _pzX = cx - (cx - _pzX) * f; _pzY = cy - (cy - _pzY) * f; _pzScale *= f; pzApply(); };
-    window.closePhotoZoom = function () { $('photo-zoom-overlay').style.display = 'none'; $('pz-img').removeAttribute('src'); };
+    let _pzObjUrl = null;
+    window.closePhotoZoom = function () { $('photo-zoom-overlay').style.display = 'none'; $('pz-img').removeAttribute('src'); if (_pzObjUrl) { URL.revokeObjectURL(_pzObjUrl); _pzObjUrl = null; } };
     window.openPhotoZoom = function (item, idx) {
       try {
         const srcs = (item && item.source_images) || [];
@@ -8715,7 +8795,20 @@
         const ov = $('photo-zoom-overlay'), img = $('pz-img'), st = $('pz-stage');
         $('pz-caption').textContent = (item.code || '(品番なし)') + ' ' + (item.color || '') + ' ' + (item.size || '') + ' — 写真' + ((s0.index ?? 0) + 1) + ' / ピンチやホイールで拡大できます';
         ov.style.display = 'block';
-        img.onerror = () => { closePhotoZoom(); toast('元写真はこのセッションでは表示できません（再解析後に利用可）', 'info'); };
+        // 元ファイルが残っていればフル解像度で表示（320pxサムネ拡大のぼやけ対策）
+        let zoomSrc = s0.thumb;
+        if (typeof File !== 'undefined' && s0.fileRef instanceof File) {
+          _pzObjUrl = URL.createObjectURL(s0.fileRef);
+          zoomSrc = _pzObjUrl;
+        }
+        img.onerror = () => {
+          if (_pzObjUrl && img.src === _pzObjUrl) {
+            URL.revokeObjectURL(_pzObjUrl); _pzObjUrl = null;
+            img.src = s0.thumb; // 元ファイルが読めない場合はサムネイルへフォールバック
+            return;
+          }
+          closePhotoZoom(); toast('元写真はこのセッションでは表示できません（再解析後に利用可）', 'info');
+        };
         img.onload = () => {
           const sc = Math.min(st.clientWidth / img.naturalWidth, st.clientHeight / img.naturalHeight) * 0.96;
           _pzScale = (sc > 0 && isFinite(sc)) ? sc : 1;
@@ -8723,7 +8816,7 @@
           _pzY = (st.clientHeight - img.naturalHeight * _pzScale) / 2;
           pzApply();
         };
-        img.src = s0.thumb;
+        img.src = zoomSrc;
         if (img.complete && img.naturalWidth) img.onload();
       } catch (e) { console.warn('openPhotoZoom', e); }
     };
