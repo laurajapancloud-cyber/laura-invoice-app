@@ -178,7 +178,7 @@
       align-items: center;
       justify-content: center;
       background: var(--bg-input);
-      font-size: 10px;
+      font-size: 12px;
       color: var(--text-muted);
     }
 
@@ -377,7 +377,7 @@
     }
 
     .logo-sub {
-      font-size: 9px;
+      font-size: 10px;
       color: var(--text-muted);
       letter-spacing: 0.5em;
       margin-bottom: 20px;
@@ -494,7 +494,7 @@
 
     .form-group label {
       display: block;
-      font-size: 11px;
+      font-size: 12px;
       color: var(--text-secondary);
       font-weight: 600;
       margin-bottom: 6px;
@@ -712,7 +712,7 @@
     .btn-sm {
       padding: 8px 14px;
       font-size: 12px;
-      min-height: 0;
+      min-height: 38px;
       width: auto;
       margin: 0;
       border-radius: 7px;
@@ -745,7 +745,7 @@
     }
 
     .progress-label {
-      font-size: 11px;
+      font-size: 12px;
       color: var(--text-muted);
       margin-top: 6px;
       display: flex;
@@ -758,7 +758,7 @@
       color: #1a1a1a;
       padding: 2px 8px;
       border-radius: 4px;
-      font-size: 10px;
+      font-size: 12px;
       font-weight: 700;
     }
 
@@ -768,7 +768,7 @@
       border: 1px solid var(--border);
       padding: 2px 8px;
       border-radius: 4px;
-      font-size: 10px;
+      font-size: 12px;
     }
 
     .btn-red-text {
@@ -806,6 +806,54 @@
       border-color: rgba(224, 97, 87, 0.3);
     }
 
+    .toast-stack {
+      position: fixed;
+      bottom: calc(24px + env(safe-area-inset-bottom));
+      right: 16px;
+      display: flex;
+      flex-direction: column-reverse;
+      gap: 8px;
+      z-index: 10001;
+      pointer-events: none;
+    }
+
+    .toast-stack .toast {
+      pointer-events: auto;
+      margin: 0;
+      min-width: 280px;
+      max-width: 360px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+      animation: toastSlideIn .4s cubic-bezier(0.16, 1, 0.3, 1);
+      background-color: var(--bg-elevated);
+    }
+
+    @media (max-width: 1023px) {
+      .toast-stack {
+        left: 16px;
+        right: 16px;
+        bottom: calc(132px + env(safe-area-inset-bottom));
+        align-items: center;
+      }
+
+      .toast-stack .toast {
+        width: 100%;
+        max-width: 480px;
+        min-width: 0;
+      }
+    }
+
+    @keyframes toastSlideIn {
+      from {
+        transform: translateY(10px);
+        opacity: 0;
+      }
+
+      to {
+        transform: none;
+        opacity: 1;
+      }
+    }
+
     /* ===== Status badges ===== */
     .status-badge {
       display: inline-flex;
@@ -814,7 +862,7 @@
       min-width: 58px;
       padding: 4px 8px;
       border-radius: 999px;
-      font-size: 11px;
+      font-size: 12px;
       font-weight: 700;
     }
 
@@ -875,7 +923,7 @@
     }
 
     .ai-badge {
-      font-size: 11px;
+      font-size: 12px;
       padding: 4px 9px;
       border-radius: 999px;
       font-weight: 700;
@@ -901,7 +949,7 @@
     }
 
     .merge-note {
-      font-size: 11px;
+      font-size: 12px;
       color: var(--blue);
       margin-top: 6px;
     }
@@ -991,7 +1039,9 @@
       color: var(--red);
       font-size: 18px;
       cursor: pointer;
-      padding: 4px 10px;
+      padding: 8px 12px;
+      min-height: 36px;
+      min-width: 40px;
       border-radius: 6px;
       transition: background 0.15s;
     }
@@ -1023,7 +1073,7 @@
     }
 
     .item-field label {
-      font-size: 11px;
+      font-size: 12px;
       font-weight: 600;
       color: var(--text-secondary);
       text-transform: uppercase;
@@ -1199,7 +1249,7 @@
       display: flex;
       align-items: center;
       gap: 4px;
-      font-size: 11px;
+      font-size: 12px;
       color: var(--text-secondary);
       font-variant-numeric: tabular-nums;
       white-space: nowrap;
@@ -1358,7 +1408,7 @@
     }
 
     .bar-label {
-      font-size: 11px;
+      font-size: 12px;
       color: var(--text-muted);
       letter-spacing: 0.05em;
     }
@@ -1481,12 +1531,19 @@
 
     #hist-type-filter,
     #hist-user-filter,
-    #hist-month-filter {
+    #hist-month-filter,
+    #hist-status-filter {
       font-size: 15px;
+      padding: 12px;
+      border-radius: 10px;
       min-height: 44px;
       background: #121212;
       border: 1px solid rgba(255, 255, 255, 0.16);
       color: #fffaf0;
+    }
+
+    #hist-month-filter {
+      width: 140px;
     }
 
     /* Scrollbar */
@@ -1535,7 +1592,7 @@
     }
 
     .badge {
-      font-size: 10px;
+      font-size: 12px;
       padding: 2px 6px;
       border-radius: 4px;
       margin-left: 8px;
@@ -1593,7 +1650,7 @@
     }
 
     .doc-label {
-      font-size: 10px;
+      font-size: 12px;
       font-weight: 700;
       color: var(--text-secondary);
       margin-bottom: 8px;
@@ -1609,7 +1666,7 @@
       flex: 1;
       margin-bottom: 0;
       padding: 6px 2px;
-      font-size: 10px;
+      font-size: 12px;
       border-radius: 6px;
     }
 
@@ -1714,7 +1771,8 @@
       align-items: center;
       gap: 8px;
       width: 100%;
-      padding: 10px 12px;
+      padding: 12px;
+      min-height: 42px;
       background: none;
       border: none;
       border-radius: 8px;
@@ -1788,7 +1846,7 @@
       color: #3a3122;
       font-weight: 600;
       letter-spacing: 0.05em;
-      font-size: 10px;
+      font-size: 12px;
       text-transform: uppercase;
     }
 
@@ -1834,7 +1892,8 @@
     }
 
     .qty-btn {
-      width: 36px;
+      width: 40px;
+      min-height: 40px;
       background: transparent;
       border: none;
       color: var(--gold);
@@ -2030,7 +2089,7 @@
       border-radius: 12px;
       border: 1px solid var(--border);
       padding: 10px;
-      font-size: 11px;
+      font-size: 12px;
     }
 
     .excel-preview-container table {
@@ -2140,7 +2199,7 @@
       border-radius: 20px;
       background: var(--gold-soft);
       border: 1px solid var(--border);
-      font-size: 11px;
+      font-size: 12px;
       color: var(--gold-bright);
       cursor: pointer;
     }
@@ -2207,7 +2266,7 @@
 
       .topbar-breadcrumb .sep {
         opacity: 0.4;
-        font-size: 11px;
+        font-size: 12px;
       }
 
       .topbar-actions {
@@ -2242,7 +2301,7 @@
         background: var(--bg-base);
         border: 1px solid var(--border);
         border-radius: 4px;
-        font-size: 10px;
+        font-size: 12px;
         font-family: monospace;
       }
 
@@ -2279,7 +2338,7 @@
 
       .logo-text span {
         display: block;
-        font-size: 8px;
+        font-size: 10px;
         color: var(--text-muted);
         letter-spacing: 0.3em;
         margin-top: 4px;
@@ -2326,7 +2385,7 @@
 
       .sidebar-tab-shortcut {
         margin-left: auto;
-        font-size: 9px;
+        font-size: 10px;
         color: var(--text-muted);
         background: rgba(255, 255, 255, 0.05);
         padding: 2px 6px;
@@ -2347,7 +2406,7 @@
         padding: 0 16px;
         background: var(--bg-elevated);
         border-top: 1px solid var(--border);
-        font-size: 11px;
+        font-size: 12px;
         color: var(--text-muted);
         letter-spacing: 0.04em;
         gap: 20px;
@@ -2456,7 +2515,7 @@
         grid-template-columns: 28px 104px 52px minmax(0, 1fr) 104px 80px !important;
         gap: 8px !important;
         padding: 10px 12px;
-        font-size: 10px;
+        font-size: 12px;
         color: var(--gold);
         letter-spacing: 0.18em;
         text-transform: uppercase;
@@ -2569,7 +2628,7 @@
       .hist-item .status-badge {
         min-width: 60px;
         padding: 3px 7px;
-        font-size: 10px;
+        font-size: 12px;
         white-space: nowrap;
       }
 
@@ -2654,7 +2713,7 @@
       .upload-area::before {
         content: 'またはここにドラッグ&ドロップ';
         display: block;
-        font-size: 11px;
+        font-size: 12px;
         color: var(--text-muted);
         margin-top: 10px;
         letter-spacing: 0.1em;
@@ -2724,38 +2783,6 @@
         padding: 12px 14px !important;
       }
 
-      .toast-stack {
-        position: fixed;
-        bottom: 36px;
-        right: 16px;
-        display: flex;
-        flex-direction: column-reverse;
-        gap: 8px;
-        z-index: 9000;
-        pointer-events: none;
-      }
-
-      .toast-stack .toast {
-        pointer-events: auto;
-        margin: 0;
-        min-width: 280px;
-        max-width: 360px;
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
-        animation: toastSlideIn .4s cubic-bezier(0.16, 1, 0.3, 1);
-      }
-
-      @keyframes toastSlideIn {
-        from {
-          transform: translateX(20px);
-          opacity: 0;
-        }
-
-        to {
-          transform: translateX(0);
-          opacity: 1;
-        }
-      }
-
       .cmdk-overlay {
         position: fixed;
         inset: 0;
@@ -2817,7 +2844,7 @@
 
       .cmdk-section {
         padding: 8px 12px 4px;
-        font-size: 9px;
+        font-size: 10px;
         color: var(--gold);
         letter-spacing: 0.18em;
         text-transform: uppercase;
@@ -2851,7 +2878,7 @@
       }
 
       .cmdk-item-meta {
-        font-size: 11px;
+        font-size: 12px;
         color: var(--text-muted);
         font-family: monospace;
       }
@@ -2907,7 +2934,7 @@
         border: 1px solid var(--border-strong);
         padding: 5px 9px;
         border-radius: 5px;
-        font-size: 11px;
+        font-size: 12px;
         white-space: nowrap;
         opacity: 0;
         pointer-events: none;
@@ -2940,7 +2967,7 @@
 
       .pc-item-table th {
         text-align: left;
-        font-size: 11px;
+        font-size: 12px;
         color: var(--gold);
         letter-spacing: 0.05em;
         padding: 8px 4px;
@@ -3023,7 +3050,8 @@
         flex-direction: column !important;
       }
 
-      #hist-month-filter {
+      #hist-month-filter,
+      #hist-status-filter {
         width: 100% !important;
       }
     }
@@ -3068,7 +3096,7 @@
       border: 1px solid var(--border);
       border-radius: 4px;
       font-family: monospace;
-      font-size: 10px;
+      font-size: 12px;
       color: var(--text-muted);
       margin-left: 8px;
     }
@@ -3247,7 +3275,7 @@
     }
 
     .job-status-text {
-      font-size: 11px;
+      font-size: 12px;
       color: var(--text-muted);
     }
 
@@ -3299,6 +3327,52 @@
       box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
       color: var(--text-secondary);
       font-size: 12px;
+    }
+
+    body {
+      font-variant-numeric: lining-nums tabular-nums;
+      font-feature-settings: 'lnum' 1, 'tnum' 1;
+    }
+
+    .input-plain {
+      width: 100%;
+      padding: 10px;
+      font-size: 14px;
+      background: var(--bg-input);
+      border: 1px solid var(--border-subtle);
+      border-radius: 6px;
+      color: var(--text-primary);
+      min-height: 40px;
+    }
+
+    .field-label {
+      display: block;
+      font-size: 12px;
+      color: var(--gold);
+      margin-bottom: 4px;
+      font-weight: 600;
+    }
+
+    .qty-mini {
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      border: 1px solid var(--border-strong);
+      background: var(--bg-input);
+      color: var(--text-primary);
+      font-size: 16px;
+      font-weight: 700;
+      line-height: 1;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .qty-mini:disabled {
+      opacity: 0.35;
+      cursor: default;
     }
 
     .active-job-bar {
@@ -3404,7 +3478,7 @@
     }
 
     .gen-sub {
-      font-size: 10px;
+      font-size: 12px;
       color: var(--text-muted);
       letter-spacing: 0.4em;
       margin-bottom: 24px;
@@ -3453,7 +3527,7 @@
 
     .gen-step {
       flex: 1;
-      font-size: 9px;
+      font-size: 10px;
       color: var(--text-muted);
       letter-spacing: 0.1em;
       text-transform: uppercase;
@@ -3751,7 +3825,7 @@
       border-radius: 10px;
       color: var(--text-muted);
       cursor: pointer;
-      font-size: 10px;
+      font-size: 12px;
       font-weight: 600;
       letter-spacing: 0.06em;
       text-transform: uppercase;
@@ -3962,6 +4036,7 @@
     [data-theme="light"] #hist-type-filter,
     [data-theme="light"] #hist-user-filter,
     [data-theme="light"] #hist-month-filter,
+    [data-theme="light"] #hist-status-filter,
     [data-theme="light"] .item-field input,
     [data-theme="light"] .qty-stepper {
       background: #ffffff;
@@ -4174,7 +4249,7 @@
     }
 
     .custom-select-meta {
-      font-size: 11px;
+      font-size: 12px;
       color: var(--text-muted);
       margin-left: 8px;
     }
@@ -4326,7 +4401,7 @@
     /* ---- Forms ---- */
     .form-group label {
       letter-spacing: 0.08em;
-      font-size: 10.5px;
+      font-size: 12px;
       color: var(--text-muted);
     }
 
@@ -4416,7 +4491,7 @@
     }
 
     .stat-label {
-      font-size: 10.5px;
+      font-size: 12px;
       letter-spacing: 0.1em;
       color: var(--text-muted);
     }
@@ -4810,10 +4885,10 @@
       </div>
     </div>
     <div class="sidebar-footer"
-      style="padding:12px 24px; border-top:1px solid var(--border-subtle); font-size:11px; color:var(--text-muted);">
+      style="padding:12px 24px; border-top:1px solid var(--border-subtle); font-size:12px; color:var(--text-muted);">
       v1.0 · MILANO
       <div style="margin-top: 6px;">
-        <a href="/logout" style="color:var(--gold); text-decoration:none; font-size: 11px;">ログアウト</a>
+        <a href="/logout" style="color:var(--gold); text-decoration:none; font-size: 12px;">ログアウト</a>
       </div>
     </div>
   </aside>
@@ -5031,7 +5106,7 @@
                   <span x-text="c.name"></span>
                   <span class="custom-select-meta" x-text="c.code ? `(${c.code})` : ''"></span>
                   <span x-show="c.user_id === currentUser?.id"
-                    style="font-size:10px; background:var(--gold-deep); color:#111; padding:1px 4px; border-radius:3px; margin-left:4px;">担当</span>
+                    style="font-size:12px; background:var(--gold-deep); color:#111; padding:1px 4px; border-radius:3px; margin-left:4px;">担当</span>
                   <span class="custom-select-meta" x-show="c.discount_rate" x-text="`${c.discount_rate}%`"
                     style="float: right;"></span>
                 </div>
@@ -5082,7 +5157,6 @@
           </div>
           <div class="progress-label"><span id="prog-label">準備中...</span><span id="prog-pct">0%</span></div>
         </div>
-        <div class="toast" id="toast"></div>
       </div>
 
       <div class="card" id="preview-card" style="display:none" x-data="{ isDesktop: window.innerWidth >= 1024 }"
@@ -5145,8 +5219,15 @@
 
         <!-- モバイル表示 (Cards) -->
         <div class="item-cards" x-show="!isDesktop">
+          <div x-data="{ allOpen: false }" x-show="$store.app.items.length > 1"
+            style="display:flex; justify-content:flex-end; margin-bottom:4px;">
+            <button type="button" class="btn btn-outline btn-sm" style="font-size:12px; padding:6px 12px;"
+              @click="allOpen = !allOpen; $dispatch(allOpen ? 'cards-expand-all' : 'cards-collapse-all'); haptic('light')"
+              x-text="allOpen ? 'すべて閉じる' : 'すべて開く'"></button>
+          </div>
           <template x-for="(item, index) in $store.app.items" :key="index">
             <div x-data="{ expanded: validateItem(item).level !== 'ok' || $store.app.items.length === 1 }"
+              @cards-expand-all.window="expanded = true" @cards-collapse-all.window="expanded = false"
               :class="'item-card ai-' + validateItem(item).level">
 
               <!-- アコーディオンヘッダー -->
@@ -5158,7 +5239,7 @@
                 </template>
                 <template x-if="!(item.source_images && item.source_images.length)">
                   <div
-                    style="width:48px; height:64px; background:var(--bg-input); border-radius:6px; flex-shrink:0; display:flex; align-items:center; justify-content:center; color:var(--text-muted); font-size:10px; border: 1px solid var(--border);">
+                    style="width:48px; height:64px; background:var(--bg-input); border-radius:6px; flex-shrink:0; display:flex; align-items:center; justify-content:center; color:var(--text-muted); font-size:12px; border: 1px solid var(--border);">
                     No Img</div>
                 </template>
 
@@ -5171,14 +5252,21 @@
                       style="font-size:15px; font-weight:700; color:var(--gold-bright); font-family: 'Cormorant Garamond', serif; letter-spacing: 0.05em;"
                       x-text="'¥' + $store.app.calcItemAmount(item).toLocaleString()"></div>
                   </div>
-                  <div style="font-size:12px; color:var(--text-muted); display:flex; justify-content:space-between;">
+                  <div style="font-size:12px; color:var(--text-muted); display:flex; justify-content:space-between; align-items:center;">
                     <span x-text="(item.color || '-') + ' / ' + (item.size || '-')"></span>
-                    <span x-text="item.quantity + '個'"></span>
+                    <span style="display:inline-flex; align-items:center; gap:4px;" @click.stop>
+                      <button type="button" class="qty-mini" :disabled="item.quantity <= 1"
+                        @click.stop="item.quantity--; haptic('light')" aria-label="数量を減らす">−</button>
+                      <span x-text="item.quantity + '個'"
+                        style="min-width:38px; text-align:center; font-weight:700; font-size:13px; color:var(--text-primary);"></span>
+                      <button type="button" class="qty-mini" @click.stop="item.quantity++; haptic('light')"
+                        aria-label="数量を増やす">＋</button>
+                    </span>
                   </div>
                   <div x-show="validateItem(item).level !== 'ok'" style="margin-top:6px;">
                     <span :class="'ai-badge ai-badge-' + validateItem(item).level"
                       x-text="validateItem(item).level === 'error' ? '⚠ 要確認' : '⚠ 警告'"
-                      style="padding:3px 8px; font-size:10px;"></span>
+                      style="padding:3px 8px; font-size:12px;"></span>
                   </div>
                 </div>
 
@@ -5189,7 +5277,7 @@
                 </div>
               </div>
 
-              <!-- アコーディオンボディ -->
+              <!-- アコーディオンボデ�� -->
               <div x-show="expanded" style="margin-top: 16px; display: none;" x-transition>
                 <div style="height:1px; background:var(--border); margin:0 -16px 16px;"></div>
 
@@ -5335,10 +5423,15 @@
             <option value="prov_return">仮返品</option>
             <option value="statement">明細表</option>
           </select>
-          <select id="hist-user-filter" style="padding:12px; border-radius:10px;">
+          <select id="hist-status-filter">
+            <option value="">すべての状態</option>
+            <option value="draft">未確定</option>
+            <option value="locked">確定済</option>
+          </select>
+          <select id="hist-user-filter">
             <option value="">すべてのユーザー</option>
           </select>
-          <select id="hist-month-filter" style="width:140px; padding:12px; border-radius:10px;">
+          <select id="hist-month-filter">
             <option value="">すべての月</option>
           </select>
         </div>
@@ -5408,7 +5501,7 @@
                   <div class="hist-customer-cell">
                     <div class="hist-customer-name">
                       <span x-text="inv.customer_name"></span>
-                      <span x-show="inv.user_name" :style="`font-size:10px; color:${inv.user_color}; margin-left:4px`"
+                      <span x-show="inv.user_name" :style="`font-size:12px; color:${inv.user_color}; margin-left:4px`"
                         x-text="'● ' + inv.user_name"></span>
                     </div>
                     <div class="hist-meta" x-text="inv.item_count + '点'">
@@ -5439,7 +5532,7 @@
                         :style="`background:${TYPE_COLORS[inv.doc_type] || '#666'}1a; color:${TYPE_COLORS[inv.doc_type] || '#aaa'}; border:1px solid ${TYPE_COLORS[inv.doc_type] || '#666'}`"
                         x-text="TYPE_TITLES[inv.doc_type]?.label || '不明'"></span>
                       <span x-text="inv.customer_name"></span>
-                      <span x-show="inv.user_name" :style="`font-size:10px; color:${inv.user_color}; margin-left:4px`"
+                      <span x-show="inv.user_name" :style="`font-size:12px; color:${inv.user_color}; margin-left:4px`"
                         x-text="'● ' + inv.user_name"></span>
                       <span x-text="' • ' + inv.item_count + '点'"></span>
                       <span class="hist-meta-date"
@@ -5486,18 +5579,18 @@
           <div class="stat-box">
             <div class="stat-val" id="dash-inv-cnt">0</div>
             <div class="stat-label">伝票数（全種）</div>
-            <div class="stat-sub" id="dash-inv-cnt-diff" style="font-size:10px; margin-top:4px"></div>
+            <div class="stat-sub" id="dash-inv-cnt-diff" style="font-size:12px; margin-top:4px"></div>
           </div>
           <div class="stat-box">
             <div class="stat-val" id="dash-inv-amt" style="font-size:24px">¥0</div>
             <div class="stat-label">純売上（納品 − 返品）</div>
-            <div class="stat-sub" id="dash-inv-amt-diff" style="font-size:10px; margin-top:4px"></div>
+            <div class="stat-sub" id="dash-inv-amt-diff" style="font-size:12px; margin-top:4px"></div>
           </div>
         </div>
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:16px;">
           <div
             style="padding:12px; background:rgba(46,94,62,0.15); border-radius:10px; border:1px solid rgba(46,94,62,0.3);">
-            <div style="font-size:11px; color:var(--green); letter-spacing:0.08em; margin-bottom:4px;"><svg class="icon" aria-hidden="true" style="width:12px;height:12px;vertical-align:-2px"><use href="#i-package"></use></svg> 納品</div>
+            <div style="font-size:12px; color:var(--green); letter-spacing:0.08em; margin-bottom:4px;"><svg class="icon" aria-hidden="true" style="width:12px;height:12px;vertical-align:-2px"><use href="#i-package"></use></svg> 納品</div>
             <div style="display:flex; justify-content:space-between; align-items:baseline;">
               <span id="dash-delivery-cnt" style="font-size:22px; font-weight:700; color:var(--text-primary);">0</span>
               <span id="dash-delivery-amt" style="font-size:14px; color:var(--text-secondary);">¥0</span>
@@ -5505,7 +5598,7 @@
           </div>
           <div
             style="padding:12px; background:rgba(200,51,46,0.12); border-radius:10px; border:1px solid rgba(200,51,46,0.3);">
-            <div style="font-size:11px; color:var(--red); letter-spacing:0.08em; margin-bottom:4px;"><svg class="icon" aria-hidden="true" style="width:12px;height:12px;vertical-align:-2px"><use href="#i-return"></use></svg> 返品</div>
+            <div style="font-size:12px; color:var(--red); letter-spacing:0.08em; margin-bottom:4px;"><svg class="icon" aria-hidden="true" style="width:12px;height:12px;vertical-align:-2px"><use href="#i-return"></use></svg> 返品</div>
             <div style="display:flex; justify-content:space-between; align-items:baseline;">
               <span id="dash-return-cnt" style="font-size:22px; font-weight:700; color:var(--text-primary);">0</span>
               <span id="dash-return-amt" style="font-size:14px; color:var(--red);">-¥0</span>
@@ -5555,9 +5648,9 @@
                 style="display:flex; align-items:center; justify-content:space-between; width:100%;">
                 <div>
                   <span x-text="c.name" style="font-weight:600"></span>
-                  <span x-show="c.code" x-text="` (${c.code})`" style="font-size:11px; color:var(--text-muted)"></span>
+                  <span x-show="c.code" x-text="` (${c.code})`" style="font-size:12px; color:var(--text-muted)"></span>
                   <span x-show="c.user_name" x-text="`担当: ${c.user_name}`"
-                    style="font-size:10px; background:var(--gold-soft); color:var(--gold-bright); padding:2px 6px; border-radius:4px; margin-left:8px;"></span>
+                    style="font-size:12px; background:var(--gold-soft); color:var(--gold-bright); padding:2px 6px; border-radius:4px; margin-left:8px;"></span>
                 </div>
                 <div style="display:flex; align-items:center; gap:10px">
                   <span style="font-size:12px; color:var(--text-muted)" x-text="c.discount_rate + '%'"></span>
@@ -5574,31 +5667,28 @@
                   <div style="display:flex; gap:10px;">
                     <div style="flex: 0 0 100px;">
                       <label
-                        style="display:block; font-size:11px; color:var(--gold); margin-bottom:4px; font-weight:600;">店舗コード</label>
-                      <input type="text" class="edit-code"
-                        style="width:100%; padding:10px; font-size:14px; background:#1a1a1a; border:1px solid #444; border-radius:6px; color:#fff;">
+                        class="field-label">店舗コード</label>
+                      <input type="text" class="edit-code input-plain">
                     </div>
                     <div style="flex: 1;">
                       <label
-                        style="display:block; font-size:11px; color:var(--gold); margin-bottom:4px; font-weight:600;">取引先名
+                        class="field-label">取引先名
                         (店名)</label>
-                      <input type="text" class="edit-name"
-                        style="width:100%; padding:10px; font-size:14px; background:#1a1a1a; border:1px solid #444; border-radius:6px; color:#fff;">
+                      <input type="text" class="edit-name input-plain">
                     </div>
                   </div>
                   <div style="display:flex; justify-content:space-between; align-items:flex-end;">
                     <div style="flex: 0 0 80px;">
                       <label
-                        style="display:block; font-size:11px; color:var(--gold); margin-bottom:4px; font-weight:600;">掛率(%)</label>
-                      <input type="number" class="edit-rate"
-                        style="width:100%; padding:10px; font-size:14px; background:#1a1a1a; border:1px solid #444; border-radius:6px; color:#fff;"
+                        class="field-label">掛率(%)</label>
+                      <input type="number" class="edit-rate input-plain"
+
                         inputmode="numeric">
                     </div>
                     <div style="flex: 0 0 120px;">
                       <label
-                        style="display:block; font-size:11px; color:var(--gold); margin-bottom:4px; font-weight:600;">担当者</label>
-                      <select class="edit-user"
-                        style="width:100%; padding:10px; font-size:14px; background:#1a1a1a; border:1px solid #444; border-radius:6px; color:#fff;">
+                        class="field-label">担当者</label>
+                      <select class="edit-user input-plain">
                         <option value="">なし</option>
                       </select>
                     </div>
@@ -6073,7 +6163,7 @@
 			<div class="user-pill" onclick='selectUser(${JSON.stringify(u).replace(/'/g, "&#39;")})'>
 				<span class="dot" style="background:${u.color}"></span>
 				<span style="font-size:14px; font-weight:600">${escapeHtml(u.name)}</span>
-				<button class="del-user-btn" style="position:absolute; top:4px; right:4px; background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:10px" onclick="event.stopPropagation(); delUser(${u.id})">✕</button>
+				<button class="del-user-btn" style="position:absolute; top:4px; right:4px; background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:12px" onclick="event.stopPropagation(); delUser(${u.id})">✕</button>
 			</div>
 		`).join('');
 
@@ -6184,16 +6274,41 @@
     const friendlyError = (m) => {
       const s = String(m == null ? '' : m);
       if (/Failed to fetch|NetworkError|Load failed|fetch failed/i.test(s)) return '通信できませんでした。電波の良い場所でもう一度お試しください';
-      if (/\b401\b|Unauthorized/i.test(s)) return 'ログインの有効期限が切れています。画面を再読み込みしてください';
+      if (/\b401\b|Unauthorized/i.test(s)) return 'ログインの有効期限が切れました。入力中の内容は自動保存されています。画面を再読み込みしてログインすると、下書きから続きを再開できます';
       if (/サーバーエラー \(5\d\d\)|Internal Server Error/i.test(s)) return 'サーバーで問題が発生しました。少し待ってからもう一度お試しください';
       return s;
     };
     const toast = (msg, type, duration = 4000) => {
-      const t = $('toast');
-      t.innerHTML = (type === 'err') ? friendlyError(msg) : msg;
-      t.className = 'toast toast-' + type;
-      t.style.display = 'block';
-      if (duration > 0) setTimeout(() => t.style.display = 'none', duration);
+      const stack = $('toast-stack');
+      const el = document.createElement('div');
+      el.className = 'toast toast-' + type;
+      el.style.display = 'flex';
+      el.style.alignItems = 'center';
+      el.style.gap = '10px';
+      const span = document.createElement('span');
+      span.innerHTML = (type === 'err') ? friendlyError(msg) : msg;
+      span.style.flex = '1 1 auto';
+      el.appendChild(span);
+      if (duration > 0) {
+        setTimeout(() => {
+          el.style.transition = 'all .3s';
+          el.style.opacity = '0';
+          setTimeout(() => el.remove(), 300);
+        }, duration);
+      } else {
+        const close = document.createElement('button');
+        close.textContent = '✕';
+        close.setAttribute('aria-label', '閉じる');
+        close.style.cssText = 'background:none;border:none;color:inherit;cursor:pointer;font-size:14px;padding:8px 0 8px 12px;';
+        close.onclick = () => el.remove();
+        el.appendChild(close);
+      }
+      stack.appendChild(el);
+      if (type === 'ok') {
+        const ss = $('statusbar-saved');
+        if (ss) ss.textContent = `最終保存: ${new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}`;
+      }
+      return el;
     };
 
     // ★追加: iframeをスマホ画面幅に強制フィットさせる共通関数
@@ -6788,7 +6903,7 @@
                 </thead>
                 <tbody>${rowsHtml}</tbody>
             </table>
-            <div style="margin-top:10px; font-size:10px; color:#888;">※プレビュー用簡易表示（バーコード等は省略されています）</div>
+            <div style="margin-top:10px; font-size:12px; color:#888;">※プレビュー用簡易表示（バーコード等は省略されています）</div>
           </div>
       `;
     }
@@ -6974,14 +7089,17 @@
       const q = $('hist-search')?.value.toLowerCase().trim() || '';
       const m = $('hist-month-filter')?.value || '';
       const u = $('hist-user-filter')?.value || '';
+      const st = $('hist-status-filter')?.value || '';
       const filtered = allHistory.filter(inv => {
         const matchQ = !q || (inv.invoice_number || '').toLowerCase().includes(q) || (inv.customer_name || '').toLowerCase().includes(q);
         const matchM = !m || (inv.created_at || '').startsWith(m);
         const matchU = !u || String(inv.user_id) === String(u);
-        return matchQ && matchM && matchU;
+        const matchSt = !st || (inv.status || 'draft') === st;
+        return matchQ && matchM && matchU && matchSt;
       });
       renderHistory(filtered);
     }
+    $('hist-status-filter')?.addEventListener('change', applyHistoryFilters);
     $('hist-user-filter')?.addEventListener('change', applyHistoryFilters);
     $('hist-search')?.addEventListener('input', applyHistoryFilters);
 
@@ -7907,7 +8025,7 @@
           updateMobileActionBar();
           // 保存と確定を一本化（案A）: 保存後そのまま確定し、Undoトーストで取り消せる
           lockHist(result.invoice_id, {
-            message: '伝票を保存して確定しました',
+            message: '伝票を保存して確定し��した',
             onError: () => toast('保存されましたが確定に失敗しました。履歴の「確定」からやり直せます', 'warn', 8000)
           });
           await loadHistory();
@@ -8007,7 +8125,6 @@
       $('sp1').style.display = 'none';
       $('preview-card').style.display = 'none';
       $('dl-section').style.display = 'none';
-      $('toast').style.display = 'none';
       $('btn-generate').disabled = false;
       $('sp2').style.display = 'none';
       $('preview-title').textContent = '✎ 読み取り結果（タップで修正可能）';
@@ -8130,7 +8247,7 @@
                 ${hR > 0 ? `<div style="height:${hR}px; width:100%; background:var(--red); opacity:0.6; border-radius:0 0 3px 3px;"></div>` : ''}
               </div>
               <div class="bar-label">${m.month.slice(5)}月</div>
-              <div style="font-size:9px; color:var(--text-muted); margin-top:2px;">¥${((m.net || 0) / 1000).toFixed(0)}k</div>`;
+              <div style="font-size:10px; color:var(--text-muted); margin-top:2px;">¥${((m.net || 0) / 1000).toFixed(0)}k</div>`;
             col.title = `納品: ¥${(m.delivery || 0).toLocaleString()} / 返品: ¥${(m.return || 0).toLocaleString()} / 純売上: ¥${(m.net || 0).toLocaleString()}`;
             bc.appendChild(col);
           });
@@ -8266,36 +8383,7 @@
     // ===== Toast Stack (desktop) ===========
     // =========================================
     const isDesktopUI = () => window.matchMedia('(min-width: 1024px)').matches;
-    const originalToast = toast;
-    window.toast = function (msg, type, duration = 4000) {
-      if (!isDesktopUI()) return originalToast(msg, type, duration);
-      const stack = $('toast-stack');
-      const el = document.createElement('div');
-      el.className = 'toast toast-' + type;
-      el.style.display = 'block';
-      el.innerHTML = msg;
-      stack.appendChild(el);
-      if (duration > 0) {
-        setTimeout(() => {
-          el.style.transition = 'all .3s';
-          el.style.opacity = '0';
-          el.style.transform = 'translateX(20px)';
-          setTimeout(() => el.remove(), 300);
-        }, duration);
-      } else {
-        const close = document.createElement('button');
-        close.textContent = '✕';
-        close.style.cssText = 'background:none;border:none;color:inherit;cursor:pointer;margin-left:auto;font-size:14px;padding:0 0 0 12px';
-        close.onclick = () => el.remove();
-        el.style.display = 'flex';
-        el.style.alignItems = 'center';
-        el.appendChild(close);
-      }
-      if (type === 'ok') {
-        const ss = $('statusbar-saved');
-        if (ss) ss.textContent = `最終保存: ${new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}`;
-      }
-    };
+    window.toast = toast;
 
     // =========================================
     // ===== Command Palette (⌘K) ===========
@@ -8341,7 +8429,7 @@
         cmdkResults.push(...hits);
       }
       if (!cmdkResults.length) {
-        cmdkList.innerHTML = '<div class="cmdk-empty">"Niente di trovato"<br><span style="font-size:11px;color:var(--text-muted);letter-spacing:0.1em">該当するものがありません</span></div>';
+        cmdkList.innerHTML = '<div class="cmdk-empty">"Niente di trovato"<br><span style="font-size:12px;color:var(--text-muted);letter-spacing:0.1em">該当するものがありません</span></div>';
         return;
       }
       let html = '', currentSection = '';
@@ -8720,18 +8808,38 @@
       } catch (_n) { }
     }
     function undoToast(msg, onUndo, duration = 6000) {
-      const t = $('toast');
-      t.innerHTML = '';
+      const stack = $('toast-stack');
+      const el = document.createElement('div');
+      el.className = 'toast toast-ok';
+      el.style.display = 'flex';
+      el.style.alignItems = 'center';
+      el.style.flexWrap = 'wrap';
+      el.style.gap = '10px';
       const span = document.createElement('span');
       span.textContent = msg;
+      span.style.flex = '1 1 auto';
       const btn = document.createElement('button');
       btn.textContent = '元に戻す';
-      btn.style.cssText = 'margin-left:12px; padding:5px 14px; border-radius:6px; border:1px solid var(--gold); background:transparent; color:var(--gold); font-weight:700; font-size:12px; cursor:pointer;';
-      btn.onclick = async () => { t.style.display = 'none'; try { await onUndo(); } catch (e) { toast(e.message, 'err'); } };
-      t.appendChild(span); t.appendChild(btn);
-      t.className = 'toast toast-ok';
-      t.style.display = 'block';
-      setTimeout(() => { if (t.contains(btn)) t.style.display = 'none'; }, duration);
+      btn.style.cssText = 'padding:8px 16px; border-radius:6px; border:1px solid var(--gold); background:transparent; color:var(--gold); font-weight:700; font-size:12px; cursor:pointer; min-height:36px;';
+      btn.onclick = async () => { el.remove(); try { await onUndo(); } catch (e) { toast(e.message, 'err'); } };
+      el.appendChild(span); el.appendChild(btn);
+      let undoHinted = false;
+      try { undoHinted = !!localStorage.getItem('laura-undo-hint'); } catch (_h) { }
+      if (!undoHinted) {
+        const hint = document.createElement('div');
+        hint.textContent = '初回ヒント: いま行った操作は、この表示が出ている間「元に戻す」で取り消せます';
+        hint.style.cssText = 'font-size:12px; color:var(--text-muted); line-height:1.5; flex-basis:100%;';
+        el.appendChild(hint);
+        duration = Math.max(duration, 10000);
+        try { localStorage.setItem('laura-undo-hint', '1'); } catch (_h2) { }
+      }
+      stack.appendChild(el);
+      setTimeout(() => {
+        if (!el.isConnected) return;
+        el.style.transition = 'all .3s';
+        el.style.opacity = '0';
+        setTimeout(() => el.remove(), 300);
+      }, duration);
     }
     window.gotoHistoryTab = () => document.querySelector('.tab[data-tab="history"]')?.click();
     async function refreshTodayCard() {
@@ -8913,7 +9021,7 @@
             <span style="color:var(--gold-bright); font-weight:700; margin-left:auto;">¥${Number(r.unit_price || 0).toLocaleString()}</span>
             <span style="color:var(--text-muted)">×${Number(r.seen_count || 0)}回</span>
             <button onclick="deleteProduct('${encodeURIComponent(r.code)}','${encodeURIComponent(r.color || '')}','${encodeURIComponent(r.size || '')}',${Number(r.unit_price) || 0},this)"
-              style="background:none; border:1px solid rgba(224,97,87,0.4); color:var(--red); border-radius:6px; padding:4px 10px; font-size:11px; cursor:pointer; min-height:28px;">削除</button>
+              style="background:none; border:1px solid rgba(224,97,87,0.4); color:var(--red); border-radius:6px; padding:4px 10px; font-size:12px; cursor:pointer; min-height:28px;">削除</button>
           </div>`).join('');
       } catch (e) {
         box.innerHTML = '<div style="font-size:12px; color:var(--red); padding:8px;">読み込みに失敗しました</div>';
