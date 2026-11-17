@@ -45,10 +45,21 @@ from fastapi.concurrency import run_in_threadpool
 import zipfile
 import urllib.parse
 import hashlib
+import warnings
 try:
-    import google.generativeai as genai
+    from google import genai as google_genai_new
+    from google.genai import types as google_genai_types
 except ImportError:
-    genai = None
+    google_genai_new = None
+    google_genai_types = None
+genai = None
+if google_genai_new is None:
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=FutureWarning)
+        try:
+            import google.generativeai as genai
+        except ImportError:
+            genai = None
 try:
     from weasyprint import HTML
 except Exception as e:
@@ -176,13 +187,20 @@ def storage_download(path: str) -> bytes:
     return supabase_client.storage.from_(STORAGE_BUCKET).download(path)
 
 # AI Initialization
+gemini_client_new = None
 gemini_model = None
-if genai and GEMINI_API_KEY:
-    try:
-        genai.configure(api_key=GEMINI_API_KEY)
-        gemini_model = genai.GenerativeModel("gemini-2.5-flash")
-    except Exception as e:
-        logger.warning("Gemini init failed: %s", e)
+if GEMINI_API_KEY:
+    if google_genai_new:
+        try:
+            gemini_client_new = google_genai_new.Client(api_key=GEMINI_API_KEY)
+        except Exception as e:
+            logger.warning("google.genai init failed: %s", e)
+    if not gemini_client_new and genai:
+        try:
+            genai.configure(api_key=GEMINI_API_KEY)
+            gemini_model = genai.GenerativeModel("gemini-2.5-flash")
+        except Exception as e:
+            logger.warning("Gemini init failed: %s", e)
 
 openai_client = None
 if OPENAI_API_KEY and OpenAI:
@@ -1033,7 +1051,7 @@ async def health(deep: bool = False):
         info["db"] = db_ok
         info["storage"] = bool(supabase_client)
         info["ai"] = {
-            "gemini": bool(gemini_model),
+            "gemini": bool(gemini_client_new or gemini_model),
             "openai": bool(openai_client),
             "azure": bool(azure_client),
             "vision": bool(vision_client),
@@ -1454,6 +1472,19 @@ def _analyze_single_image(part: dict, ai_model: str, master_codes: list = None) 
         return extract_json_object((response.choices[0].message.content or "").strip())
 
     if ai_model == "gemini":
+        if gemini_client_new and google_genai_types:
+            response = gemini_client_new.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=[
+                    prompt,
+                    google_genai_types.Part.from_bytes(data=part["data"], mime_type=part["mime_type"]),
+                ],
+                config=google_genai_types.GenerateContentConfig(
+                    temperature=0,
+                    response_mime_type="application/json",
+                ),
+            )
+            return extract_json_object((response.text or "").strip())
         if not gemini_model: raise Exception("Gemini APIキーが未設定です。")
         contents = [prompt, {"mime_type": part["mime_type"], "data": part["data"]}]
         try:
@@ -3041,14 +3072,15 @@ def lock_invoice_internal(jid: str, inv_id: int, bt: Optional[BackgroundTasks] =
         # --------------------------------------------------------
         # 確定成功時、自動でDriveアップロードジョブを起動する
         # --------------------------------------------------------
-        if bt is not None:
+        drive_jid = None
+        if bt is not None and GDRIVE_WEBHOOK_URL:
             # Drive保存用の新しいジョブIDを発行
             drive_jid = db_create_job('drive_upload', {"invoice_id": inv_id})
             # バックグラウンドタスクにアップロード処理を追加
             bt.add_task(upload_drive_internal, drive_jid, inv_id)
         # --------------------------------------------------------
 
-        db_update_job(jid, 'done', result={"status": "locked"})
+        db_update_job(jid, 'done', result={"status": "locked", "drive_job_id": drive_jid})
 
     except Exception as e:
         db_update_job(jid, 'failed', error=str(e))
@@ -3072,7 +3104,14 @@ async def enqueue_lock(bt: BackgroundTasks, inv_id: int, username: Annotated[str
 @app.post("/api/history/{inv_id}/unlock")
 async def unlock_invoice(inv_id: int, username: Annotated[str, Depends(authenticate)]):
     with db_conn() as conn, conn.cursor() as cur:
-        cur.execute("UPDATE invoices SET status='draft', locked_at=NULL WHERE id=%s", (inv_id,))
+        cur.execute("""
+            UPDATE invoices
+            SET status='draft', locked_at=NULL,
+                pdf_storage_path=NULL, excel_storage_path=NULL,
+                detail_pdf_storage_path=NULL, detail_excel_storage_path=NULL,
+                client_excel_storage_path=NULL
+            WHERE id=%s
+        """, (inv_id,))
         _audit(cur, "unlock", inv_id, None, username)
         conn.commit()
     with _dashboard_lock:
@@ -3140,17 +3179,20 @@ def get_history(
     username: Annotated[str, Depends(authenticate)],
     doc_type: Optional[str] = None,
     user_id: Optional[int] = None,
+    status: Optional[str] = None,
+    month: Optional[str] = None,
+    q: Optional[str] = None,
     limit: int = 200,
     offset: int = 0,
 ):
     limit = max(1, min(limit, 200))  # 上限ガード
     with db_conn() as conn, conn.cursor() as cur:
         query = """
-            SELECT i.id, i.invoice_number, i.customer_name, i.total_grand_total, i.item_count, i.status, i.doc_type, i.user_id,
+            SELECT i.id, i.invoice_number, i.customer_name, i.customer_code, i.total_grand_total, i.item_count, i.status, i.doc_type, i.user_id,
             u.name as user_name, u.color as user_color,
             to_char(i.issue_date, 'YYYY-MM-DD') as issue_date,
             to_char(i.locked_at, 'YYYY-MM-DD"T"HH24:MI:SS') as locked_at,
-            to_char(i.created_at, 'YYYY-MM-DD\"T\"HH24:MI:SS') as created_at
+            to_char(i.created_at, 'YYYY-MM-DD"T"HH24:MI:SS') as created_at
             FROM invoices i
             LEFT JOIN users u ON i.user_id = u.id
             WHERE i.deleted_at IS NULL
@@ -3162,6 +3204,16 @@ def get_history(
         if user_id:
             query += " AND i.user_id = %s"
             params.append(user_id)
+        if status in ('draft', 'locked'):
+            query += " AND i.status = %s"
+            params.append(status)
+        if month:
+            query += " AND COALESCE(to_char(i.issue_date, 'YYYY-MM'), to_char(i.created_at AT TIME ZONE 'Asia/Tokyo', 'YYYY-MM')) = %s"
+            params.append(month)
+        if q and q.strip():
+            like_q = f"%{q.strip()}%"
+            query += " AND (i.invoice_number ILIKE %s OR i.customer_name ILIKE %s OR COALESCE(i.customer_code, '') ILIKE %s)"
+            params.extend([like_q, like_q, like_q])
 
         query += " ORDER BY i.id DESC LIMIT %s OFFSET %s"
         params.extend([limit, offset])
@@ -3169,7 +3221,7 @@ def get_history(
         rows = cur.fetchall()
     return [dict(r) for r in rows]
 
-# kind: "pdf" | "excel" | "detail_pdf" | "detail_excel"
+# kind: "pdf" | "excel" | "detail_pdf" | "detail_excel" | "client_excel"
 KIND_CONFIG = {
     "pdf":          {"path_field": "pdf_storage_path",          "mime": "application/pdf",                                                            "ext": "pdf",  "files_key": "pdf"},
     "excel":        {"path_field": "excel_storage_path",        "mime": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",         "ext": "xlsx", "files_key": "excel"},
@@ -3193,13 +3245,15 @@ def serve_file(inv_id: int, kind: str, disposition: str = "attachment"):
 
     customer = safe_filename(inv.get("customer_name") or "Unknown")
 
-    dt = to_jst(inv.get("locked_at") or inv.get("created_at"))
+    dt = _resolve_invoice_dt(inv)
     date_str = f"{dt.month}月{dt.day}日"
 
     doc_type = inv.get("doc_type", "delivery")
     title_map = DOC_TYPE_TITLES.get(doc_type, DOC_TYPE_TITLES["delivery"])
     if kind in ("pdf", "excel"):
         label = title_map["pdf_title"]
+    elif kind == "client_excel":
+        label = f"{title_map['pdf_title']}_提出用"
     else:
         label = title_map["detail_pdf_title"]
 
@@ -3209,8 +3263,8 @@ def serve_file(inv_id: int, kind: str, disposition: str = "attachment"):
     # inline / attachment を切り替え
     content_disposition = f"{disposition}; filename*=UTF-8''{encoded_fname}"
 
-    # キャッシュがあればそれを使う
-    if inv.get(cfg["path_field"]):
+    # 確定済み伝票にキャッシュがあればそれを使う（未確定は最新データから再生成）
+    if inv.get("status") == "locked" and inv.get(cfg["path_field"]):
         try:
             content = storage_download(inv[cfg["path_field"]])
             return Response(
@@ -3347,7 +3401,23 @@ def get_doc_type_folder_label(doc_type: str) -> str:
         "return": "返品",
         "prov_delivery": "仮納品",
         "prov_return": "仮返品",
+        "statement": "明細表",
     }.get(doc_type, "納品")
+
+def _resolve_invoice_dt(inv: dict) -> datetime.datetime:
+    """issue_date が指定されていればその日付、無ければ locked_at / created_at を JST datetime で返す"""
+    issue_val = inv.get("issue_date")
+    if issue_val:
+        if isinstance(issue_val, datetime.datetime):
+            return to_jst(issue_val)
+        if isinstance(issue_val, datetime.date):
+            return datetime.datetime(issue_val.year, issue_val.month, issue_val.day, tzinfo=ZoneInfo("Asia/Tokyo"))
+        try:
+            dt = datetime.datetime.strptime(str(issue_val)[:10], "%Y-%m-%d")
+            return dt.replace(tzinfo=ZoneInfo("Asia/Tokyo"))
+        except Exception:
+            pass
+    return to_jst(inv.get("locked_at") or inv.get("created_at"))
 
 def safe_filename(name: str) -> str:
     """ファイル名に使えない文字を置換する"""
@@ -3415,7 +3485,7 @@ def dl_zip(inv_id: int, username: Annotated[str, Depends(authenticate)]):
         zip_buffer.seek(0)
         
         # === ここからZIPファイル名の変更 ===
-        dt = to_jst(inv.get("locked_at") or inv.get("created_at"))
+        dt = _resolve_invoice_dt(inv)
         date_str = f"{dt.month}月{dt.day}日"
         
         zip_name = f"{customer}_{date_str}.zip"
@@ -3471,7 +3541,7 @@ def upload_drive_internal(jid: str, inv_id: int):
         inv, files = get_invoice_generated_files(inv_id)
 
         doc_type = inv.get("doc_type", "delivery")
-        dt = to_jst(inv.get("locked_at") or inv.get("created_at"))
+        dt = _resolve_invoice_dt(inv)
 
         folder_path = [
             str(dt.year),
@@ -3493,6 +3563,8 @@ def upload_drive_internal(jid: str, inv_id: int):
             ("detail_pdf",   f"{inv_num}_{cust}_{detail_label}.pdf", "application/pdf", files["detail_pdf"]),
             ("detail_excel", f"{inv_num}_{cust}_{detail_label}.xlsx","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", files["detail_excel"]),
         ]
+        if files.get("client_excel"):
+            targets.append(("client_excel", f"{inv_num}_{cust}_{main_label}_提出用.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", files["client_excel"]))
         for typ, fn, mime, data in targets:
             resp = requests.post(GDRIVE_WEBHOOK_URL, json={
                 "rootFolderId": GDRIVE_FOLDER_ID, 

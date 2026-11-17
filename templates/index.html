@@ -718,36 +718,6 @@
       transform: translateY(0);
     }
 
-    /* ===== Progress ===== */
-    .progress-wrap {
-      margin: 18px 0;
-    }
-
-    .progress-bar {
-      width: 100%;
-      height: 4px;
-      background: var(--bg-input);
-      border-radius: 2px;
-      overflow: hidden;
-      border: 1px solid var(--border);
-    }
-
-    .progress-fill {
-      height: 100%;
-      background: linear-gradient(90deg, var(--gold-deep), var(--gold-bright), var(--gold));
-      width: 0%;
-      transition: width 0.4s;
-    }
-
-    .progress-label {
-      font-size: 12px;
-      color: var(--text-muted);
-      margin-top: 6px;
-      display: flex;
-      justify-content: space-between;
-      letter-spacing: 0.05em;
-    }
-
     .badge-locked {
       background: linear-gradient(135deg, var(--gold-bright), var(--gold-deep));
       color: #1a1a1a;
@@ -3577,150 +3547,6 @@
       border-radius: 10px;
     }
 
-    /* ===== Generation Overlay ===== */
-    .gen-overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(17, 17, 17, 0.92);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      z-index: 99999;
-      display: none;
-      align-items: center;
-      justify-content: center;
-      animation: fadeIn .3s ease-out;
-    }
-
-    .gen-overlay.active {
-      display: flex;
-    }
-
-    .gen-box {
-      background: var(--bg-card);
-      border: 1px solid var(--border-strong);
-      border-radius: 20px;
-      padding: 36px 32px;
-      width: min(420px, 90vw);
-      text-align: center;
-      position: relative;
-      overflow: hidden;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6), 0 0 40px rgba(201, 169, 97, 0.15);
-    }
-
-    .gen-box::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 1px;
-      background: linear-gradient(90deg, transparent, var(--gold-bright), transparent);
-    }
-
-    .gen-crest {
-      font-family: 'Cormorant Garamond', serif;
-      font-size: 28px;
-      color: var(--gold-bright);
-      letter-spacing: 0.3em;
-      margin-bottom: 6px;
-      animation: shimmer 2s ease-in-out infinite;
-    }
-
-    @keyframes shimmer {
-
-      0%,
-      100% {
-        opacity: 0.7;
-      }
-
-      50% {
-        opacity: 1;
-        text-shadow: 0 0 20px rgba(232, 196, 104, 0.4);
-      }
-    }
-
-    .gen-sub {
-      font-size: 12px;
-      color: var(--text-muted);
-      letter-spacing: 0.4em;
-      margin-bottom: 24px;
-    }
-
-    .gen-progress-bar {
-      width: 100%;
-      height: 3px;
-      background: var(--bg-input);
-      border-radius: 2px;
-      overflow: hidden;
-      margin-bottom: 14px;
-    }
-
-    .gen-progress-fill {
-      height: 100%;
-      width: 0%;
-      background: linear-gradient(90deg, var(--gold-deep), var(--gold-bright), var(--gold));
-      transition: width .3s ease-out;
-      box-shadow: 0 0 10px rgba(201, 169, 97, 0.5);
-    }
-
-    .gen-status {
-      font-size: 13px;
-      color: var(--text-secondary);
-      letter-spacing: 0.05em;
-      min-height: 18px;
-    }
-
-    .gen-pct {
-      font-family: 'Cormorant Garamond', serif;
-      font-size: 36px;
-      color: var(--gold-bright);
-      letter-spacing: 0.05em;
-      margin-top: 8px;
-      font-variant-numeric: tabular-nums;
-    }
-
-    .gen-steps {
-      display: flex;
-      justify-content: space-between;
-      margin-top: 20px;
-      padding-top: 16px;
-      border-top: 1px solid var(--border);
-    }
-
-    .gen-step {
-      flex: 1;
-      font-size: 10px;
-      color: var(--text-muted);
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      position: relative;
-      transition: color .3s;
-    }
-
-    .gen-step.done {
-      color: var(--green);
-    }
-
-    .gen-step.active {
-      color: var(--gold-bright);
-    }
-
-    .gen-step::before {
-      content: '○';
-      display: block;
-      font-size: 14px;
-      margin-bottom: 4px;
-    }
-
-    .gen-step.done::before {
-      content: '✓';
-    }
-
-    .gen-step.active::before {
-      content: '◐';
-      animation: spin 1s linear infinite;
-    }
-
     /* ===== Camera Modal (Continuous Capture) ===== */
     .cam-overlay {
       position: fixed;
@@ -4121,56 +3947,6 @@
         border-radius: 2px;
         margin: 8px auto 0;
       }
-    }
-
-    /* ---- Swipe actions (history rows) ---- */
-    .swipe-row {
-      position: relative;
-      overflow: hidden;
-      touch-action: pan-y;
-    }
-
-    .swipe-row-content {
-      position: relative;
-      transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-      will-change: transform;
-      background: var(--bg-card);
-    }
-
-    .swipe-row-actions {
-      position: absolute;
-      right: 0;
-      top: 0;
-      bottom: 0;
-      display: flex;
-      align-items: stretch;
-      gap: 1px;
-    }
-
-    .swipe-action {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 84px;
-      font-size: 12px;
-      font-weight: 700;
-      letter-spacing: 0.06em;
-      color: #fff;
-      cursor: pointer;
-      border: none;
-      user-select: none;
-    }
-
-    .swipe-action.danger {
-      background: linear-gradient(180deg, #b03a3a, #841f1f);
-    }
-
-    .swipe-action.info {
-      background: linear-gradient(180deg, #345aa1, #21407c);
-    }
-
-    .swipe-action.copy {
-      background: linear-gradient(180deg, #4a4a4a, #2c2c2c);
     }
 
     /* ---- Light mode (auto via prefers-color-scheme + manual override) ---- */
@@ -5052,25 +4828,6 @@
     </defs>
   </svg>
 
-  <!-- 生成中オーバーレイ -->
-  <div id="gen-overlay" class="gen-overlay">
-    <div class="gen-box">
-      <div class="gen-crest">LAURA</div>
-      <div class="gen-sub">GENERATING DOCUMENTS</div>
-      <div class="gen-progress-bar">
-        <div class="gen-progress-fill" id="gen-fill"></div>
-      </div>
-      <div class="gen-pct" id="gen-pct">0%</div>
-      <div class="gen-status" id="gen-status">準備中...</div>
-      <div class="gen-steps">
-        <div class="gen-step active" id="gen-step-1">データ整形</div>
-        <div class="gen-step" id="gen-step-2">PDF生成</div>
-        <div class="gen-step" id="gen-step-3">Excel生成</div>
-        <div class="gen-step" id="gen-step-4">完了</div>
-      </div>
-    </div>
-  </div>
-
   <!-- 連続撮影用オーバーレイ -->
   <!-- バーコード読取テスト（β）オーバーレイ -->
   <div id="bc-overlay" class="cam-overlay" style="display:none;">
@@ -5489,12 +5246,6 @@
         <button class="btn btn-gold" id="btn-analyze" disabled style="margin-top:12px">
           <div class="spinner" id="sp1"></div><span id="btn-analyze-text">AIでデータを抽出する</span>
         </button>
-        <div class="progress-wrap" id="prog-wrap" style="display:none">
-          <div class="progress-bar">
-            <div class="progress-fill" id="prog-fill"></div>
-          </div>
-          <div class="progress-label"><span id="prog-label">準備中...</span><span id="prog-pct">0%</span></div>
-        </div>
       </div>
       </div>
 
@@ -5753,7 +5504,7 @@
           </div>
 
           <div id="dl-actions" style="margin-top:18px; display:flex; justify-content:center;"></div>
-          <button class="btn btn-blue" id="btn-drive" style="margin-top:10px; width:100%" title="PDF・Excelなど4ファイルをまとめてDriveへ保存します">
+          <button class="btn btn-blue" id="btn-drive" style="margin-top:10px; width:100%" title="PDF・Excelなど5ファイルをまとめてDriveへ保存します">
             <div class="spinner" id="sp3"></div> <svg class="icon" aria-hidden="true"><use href="#i-cloud"></use></svg>Driveに保存
           </button>
 
@@ -5850,7 +5601,7 @@
                     <div class="hist-num" x-text="inv.invoice_number"></div>
                     <div class="hist-date"><svg class="icon hist-date-icon" aria-hidden="true">
                         <use href="#i-calendar"></use>
-                      </svg><span x-text="(inv.created_at || '').slice(0,10).replace(/-/g,'/')"></span></div>
+                      </svg><span x-text="(inv.issue_date || inv.created_at || '').slice(0,10).replace(/-/g,'/')"></span></div>
                   </div>
                   <div>
                     <span class="badge"
@@ -5895,7 +5646,7 @@
                         x-text="'● ' + inv.user_name"></span>
                       <span x-text="' • ' + inv.item_count + '点'"></span>
                       <span class="hist-meta-date"
-                        x-text="' • ' + (inv.created_at || '').slice(0,10).replace(/-/g,'/')"></span>
+                        x-text="' • ' + (inv.issue_date || inv.created_at || '').slice(0,10).replace(/-/g,'/')"></span>
                     </div>
                     <div class="hist-actions-row">
                       <button class="btn btn-gold btn-sm" @click.stop="quickPreview(inv.id)">プレビュー</button>
@@ -6235,51 +5986,6 @@
       btn.addEventListener('pointercancel', reset);
     };
 
-    // スワイプアクション: 履歴行を左にスワイプして操作ボタンを表示
-    window.bindSwipeRow = function (row, actions) {
-      if (!row || row.dataset.swipeBound) return;
-      row.dataset.swipeBound = '1';
-      const content = row.querySelector('.swipe-row-content');
-      const actionsEl = row.querySelector('.swipe-row-actions');
-      if (!content || !actionsEl) return;
-      let startX = 0, currentX = 0, dragging = false, opened = false;
-      const maxX = -Math.min(actions.length * 84, 252);
-
-      const onStart = (e) => {
-        const t = e.touches?.[0] || e;
-        startX = t.clientX;
-        dragging = true;
-        content.style.transition = 'none';
-      };
-      const onMove = (e) => {
-        if (!dragging) return;
-        const t = e.touches?.[0] || e;
-        let dx = t.clientX - startX + (opened ? maxX : 0);
-        if (dx > 0) dx = 0;
-        if (dx < maxX - 40) dx = maxX - 40;
-        currentX = dx;
-        content.style.transform = `translateX(${dx}px)`;
-      };
-      const onEnd = () => {
-        if (!dragging) return;
-        dragging = false;
-        content.style.transition = '';
-        opened = currentX < maxX / 2;
-        content.style.transform = opened ? `translateX(${maxX}px)` : 'translateX(0)';
-        if (opened) haptic('light');
-      };
-      content.addEventListener('touchstart', onStart, { passive: true });
-      content.addEventListener('touchmove', onMove, { passive: true });
-      content.addEventListener('touchend', onEnd);
-      // 行外クリックで閉じる
-      document.addEventListener('click', (e) => {
-        if (opened && !row.contains(e.target)) {
-          opened = false;
-          content.style.transform = 'translateX(0)';
-        }
-      });
-    };
-
     // スケルトン HTML 生成
     window.skeletonRows = function (count = 4) {
       let html = '';
@@ -6468,14 +6174,29 @@
           }
         },
 
-        async fetchHistory(type = 'all', append = false) {
+        async fetchHistory(type = 'all', append = false, filters = null) {
           try {
             if (!append) {
               this.historyOffset = 0;
             } else {
               this.historyOffset += 200;
             }
-            const r = await fetch(`/api/history?doc_type=${type}&offset=${this.historyOffset}&limit=200`);
+            const f = filters || {};
+            const params = new URLSearchParams({
+              doc_type: type || 'all',
+              offset: String(this.historyOffset),
+              limit: '200',
+            });
+            const qVal = (f.q !== undefined ? f.q : ($('hist-search')?.value || '')).trim();
+            const mVal = f.month !== undefined ? f.month : ($('hist-month-filter')?.value || '');
+            const uVal = f.user_id !== undefined ? f.user_id : ($('hist-user-filter')?.value || '');
+            const stVal = f.status !== undefined ? f.status : ($('hist-status-filter')?.value || '');
+            if (qVal) params.set('q', qVal);
+            if (mVal) params.set('month', mVal);
+            if (uVal) params.set('user_id', uVal);
+            if (stVal) params.set('status', stVal);
+
+            const r = await fetch(`/api/history?${params.toString()}`);
             if (!r.ok) throw new Error('HTTP ' + r.status);
             const data = await r.json();
             if (append) {
@@ -6547,14 +6268,20 @@
       const isMain = (kind === 'pdf' || kind === 'excel');
       const isPdf = (kind === 'pdf' || kind === 'detail-pdf');
 
-      const label = isMain ? t.pdf_title : t.detail_pdf_title;
+      let label = isMain ? t.pdf_title : t.detail_pdf_title;
+      if (kind === 'client-excel') label = `${t.pdf_title}_提出用`;
       const ext = isPdf ? 'pdf' : 'xlsx';
 
       const safeCustomer = (customerName || "Unknown").replace(/[\\/:*?"<>|]+/g, "_").trim();
 
-      let dt = new Date();
-      if (dateISO) dt = new Date(dateISO);
-      const dateStr = `${dt.getMonth() + 1}月${dt.getDate()}日`;
+      let dateStr;
+      const isoMatch = dateISO ? String(dateISO).match(/^(\d{4})-(\d{2})-(\d{2})/) : null;
+      if (isoMatch && !String(dateISO).includes('T')) {
+        dateStr = `${parseInt(isoMatch[2], 10)}月${parseInt(isoMatch[3], 10)}日`;
+      } else {
+        const dt = dateISO ? new Date(dateISO) : new Date();
+        dateStr = `${dt.getMonth() + 1}月${dt.getDate()}日`;
+      }
 
       return `${safeCustomer}_${dateStr}_${label}.${ext}`;
     }
@@ -7011,6 +6738,10 @@
         if (strip) strip.style.display = 'block';
         if (stripText && type) stripText.textContent = `${this.getJobLabel(type)}を準備中...`;
       },
+      hide() {
+        const strip = $('active-job-strip');
+        if (strip) strip.style.display = 'none';
+      },
       updateItem(job) {
         const strip = $('active-job-strip');
         const stripText = $('active-job-text');
@@ -7063,92 +6794,6 @@
     };
 
     const jobManager = new JobManager();
-
-    let genTimer = null;
-    function showGenProgress(estimatedSec = 6, mode = 'gen') {
-      $('gen-overlay').classList.add('active');
-      $('gen-fill').style.width = '0%';
-      $('gen-pct').textContent = '0%';
-
-      // モードに応じてタイトルとステップを切り替え
-      let title = 'GENERATING DOCUMENTS';
-      let steps = ['データ整形', 'PDF生成', 'Excel生成', '完了'];
-
-      if (mode === 'analyze') {
-        title = 'AI ANALYSIS IN PROGRESS';
-        steps = ['画像最適化', 'サーバー送信', 'AIデータ抽出', '完了'];
-      } else if (mode === 'drive') {
-        title = 'UPLOADING TO DRIVE';
-        steps = ['Drive接続', '認証チェック', 'データ転送', '完了'];
-      }
-
-      $('gen-overlay').querySelector('.gen-sub').textContent = title;
-
-      ['gen-step-1', 'gen-step-2', 'gen-step-3', 'gen-step-4'].forEach((id, i) => {
-        const el = $(id);
-        el.classList.remove('done', 'active');
-        el.textContent = steps[i];
-      });
-
-      $('gen-status').textContent = '準備中...';
-      $('gen-step-1').classList.add('active');
-
-      let progress = 0;
-      const target = 94; // 完了するまでは94%で寸止めする
-      const totalMs = estimatedSec * 1000;
-      const startTime = Date.now();
-
-      if (genTimer) clearInterval(genTimer);
-
-      genTimer = setInterval(() => {
-        const elapsed = Date.now() - startTime;
-        const t = Math.min(elapsed / totalMs, 1);
-        progress = target * (1 - Math.pow(1 - t, 3));
-
-        $('gen-fill').style.width = progress + '%';
-        $('gen-pct').textContent = Math.floor(progress) + '%';
-
-        // 進行度に応じてテキストを更新
-        if (mode === 'analyze') {
-          if (progress < 25) {
-            $('gen-status').textContent = '画像を最適化して送信中...';
-          } else if (progress < 55) {
-            $('gen-step-1').className = 'gen-step done';
-            $('gen-step-2').className = 'gen-step active';
-            $('gen-status').textContent = 'AIエンジンを起動しています...';
-          } else {
-            $('gen-step-2').className = 'gen-step done';
-            $('gen-step-3').className = 'gen-step active';
-            $('gen-status').textContent = 'AIがデータを抽出中... (数秒〜十数秒かかります)';
-          }
-        } else {
-          // 保存・PDF生成時のテキスト
-          if (progress < 25) {
-            $('gen-status').textContent = 'データを整形しています...';
-          } else if (progress < 55) {
-            $('gen-step-1').className = 'gen-step done';
-            $('gen-step-2').className = 'gen-step active';
-            $('gen-status').textContent = '納品書PDFをレンダリング中...';
-          } else {
-            $('gen-step-2').className = 'gen-step done';
-            $('gen-step-3').className = 'gen-step active';
-            $('gen-status').textContent = '管理データを組み立て中...';
-          }
-        }
-      }, 100);
-    }
-
-    function hideGenProgress() {
-      if (genTimer) { clearInterval(genTimer); genTimer = null; }
-      $('gen-fill').style.width = '100%';
-      $('gen-pct').textContent = '100%';
-      $('gen-status').textContent = '✦ 完了';
-      ['gen-step-1', 'gen-step-2', 'gen-step-3'].forEach(id => {
-        $(id).classList.remove('active'); $(id).classList.add('done');
-      });
-      $('gen-step-4').classList.add('done');
-      setTimeout(() => $('gen-overlay').classList.remove('active'), 800);
-    }
 
     function setupPreviews(payload, d) {
       const invoiceId = d.id || d.invoice_id || lastInvoiceId;
@@ -7232,7 +6877,7 @@
       }, 100);
 
       const customer = (payload && payload.customer_name) ? payload.customer_name : (d.customer_name || "Unknown");
-      const dateISO = d.locked_at || d.created_at;
+      const dateISO = d.issue_date || d.locked_at || d.created_at;
       const fPdf = getFileName(d.doc_type, customer, dateISO, 'pdf');
       const fXl = getFileName(d.doc_type, customer, dateISO, 'excel');
       const fClientXl = fXl.replace('.xlsx', '_提出用.xlsx');
@@ -7462,7 +7107,8 @@
     let selectedHistId = null;
     let sortKey = 'created_at', sortDir = 'desc';
 
-    async function loadHistory() {
+    let _histSearchTimer = null;
+    async function loadHistory(append = false) {
       const histList = $('hist-list');
       if (!histList) return;
       const t = $('hist-type-filter')?.value || 'all';
@@ -7471,7 +7117,7 @@
       if (!hadData) Alpine.store('app').isLoadingHistory = true;
 
       try {
-        await Alpine.store('app').fetchHistory(t);
+        await Alpine.store('app').fetchHistory(t, append);
         updateMonthFilter(allHistory);
       } catch (e) {
         console.error("History load error:", e);
@@ -7480,13 +7126,15 @@
         if (histList) delete histList.dataset.loadingSkeleton;
       }
     }
-    $('hist-type-filter')?.addEventListener('change', loadHistory);
+    $('hist-type-filter')?.addEventListener('change', () => loadHistory(false));
 
     function updateMonthFilter(data) {
-      const months = [...new Set(data.map(inv => (inv.created_at || '').split('-').slice(0, 2).join('-')))].filter(Boolean).sort().reverse();
       const filter = $('hist-month-filter');
       if (!filter) return;
       const current = filter.value;
+      const existing = Array.from(filter.options).map(o => o.value).filter(Boolean);
+      const fromData = data.map(inv => (inv.issue_date || inv.created_at || '').slice(0, 7)).filter(m => /^\d{4}-\d{2}$/.test(m));
+      const months = [...new Set([...existing, ...fromData])].sort().reverse();
       filter.innerHTML = '<option value="">すべての月</option>';
       months.forEach(m => {
         const opt = document.createElement('option');
@@ -7495,7 +7143,7 @@
         filter.appendChild(opt);
       });
       filter.value = current;
-      filter.onchange = applyHistoryFilters;
+      filter.onchange = () => { applyHistoryFilters(); loadHistory(false); };
     }
 
     function applyHistoryFilters() {
@@ -7504,17 +7152,21 @@
       const u = $('hist-user-filter')?.value || '';
       const st = $('hist-status-filter')?.value || '';
       const filtered = allHistory.filter(inv => {
-        const matchQ = !q || (inv.invoice_number || '').toLowerCase().includes(q) || (inv.customer_name || '').toLowerCase().includes(q);
-        const matchM = !m || (inv.created_at || '').startsWith(m);
+        const matchQ = !q || (inv.invoice_number || '').toLowerCase().includes(q) || (inv.customer_name || '').toLowerCase().includes(q) || (inv.customer_code || '').toLowerCase().includes(q);
+        const matchM = !m || (inv.issue_date || inv.created_at || '').startsWith(m);
         const matchU = !u || String(inv.user_id) === String(u);
         const matchSt = !st || (inv.status || 'draft') === st;
         return matchQ && matchM && matchU && matchSt;
       });
       renderHistory(filtered);
     }
-    $('hist-status-filter')?.addEventListener('change', applyHistoryFilters);
-    $('hist-user-filter')?.addEventListener('change', applyHistoryFilters);
-    $('hist-search')?.addEventListener('input', applyHistoryFilters);
+    $('hist-status-filter')?.addEventListener('change', () => { applyHistoryFilters(); loadHistory(false); });
+    $('hist-user-filter')?.addEventListener('change', () => { applyHistoryFilters(); loadHistory(false); });
+    $('hist-search')?.addEventListener('input', () => {
+      applyHistoryFilters();
+      clearTimeout(_histSearchTimer);
+      _histSearchTimer = setTimeout(() => loadHistory(false), 350);
+    });
 
     function renderHistory(data) {
       Alpine.store('app').history = data;
@@ -7568,9 +7220,24 @@
       haptic('medium');
       jobManager.enqueue('lock', `/api/jobs/lock/${id}`, {}, {
         onError: opts.onError,
-        onSuccess: () => {
+        onSuccess: (res) => {
           haptic('success');
           loadHistory();
+          if (res && res.drive_job_id) {
+            JobUI.show('drive_upload');
+            jobManager.trackJob(res.drive_job_id, 'drive_upload', {
+              onSuccess: (dRes) => {
+                if (dRes && Array.isArray(dRes.uploaded)) {
+                  const links = dRes.uploaded.map(u => `<a href="${u.url}" target="_blank" style="color:var(--gold-bright);text-decoration:underline">${u.type.toUpperCase()}</a>`).join(' / ');
+                  toast(`✦ Driveに自動保存しました: ${links}`, 'ok', 6000);
+                }
+                const btnDrive = $('btn-drive');
+                if (btnDrive && lastInvoiceId === id) {
+                  btnDrive.innerHTML = `<div class="spinner" id="sp3"></div> <svg class="icon" aria-hidden="true"><use href="#i-cloud"></use></svg>Driveに保存済み（再送する）`;
+                }
+              }
+            });
+          }
           undoToast(opts.message || '伝票を確定しました', async () => {
             const rr = await fetch(`/api/history/${id}/unlock`, { method: 'POST' });
             if (!rr.ok) throw new Error('確定の解除に失敗しました');
@@ -7614,11 +7281,12 @@
         const titles = TYPE_TITLES[d.doc_type] || TYPE_TITLES.delivery;
 
         // ファイル名を生成
-        const fPdf = getFileName(d.doc_type, d.customer_name, d.locked_at || d.created_at, 'pdf');
-        const fXl = getFileName(d.doc_type, d.customer_name, d.locked_at || d.created_at, 'excel');
+        const histDate = d.issue_date || d.locked_at || d.created_at;
+        const fPdf = getFileName(d.doc_type, d.customer_name, histDate, 'pdf');
+        const fXl = getFileName(d.doc_type, d.customer_name, histDate, 'excel');
         const fClientXl = fXl.replace('.xlsx', '_提出用.xlsx');
-        const fDpdf = getFileName(d.doc_type, d.customer_name, d.locked_at || d.created_at, 'detail-pdf');
-        const fDxl = getFileName(d.doc_type, d.customer_name, d.locked_at || d.created_at, 'detail-excel');
+        const fDpdf = getFileName(d.doc_type, d.customer_name, histDate, 'detail-pdf');
+        const fDxl = getFileName(d.doc_type, d.customer_name, histDate, 'detail-excel');
 
         if (pane && isDesktop) {
           const lockBtn = d.status === 'locked'
@@ -7641,7 +7309,7 @@
 								<button class="btn btn-outline btn-sm" onclick="editHist(${d.invoice_id})">✎ 編集</button>
 								${lockBtn}
 								${driveBtn}
-								${dlMenuHtml(invoiceDlEntries(d.invoice_id, d.doc_type, d.customer_name, d.locked_at || d.created_at, true))}
+								${dlMenuHtml(invoiceDlEntries(d.invoice_id, d.doc_type, d.customer_name, histDate, true))}
 								<button class="btn btn-red btn-sm" onclick="delHist(${d.invoice_id})">✕ 削除</button>
 							</div>
 						</div>
@@ -8056,9 +7724,6 @@
                 const rows = (pg.live_items || []).map(it => '<div>✓ <b>' + escapeHtml(String(it.code || '-')) + '</b>' + (it.size ? ' / ' + escapeHtml(String(it.size)) : '') + (it.unit_price ? ' / ¥' + Number(it.unit_price).toLocaleString() : '') + '</div>').join('');
                 $('live-analyze-rows').innerHTML = rows || '<div style="color:var(--text-muted)">読み取り中...</div>';
               }
-              if ($('gen-overlay') && $('gen-overlay').classList.contains('active') && $('gen-status')) {
-                $('gen-status').textContent = 'AIがデータを抽出中... ' + pg.done + '/' + pg.total + '枚完了';
-              }
             } catch (_lp) { }
           },
           onSuccess: (data) => {
@@ -8161,12 +7826,6 @@
         resetAnalyzeBtn();
       }
     });
-    function updProg(label, cur, tot) {
-      $('prog-label').textContent = label;
-      const p = Math.round(cur / tot * 100);
-      $('prog-pct').textContent = p + '%';
-      $('prog-fill').style.width = p + '%';
-    }
 
     function getRate() {
       const v = $('inp-rate').value;
@@ -8456,7 +8115,7 @@
 
           setupPreviews(payload, d);
           const dlWrap = $('dl-actions');
-          if (dlWrap) dlWrap.innerHTML = dlMenuHtml(invoiceDlEntries(result.invoice_id, result.doc_type, payload.customer_name, null));
+          if (dlWrap) dlWrap.innerHTML = dlMenuHtml(invoiceDlEntries(result.invoice_id, result.doc_type, payload.customer_name, payload.issue_date || null));
 
           localStorage.removeItem('laura-draft');
           try { if (currentDraftId) { fetch('/api/drafts/' + currentDraftId, { method: 'DELETE' }); currentDraftId = null; } } catch (_dd) { }
@@ -8570,6 +8229,7 @@
       if ($('btn-generate-mob')) $('btn-generate-mob').disabled = false;
       if ($('sp2-mob')) $('sp2-mob').style.display = 'none';
       if ($('btn-generate-mob-text')) $('btn-generate-mob-text').textContent = '✦ 保存して確定';
+      if ($('btn-drive')) $('btn-drive').innerHTML = '<div class="spinner" id="sp3"></div> <svg class="icon" aria-hidden="true"><use href="#i-cloud"></use></svg>Driveに保存';
       $('preview-title').textContent = '✎ 読み取り結果（タップで修正可能）';
       localStorage.removeItem('laura-draft');
       currentDraftId = null; // 次の自動保存から新しい下書きとして扱う

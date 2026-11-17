@@ -163,3 +163,16 @@
 - **納品書・明細表デザインのモダナイズ**: `templates/invoice_template.html` と `main.py` の明細HTML生成（共通ヘルパー `render_detail_html` に統合）を刷新。`@page` A4余白・複数ページ時 `thead` 反復・水平罫線主体のテーブル・品番左揃え・単価/金額/上代の右揃え等幅数字・明細表への発行日・担当者・店舗コード・合計枚数表示を導入
 - **ボタン内スピナー連動**: 「AIでデータを抽出する」（`#sp1` ＋進捗件数表記）・「保存して確定」（`#sp2` / モバイルバー `#sp2-mob` ＆二重発火防止）・「Driveに保存」（`.spinner`）押下時にスピナーと状態文言が連動するよう接続
 - Service Worker キャッシュを laura-v18 に更新
+
+## v8.5 (2026-11-17) — キャッシュ不整合修正・Drive連携強化・履歴検索拡張・マニュアル刷新
+
+### データ整合性・キャッシュ・Drive連携の修正
+- **確定解除時の古いファイルキャッシュ問題を解消**: `unlock_invoice` で5つの `*_storage_path` カラムを `NULL` にリセットし、`serve_file` でも未確定（draft）伝票では常に最新データから再生成するようガードを追加
+- **伝票日付（`issue_date`）・ファイル名・Driveフォルダの統一**: `_resolve_invoice_dt` を追加し、DLファイル名・ZIPファイル名・Google Drive 格納パス（`年/年-月/種別`）すべてで指定の `issue_date` を優先参照するように統一。`get_doc_type_folder_label` に `"statement": "明細表"` を追加し、`serve_file` の提出用Excelファイル名（`*_提出用.xlsx`）を修正、Drive保存にも提出用Excel（計5ファイル）を含めるよう拡張
+- **確定時自動Drive保存の可視化**: `lock_invoice_internal` が `GDRIVE_WEBHOOK_URL` 設定時のみ自動Drive保存ジョブを作成して `drive_job_id` を返し、フロント側 `lockHist()` で自動追跡・完了通知・ボタン表記更新（`Driveに保存済み（再送する）`）を行うように改善
+
+### 履歴検索・マニュアル・コード整理
+- **履歴検索のサーバー連携**: `/api/history` に `q`, `month`, `status` クエリパラメータと `customer_code` 取得を追加し、フロント側の350msデバウンス検索・月/状態フィルタ変更時にサーバーと連動（200件超の過去伝票も検索可能）。一覧の日付表示や月フィルタも `issue_date` を優先参照
+- **操作マニュアル（`templates/manual.html`）の刷新**: 外部 Google Fonts CDN 依存を排除しセルフホストフォント化、`laura-theme` 連動ライトモード対応、「アプリに戻る」「テーマ切替」ボタンの追加、本文を v8.5 の最新仕様（5種出力・商品マスタ・Drive自動同期・スマホ `⋯` メニュー）にアップデート
+- **Gemini SDK・デッドUI整理**: `google.genai`（新SDK）優先＆ `FutureWarning` 抑止に対応。`templates/index.html` から未使用の `#gen-overlay`, `#prog-wrap`, `.swipe-row`, `bindSwipeRow`, `showGenProgress`/`hideGenProgress`, `updProg` を削除し、`JobUI.hide()` を補完
+- Service Worker キャッシュを laura-v19 に更新

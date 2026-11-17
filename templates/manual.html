@@ -3,16 +3,90 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="description" content="LAURA JAPAN 伝票システムの操作マニュアル">
-    <meta name="theme-color" content="#1a1a1a">
+    <meta name="theme-color" content="#c9a961">
     <title>LAURA JAPAN | 伝票システム 操作マニュアル</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link
-        href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@500&display=swap"
-        rel="stylesheet">
+    <script>
+        try {
+            const storedTheme = localStorage.getItem('laura-theme');
+            const prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
+            const theme = storedTheme || (prefersLight ? 'light' : 'dark');
+            if (theme === 'light') document.documentElement.setAttribute('data-theme', 'light');
+        } catch (e) {}
+    </script>
     <style>
+        @font-face {
+            font-family: 'Inter';
+            font-style: normal;
+            font-weight: 400;
+            font-display: swap;
+            src: local('Inter'), url('/static/fonts/inter-400.woff2') format('woff2');
+        }
+        @font-face {
+            font-family: 'Inter';
+            font-style: normal;
+            font-weight: 500;
+            font-display: swap;
+            src: local('Inter Medium'), url('/static/fonts/inter-500.woff2') format('woff2');
+        }
+        @font-face {
+            font-family: 'Inter';
+            font-style: normal;
+            font-weight: 600;
+            font-display: swap;
+            src: local('Inter SemiBold'), url('/static/fonts/inter-600.woff2') format('woff2');
+        }
+        @font-face {
+            font-family: 'Inter';
+            font-style: normal;
+            font-weight: 700;
+            font-display: swap;
+            src: local('Inter Bold'), url('/static/fonts/inter-700.woff2') format('woff2');
+        }
+        @font-face {
+            font-family: 'Cormorant Garamond';
+            font-style: normal;
+            font-weight: 500;
+            font-display: swap;
+            src: local('Cormorant Garamond Medium'), url('/static/fonts/cormorant-garamond-500.woff2') format('woff2');
+        }
+        @font-face {
+            font-family: 'Cormorant Garamond';
+            font-style: normal;
+            font-weight: 600;
+            font-display: swap;
+            src: local('Cormorant Garamond SemiBold'), url('/static/fonts/cormorant-garamond-600.woff2') format('woff2');
+        }
+        @font-face {
+            font-family: 'Cormorant Garamond';
+            font-style: normal;
+            font-weight: 700;
+            font-display: swap;
+            src: local('Cormorant Garamond Bold'), url('/static/fonts/cormorant-garamond-700.woff2') format('woff2');
+        }
+        @font-face {
+            font-family: 'Noto Sans JP';
+            font-style: normal;
+            font-weight: 400;
+            font-display: swap;
+            src: local('Noto Sans JP'), url('/static/fonts/noto-sans-jp-400.woff2') format('woff2');
+        }
+        @font-face {
+            font-family: 'Noto Sans JP';
+            font-style: normal;
+            font-weight: 500;
+            font-display: swap;
+            src: local('Noto Sans JP Medium'), url('/static/fonts/noto-sans-jp-500.woff2') format('woff2');
+        }
+        @font-face {
+            font-family: 'Noto Sans JP';
+            font-style: normal;
+            font-weight: 700;
+            font-display: swap;
+            src: local('Noto Sans JP Bold'), url('/static/fonts/noto-sans-jp-700.woff2') format('woff2');
+        }
+
         :root {
             --gold: #d4af37;
             --gold-bright: #f1d279;
@@ -23,7 +97,7 @@
             --bg-card: #1e1e1e;
             --text-main: #f0f0f0;
             --text-muted: #a0a0a0;
-            --text-dim: #6a6a6a;
+            --text-dim: #807c70;
             --pc: #6ba6ee;
             --mobile: #ee6b6b;
             --tip: #6bdb8a;
@@ -33,6 +107,26 @@
             --glow: 0 0 40px rgba(212, 175, 55, .15);
             --radius: 16px;
             --ease: .3s cubic-bezier(.4, 0, .2, 1);
+        }
+
+        :root[data-theme="light"] {
+            --gold: #a8893f;
+            --gold-bright: #7a6327;
+            --gold-soft: rgba(168, 137, 63, .14);
+            --gold-line: rgba(168, 137, 63, .45);
+            --bg-dark: #f7f5f0;
+            --bg-darker: #ffffff;
+            --bg-card: #ffffff;
+            --text-main: #2a261f;
+            --text-muted: #575141;
+            --text-dim: #6e6552;
+            --pc: #2563eb;
+            --mobile: #dc2626;
+            --tip: #15803d;
+            --warn: #b45309;
+            --info: #1d4ed8;
+            --shadow: 0 8px 24px rgba(42, 38, 31, .08);
+            --glow: 0 0 24px rgba(168, 137, 63, .12);
         }
 
         * {
@@ -898,6 +992,89 @@
             outline-offset: 2px;
             border-radius: 4px
         }
+
+        .sidebar-tools {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 18px;
+        }
+
+        .sidebar-tool-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+            padding: 9px 12px;
+            border-radius: 10px;
+            font-size: .82rem;
+            font-weight: 600;
+            text-decoration: none;
+            color: var(--text-main);
+            background: rgba(255, 255, 255, .05);
+            border: 1px solid var(--gold-line);
+            cursor: pointer;
+            font-family: inherit;
+            transition: var(--ease);
+        }
+
+        .sidebar-tool-btn:hover {
+            background: var(--gold-soft);
+            color: var(--gold-bright);
+        }
+
+        :root[data-theme="light"] body {
+            font-family: 'Inter', 'Noto Sans JP', 'Hiragino Sans', 'Yu Gothic', sans-serif;
+            background: radial-gradient(ellipse at top left, rgba(168, 137, 63, .08), transparent 50%), var(--bg-dark);
+        }
+
+        :root[data-theme="light"] .sidebar {
+            border-right-color: rgba(168, 137, 63, .2);
+            background: #ffffff;
+        }
+
+        :root[data-theme="light"] .sidebar-tool-btn {
+            background: #faf8f3;
+            color: var(--text-main);
+        }
+
+        :root[data-theme="light"] .hero {
+            background: radial-gradient(ellipse at center, rgba(168, 137, 63, .12), transparent 70%), #ffffff;
+            box-shadow: var(--shadow);
+        }
+
+        :root[data-theme="light"] h1 {
+            background: linear-gradient(135deg, #8b6a24, #b8913a, #634912);
+            -webkit-background-clip: text;
+            background-clip: text;
+            filter: none;
+        }
+
+        :root[data-theme="light"] .card {
+            background: #ffffff;
+            border-color: rgba(168, 137, 63, .28);
+        }
+
+        :root[data-theme="light"] .kbd,
+        :root[data-theme="light"] code {
+            background: #f3efe6 !important;
+            border-color: rgba(168, 137, 63, .35) !important;
+            color: var(--gold-bright) !important;
+        }
+
+        :root[data-theme="light"] .callout {
+            background: #faf8f3;
+            border-color: rgba(168, 137, 63, .28);
+        }
+
+        :root[data-theme="light"] .toc a.active .toc-num {
+            color: #ffffff;
+        }
+
+        :root[data-theme="light"] .sidebar-foot {
+            border-top-color: rgba(168, 137, 63, .2);
+        }
     </style>
 </head>
 
@@ -916,12 +1093,16 @@
                 LAURA JAPAN
                 <small>User Manual</small>
             </div>
+            <div class="sidebar-tools">
+                <a href="/" class="sidebar-tool-btn">← アプリに戻る</a>
+                <button type="button" class="sidebar-tool-btn" id="manualThemeToggle">☀ テーマ切替</button>
+            </div>
             <nav>
                 <ul class="toc">
                     <li><a href="#login" data-section="login"><span class="toc-num">01</span>ログインと初期設定</a></li>
                     <li><a href="#create" data-section="create"><span class="toc-num">02</span>伝票の作成（AI解析）</a></li>
-                    <li><a href="#preview" data-section="preview"><span class="toc-num">03</span>プレビューと返品処理</a></li>
-                    <li><a href="#history" data-section="history"><span class="toc-num">04</span>履歴管理とZIP出力</a></li>
+                    <li><a href="#preview" data-section="preview"><span class="toc-num">03</span>確認・修正と帳票出力</a></li>
+                    <li><a href="#history" data-section="history"><span class="toc-num">04</span>履歴管理と自動バックアップ</a></li>
                 </ul>
             </nav>
             <div class="sidebar-foot">
@@ -939,9 +1120,9 @@
                 <h1>LAURA JAPAN<span class="ja">伝票システム 操作マニュアル</span></h1>
                 <div class="subtitle">Invoice System User Manual</div>
                 <div class="hero-meta">
-                    <span><span class="dot"></span>Version 2.0</span>
+                    <span><span class="dot"></span>Version 8.5</span>
                     <span><span class="dot"></span>2026 Edition</span>
-                    <span><span class="dot"></span>Web &amp; Mobile</span>
+                    <span><span class="dot"></span>Web &amp; PWA Mobile</span>
                 </div>
             </header>
 
@@ -956,13 +1137,13 @@
                 </div>
 
                 <div class="card">
-                    <h3>🔐 アカウント認証とオペレーター選択</h3>
-                    <p>システムを利用するには、指定のユーザーIDとパスワードでログインしてください。ログイン後、業務を行うオペレーター（担当者）を選択します。</p>
+                    <h3>🔐 アカウント認証と担当者選択</h3>
+                    <p>システムを利用するには、指定のユーザーIDとパスワードでログインしてください。ログイン後、業務を行う担当者を選択します。ログイン画面や本マニュアルも本体のライト / ダークテーマ設定に自動連動します。</p>
 
                     <ol class="steps">
-                        <li>ブラウザでシステムURLにアクセス</li>
+                        <li>ブラウザまたはホーム画面アイコン（PWA）からシステムを起動</li>
                         <li>ユーザーID / パスワードを入力してログイン</li>
-                        <li>担当オペレーターを選択して業務開始</li>
+                        <li>右上のユーザー選択から担当者を指定して業務開始</li>
                     </ol>
 
                     <div class="responsive-grid">
@@ -980,7 +1161,7 @@
 
                     <div class="callout callout-info">
                         <span class="callout-icon">💡</span>
-                        <div><strong>モバイル端末でのナビゲーション</strong>サイドメニュー（ハンバーガーアイコン）から「新規作成」「履歴」へ素早くアクセスできます。</div>
+                        <div><strong>スマホでの画面切り替え</strong>画面下部のボトムナビゲーションバー（「作成」「履歴」「分析」「設定」）から各機能へワンタップで切り替えられます。本マニュアルも「設定」タブからいつでも開けます。</div>
                     </div>
                 </div>
             </section>
@@ -996,29 +1177,29 @@
                 </div>
 
                 <div class="card">
-                    <h3>🤖 高度なAIによる自動データ化</h3>
-                    <p>「新規作成」から商品タグの写真をアップロードすると、AIが内容を瞬時に解析します。<b>複数枚の一括アップロードに対応</b>しているため、現場での作業時間を大幅に削減できます。</p>
+                    <h3>🤖 伝票設定と高精度AIによる自動データ化</h3>
+                    <p>「伝票日付」「店舗コード（入力すると登録済み取引先・掛率を自動選択）」または「店名検索」を指定し、商品タグ（下げ札）の写真をアップロードするとAIが内容を瞬時に解析します。<b>最大30枚の並列解析</b>に対応しています。</p>
 
                     <ul class="feature-list">
-                        <li><span class="badge">POINT 01</span><b>背番号認識：</b>大量の同じタグを撮影しても、AIが1枚ずつ識別して重複なくデータ化します。</li>
-                        <li><span class="badge">POINT 02</span><b>並列解析：</b>1回につき最大30枚。1枚ずつ並列で解析するため、画像の取り違えや読み飛ばしが起きません。</li>
-                        <li><span class="badge">POINT 03</span><b>マルチデバイス対応：</b>スマホで撮影 → そのままアップロードでデスクから現場まで一気通貫。</li>
+                        <li><span class="badge">POINT 01</span><b>伝票日付・店舗コード連携：</b>過去の伝票日付の指定や、店舗コード入力による取引先・掛率の自動セットに対応しています。</li>
+                        <li><span class="badge">POINT 02</span><b>AIエンジン選択：</b>撮影エリア下のコンパクトバーからモデルを切り替えられます（初期値は「設定」タブの「既定のAIモデル」で記憶可能）。</li>
+                        <li><span class="badge">POINT 03</span><b>学習済み商品マスタ：</b>過去に確定した伝票から「品番 × カラー × サイズ × 単価」の実績を自動学習し、読み取り精度向上や価格ズレ警告に活用します。</li>
                     </ul>
 
                     <div class="callout callout-tip">
                         <span class="callout-icon">✅</span>
-                        <div><strong>撮影のコツ</strong>タグ全体が画面に収まるように、明るい場所で撮影すると認識精度が向上します。</div>
+                        <div><strong>撮影のコツ</strong>タグ全体が画面に収まるように、明るい場所でピントを合わせて撮影すると認識精度が向上します。読み取り後は一覧の小写真をタップして拡大照合もできます。</div>
                     </div>
 
                     <h3 style="margin-top:32px">🗂️ 伝票種別の選択</h3>
                     <span class="label label-pc">💻 PC View</span>
                     <div class="img-container" style="max-width:600px"><img src="/static/manual/toggle.png"
                             alt="伝票種別の切り替えタブ"></div>
-                    <p>上部のタブで <b>「納品 / 仮納品 / 返品 / 仮返品」</b> を切り替えることができます。選択した種別に応じて、書類のタイトルや計算ロジックが自動で切り替わります。</p>
+                    <p>上部のボタンで <b>「納品 / 返品 / 明細表 / 仮（仮納品・仮返品）」</b> を切り替えることができます。選択した種別に応じて、帳票のタイトルや計算ロジック、Drive保存先フォルダが自動で切り替わります。</p>
 
                     <div class="callout callout-warn">
                         <span class="callout-icon">⚠️</span>
-                        <div><strong>確定前にご確認ください</strong>伝票種別は確定後の変更ができません。アップロード前に必ず種別をご確認ください。</div>
+                        <div><strong>確定前にご確認ください</strong>未確定の下書きは自動でサーバー保存され、他端末や作成画面上部の「今日の状態」から続きを再開できます。</div>
                     </div>
                 </div>
             </section>
@@ -1028,29 +1209,28 @@
                 <div class="section-title">
                     <div class="section-number">3</div>
                     <div class="section-title-text">
-                        プレビューと返品処理
-                        <span class="section-title-en">Preview &amp; Return Processing</span>
+                        確認・修正と帳票出力
+                        <span class="section-title-en">Preview &amp; Export</span>
                     </div>
                 </div>
 
                 <div class="card">
-                    <h3>↩️ 返品時のマイナス自動計算</h3>
-                    <p>「返品」を選択した場合、入力された数量はそのままに、<b>計算結果と書類上の表記がすべて「マイナス」に反転</b>します。手作業での符号変更は不要です。</p>
+                    <h3>↩️ 返品計算・チェック機能と5種類の出力形式</h3>
+                    <p>読み取り結果では品番・単価未読取や過去実績との価格差・重複行を自動チェックします。「返品 / 仮返品」選択時は数量と金額が自動でマイナス反転し、手作業の符号変更は不要です。</p>
 
                     <div class="img-container"><img src="/static/manual/preview.png" alt="返品プレビュー画面"></div>
 
                     <ul class="feature-list">
-                        <li>プレビュー画面で <b style="font-family:'JetBrains Mono',monospace">× -1点</b>
-                            のように表示され、合計金額もマイナスになります。</li>
-                        <li>数値が <b style="color:#ee6b6b">赤字</b> で表示されるなど、視覚的に返品であることが分かりやすくなっています。</li>
-                        <li><b>Math.truncロジック</b> により、消費税は税抜合計に対して一度だけ端数処理（切り捨て）されます。</li>
+                        <li><b>5種類の帳票を一括作成：</b>「納品書PDF」「会社控Excel（バーコード付）」「提出用Excel（掛率なし）」「明細表PDF」「明細表Excel」またはZIP一括出力に対応。</li>
+                        <li><b>商品マスタ検証：</b>過去実績と単価が大きく異なる場合や、数量50点以上・重複行がある場合は保存前に確認警告を表示します。</li>
+                        <li><b>Math.truncロジック：</b>消費税は税抜合計に対して一度だけ端数処理（切り捨て）し、適格請求書の計算ルールに準拠しています。</li>
                     </ul>
 
                     <div class="callout callout-info">
                         <span class="callout-icon">🔢</span>
-                        <div><strong>計算精度について</strong>JavaScriptの浮動小数点誤差を回避するため、税計算には <code
-                                style="background:rgba(255,255,255,.06);padding:2px 6px;border-radius:4px;font-family:'JetBrains Mono',monospace;font-size:.85em;color:var(--gold-bright)">Math.trunc</code>
-                            を採用。1円単位まで正確です。</div>
+                        <div><strong>計算精度について</strong>金額計算には <code
+                                style="background:rgba(255,255,255,.06);padding:2px 6px;border-radius:4px;font-family:monospace;font-size:.85em;color:var(--gold-bright)">Math.trunc</code>
+                            を採用し、画面表示とPDF/Excel出力の1円単位まで完全に一致させています。</div>
                     </div>
                 </div>
             </section>
@@ -1060,26 +1240,26 @@
                 <div class="section-title">
                     <div class="section-number">4</div>
                     <div class="section-title-text">
-                        履歴管理とZIP出力
-                        <span class="section-title-en">History &amp; ZIP Export</span>
+                        履歴管理と自動バックアップ
+                        <span class="section-title-en">History &amp; Cloud Sync</span>
                     </div>
                 </div>
 
                 <div class="card">
                     <h3>📂 すべての伝票を一元管理</h3>
-                    <p>「履歴」画面では、過去に作成したすべての伝票を閲覧できます。検索・フィルタ・一括ダウンロードに対応しており、月次の経理処理がスムーズに進みます。</p>
+                    <p>「履歴」画面では、伝票番号・取引先名・店舗コードでの検索、種別・月（伝票日付基準）・担当者・状態での絞り込みができます。検索時は200件以前の過去データもサーバーから取得して表示します。</p>
 
                     <div class="img-container"><img src="/static/manual/history.png" alt="履歴一覧画面"></div>
 
                     <ul class="feature-list">
-                        <li><b>ステータス管理：</b>「未確定」「確定済み」などの状態が一目でわかります。</li>
-                        <li><b>ZIPダウンロード：</b>納品書・商品明細表のPDFとExcelを <b>1クリック</b> でまとめて保存できます。</li>
-                        <li><b>Google Drive連携：</b>確定した伝票は、自動的に <b>日付と種別ごとのフォルダ</b> へ整理されて保存されます。</li>
+                        <li><b>スッキリしたモバイル操作：</b>カード下部の「プレビュー / 編集 / 確定・解除」と右端の <b>⋯ メニュー</b>（Drive保存・ZIP一括・削除）で迷わず操作できます。</li>
+                        <li><b>確定後の再編集も安心：</b>確定を「解除」して修正・再保存するとキャッシュが自動リセットされ、常に最新のPDF・Excelが再生成されます。</li>
+                        <li><b>Google Drive 自動連携：</b>伝票を確定すると自動でDrive（<code>年 / 年-月 / 種別</code> フォルダ）へ5ファイルが同期され、進行状況と完了通知が画面に表示されます。</li>
                     </ul>
 
                     <div class="callout callout-tip">
                         <span class="callout-icon">☁️</span>
-                        <div><strong>クラウド連携で安心</strong>Google Driveに自動バックアップされるため、端末トラブル時もデータが守られます。</div>
+                        <div><strong>クラウド連携と取り消し機能</strong>削除・確定操作の直後は画面下部の通知から「元に戻す」ことができます。</div>
                     </div>
                 </div>
             </section>
@@ -1099,6 +1279,26 @@
     </div>
 
     <script>
+        // theme sync
+        (function initManualTheme() {
+            const btn = document.getElementById('manualThemeToggle');
+            const updateBtn = () => {
+                const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+                if (btn) btn.textContent = isLight ? '🌙 ダークモードへ' : '☀ ライトモードへ';
+            };
+            updateBtn();
+            if (btn) {
+                btn.addEventListener('click', () => {
+                    const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+                    const next = isLight ? 'dark' : 'light';
+                    if (next === 'light') document.documentElement.setAttribute('data-theme', 'light');
+                    else document.documentElement.removeAttribute('data-theme');
+                    try { localStorage.setItem('laura-theme', next); } catch (e) {}
+                    updateBtn();
+                });
+            }
+        })();
+
         // progress bar
         const progressEl = document.getElementById('progress');
         const updateProgress = () => {
