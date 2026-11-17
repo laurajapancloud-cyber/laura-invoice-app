@@ -1782,7 +1782,7 @@ def apply_a4_print_settings(ws, orientation="portrait", fit_to_width=True, fit_t
 
     ws.print_options.horizontalCentered = True
 
-def build_detail_excel(invoice_number: str, customer_name: str, items: list, doc_type='delivery', user_name: str = '') -> bytes:
+def build_detail_excel(invoice_number: str, customer_name: str, items: list, doc_type='delivery', user_name: str = '', issue_date: Optional[Any] = None) -> bytes:
     """商品明細表 Excel (サイズ別内訳・モダンデザイン)"""
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -1822,7 +1822,18 @@ def build_detail_excel(invoice_number: str, customer_name: str, items: list, doc
     for col, w in widths.items():
         ws.column_dimensions[col].width = w
 
-    now = get_jst_now()
+    now = None
+    if isinstance(issue_date, datetime.datetime):
+        now = issue_date
+    elif isinstance(issue_date, datetime.date):
+        now = datetime.datetime(issue_date.year, issue_date.month, issue_date.day)
+    elif issue_date:
+        try:
+            now = datetime.datetime.strptime(str(issue_date)[:10], "%Y-%m-%d")
+        except Exception:
+            now = None
+    if now is None:
+        now = get_jst_now()
     reiwa = now.year - 2018
 
     # ===== タイトルバー (1行目) =====
@@ -1842,10 +1853,10 @@ def build_detail_excel(invoice_number: str, customer_name: str, items: list, doc
         ws["F2"].font = FONT_META
         ws.merge_cells("F2:G2")
 
-    ws["G2"] = f"伝票番号: {invoice_number}"
-    ws["G2"].font = FONT_INV_NO
-    ws.merge_cells("G2:K2")
-    ws["G2"].alignment = Alignment(horizontal="right", vertical="center")
+    ws["H2"] = f"伝票番号: {invoice_number}"
+    ws["H2"].font = FONT_INV_NO
+    ws.merge_cells("H2:K2")
+    ws["H2"].alignment = Alignment(horizontal="right", vertical="center")
 
     ws["I3"] = f"{reiwa}年"
     ws["J3"] = f"{now.month}月"
@@ -2216,7 +2227,8 @@ def build_invoice_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
     doc_type = invoice_data.get("doc_type", "delivery")
     label_map = {
         "delivery": "納品", "return": "返品",
-        "prov_delivery": "仮納品", "prov_return": "仮返品"
+        "prov_delivery": "仮納品", "prov_return": "仮返品",
+        "statement": "明細表"
     }
 
     current_row = 1
@@ -2224,7 +2236,7 @@ def build_invoice_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
     for chunk_idx, chunk_items in enumerate(chunks):
         # ===== タイトルバー (1行目相当) =====
         ws.merge_cells(f"A{current_row}:I{current_row}")
-        ws[f"A{current_row}"] = f"{label_map.get(doc_type, '納品')}伝票"
+        ws[f"A{current_row}"] = "明細表" if doc_type == "statement" else f"{label_map.get(doc_type, '納品')}伝票"
         ws[f"A{current_row}"].font = FONT_TITLE
         ws[f"A{current_row}"].fill = FILL_TITLE
         ws[f"A{current_row}"].alignment = Alignment(horizontal="center", vertical="center")
@@ -2236,7 +2248,8 @@ def build_invoice_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
         ws[f"G{r2}"].font = FONT_LABEL
         ws[f"G{r2}"].alignment = Alignment(horizontal="right", vertical="center")
         ws.merge_cells(f"H{r2}:I{r2}")
-        ws[f"H{r2}"] = ""
+        ws[f"H{r2}"] = invoice_data.get("invoice_number", "")
+        ws[f"H{r2}"].font = FONT_BODY_BOLD
         ws[f"H{r2}"].fill = FILL_HIGHLIGHT
         ws[f"H{r2}"].alignment = Alignment(horizontal="left", vertical="center", indent=1)
         ws.row_dimensions[r2].height = 20
@@ -2363,13 +2376,13 @@ def build_invoice_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
                     if bc_bytes:
                         img = ExcelImage(BytesIO(bc_bytes))
                         img.width, img.height = 160, 36
-                    marker = AnchorMarker(col=4, colOff=pixels_to_EMU(8),
-                                          row=r-1, rowOff=pixels_to_EMU(15))
-                    img.anchor = OneCellAnchor(
-                        _from=marker,
-                        ext=XDRPositiveSize2D(cx=pixels_to_EMU(160), cy=pixels_to_EMU(36))
-                    )
-                    ws.add_image(img)
+                        marker = AnchorMarker(col=4, colOff=pixels_to_EMU(8),
+                                              row=r-1, rowOff=pixels_to_EMU(15))
+                        img.anchor = OneCellAnchor(
+                            _from=marker,
+                            ext=XDRPositiveSize2D(cx=pixels_to_EMU(160), cy=pixels_to_EMU(36))
+                        )
+                        ws.add_image(img)
                 except Exception as e:
                     logger.warning("Item barcode skipped (row %d, code=%s): %s", r, item.get("code"), e)
 
@@ -2462,6 +2475,12 @@ def build_client_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
     ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
     ws.row_dimensions[1].height = 40
 
+    # 伝票番号
+    ws.merge_cells("F2:G2")
+    ws["F2"] = f"伝票No: {invoice_data.get('invoice_number', '')}"
+    ws["F2"].font = FONT_BODY
+    ws["F2"].alignment = Alignment(horizontal="right", vertical="center")
+
     # 顧客名
     ws.merge_cells("A3:E3")
     ws["A3"] = f"{invoice_data.get('customer_name', '')}"
@@ -2469,8 +2488,10 @@ def build_client_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
     ws["A3"].alignment = Alignment(horizontal="left", vertical="center")
 
     # 日付等
-    dt = to_jst(invoice_data.get("locked_at") or invoice_data.get("created_at"))
-    date_str = f"{dt.year}年{dt.month}月{dt.day}日"
+    date_str = invoice_data.get("date")
+    if not date_str:
+        dt = to_jst(invoice_data.get("locked_at") or invoice_data.get("created_at"))
+        date_str = f"{dt.year}年{dt.month}月{dt.day}日"
     
     ws.merge_cells("F3:G3")
     ws["F3"] = date_str
@@ -2585,7 +2606,7 @@ def build_all_files(invoice_data: dict, is_preview: bool = False) -> dict:
         "pdf": build_invoice_pdf(invoice_data),
         "excel": build_invoice_excel(invoice_data, is_preview=is_preview),
         "detail_pdf": build_detail_pdf(invoice_data["invoice_number"], invoice_data["customer_name"], invoice_data["items"], doc_type, invoice_data.get("user_name", "")),
-        "detail_excel": build_detail_excel(invoice_data["invoice_number"], invoice_data["customer_name"], invoice_data["items"], doc_type, invoice_data.get("user_name", "")),
+        "detail_excel": build_detail_excel(invoice_data["invoice_number"], invoice_data["customer_name"], invoice_data["items"], doc_type, invoice_data.get("user_name", ""), invoice_data.get("issue_date")),
         "client_excel": build_client_excel(invoice_data, is_preview=is_preview),
     }
 
@@ -2622,6 +2643,7 @@ def build_single_file(kind: str, invoice_data: dict) -> bytes:
             invoice_data["items"],
             doc_type,
             invoice_data.get("user_name", ""),
+            invoice_data.get("issue_date"),
         )
 
     if kind == "client_excel":
@@ -2704,6 +2726,7 @@ def assemble_invoice_data(inv_info: dict, items_input: list, discount_rate: int,
         "total_net_amount": total_net, "total_tax_amount": total_tax, "total_grand_total": total_grand,
         "user_name": inv_info.get("user_name", ""),
         "issuer": "株式会社 ラウラジャパン", "date": date_formatted,
+        "issue_date": str(issue_date_str) if issue_date_str else dt.strftime("%Y-%m-%d"),
         "registration_no": INVOICE_REG_NO,
         "doc_type": doc_type,
         "doc_title_main": titles["main"],
@@ -2826,6 +2849,8 @@ def _save_invoice_record(payload: "DocumentRequest"):
 
         _audit(cur, "save", inv_id, invoice_number, user_name or None, {"doc_type": doc_type, "grand_total": inv_data["total_grand_total"], "items": len(inv_data["items"])})
         conn.commit()
+    with _dashboard_lock:
+        _dashboard_cache.clear()
     return inv_id, invoice_number, inv_data
 
 
@@ -2945,6 +2970,8 @@ async def unlock_invoice(inv_id: int, username: Annotated[str, Depends(authentic
         cur.execute("UPDATE invoices SET status='draft', locked_at=NULL WHERE id=%s", (inv_id,))
         _audit(cur, "unlock", inv_id, None, username)
         conn.commit()
+    with _dashboard_lock:
+        _dashboard_cache.clear()
     return {"status": "draft"}
 
 # ==================== History & Serving API ====================
@@ -3016,6 +3043,7 @@ def get_history(
         query = """
             SELECT i.id, i.invoice_number, i.customer_name, i.total_grand_total, i.item_count, i.status, i.doc_type, i.user_id,
             u.name as user_name, u.color as user_color,
+            to_char(i.issue_date, 'YYYY-MM-DD') as issue_date,
             to_char(i.locked_at, 'YYYY-MM-DD"T"HH24:MI:SS') as locked_at,
             to_char(i.created_at, 'YYYY-MM-DD\"T\"HH24:MI:SS') as created_at
             FROM invoices i
@@ -3048,7 +3076,10 @@ KIND_CONFIG = {
 def serve_file(inv_id: int, kind: str, disposition: str = "attachment"):
     cfg = KIND_CONFIG[kind]
     with db_conn() as conn, conn.cursor() as cur:
-        cur.execute("SELECT * FROM invoices WHERE id=%s", (inv_id,))
+        cur.execute(
+            "SELECT i.*, u.name AS user_name FROM invoices i LEFT JOIN users u ON i.user_id = u.id WHERE i.id=%s",
+            (inv_id,),
+        )
         inv = cur.fetchone()
         if not inv:
             raise HTTPException(404, "Not found")
@@ -3140,7 +3171,10 @@ def dl_client_excel(inv_id: int, username: Annotated[str, Depends(authenticate)]
 def preview_pdf(inv_id: int, username: Annotated[str, Depends(authenticate)]):
     """保存済みの伝票のPDFプレビューの代わりに、HTMLテンプレートをレンダリングして返す"""
     with db_conn() as conn, conn.cursor() as cur:
-        cur.execute("SELECT * FROM invoices WHERE id=%s", (inv_id,))
+        cur.execute(
+            "SELECT i.*, u.name AS user_name FROM invoices i LEFT JOIN users u ON i.user_id = u.id WHERE i.id=%s",
+            (inv_id,),
+        )
         inv = cur.fetchone()
         if not inv:
             raise HTTPException(404, "Not found")
@@ -3238,7 +3272,10 @@ def safe_filename(name: str) -> str:
 def get_invoice_generated_files(inv_id: int):
     """伝票の生成ファイル（4種類）を取得する。確定済みでキャッシュがあればそれを優先する"""
     with db_conn() as conn, conn.cursor() as cur:
-        cur.execute("SELECT * FROM invoices WHERE id=%s", (inv_id,))
+        cur.execute(
+            "SELECT i.*, u.name AS user_name FROM invoices i LEFT JOIN users u ON i.user_id = u.id WHERE i.id=%s",
+            (inv_id,),
+        )
         inv = cur.fetchone()
         if not inv:
             raise HTTPException(404, "Invoice not found")
@@ -3318,10 +3355,12 @@ def get_history_items(inv_id: int, username: Annotated[str, Depends(authenticate
     with db_conn() as conn, conn.cursor() as cur:
         cur.execute("SELECT code, color, size, unit_price, quantity FROM invoice_items WHERE invoice_id = %s", (inv_id,))
         rows = cur.fetchall()
-        cur.execute("SELECT invoice_number, customer_name, discount_rate, doc_type FROM invoices WHERE id = %s", (inv_id,))
+        cur.execute("SELECT invoice_number, customer_name, customer_code, discount_rate, doc_type, issue_date FROM invoices WHERE id = %s", (inv_id,))
         inv = cur.fetchone()
     if not inv: raise HTTPException(status_code=404, detail="Invoice not found")
-    return {"invoice_number": inv["invoice_number"], "customer_name": inv["customer_name"], "discount_rate": inv["discount_rate"], "doc_type": inv.get("doc_type", "delivery"), "items": [dict(r) for r in rows]}
+    issue_dt = inv.get("issue_date")
+    issue_date_str = issue_dt.isoformat() if hasattr(issue_dt, "isoformat") else (str(issue_dt) if issue_dt else None)
+    return {"invoice_number": inv["invoice_number"], "customer_name": inv["customer_name"], "customer_code": inv.get("customer_code"), "discount_rate": inv["discount_rate"], "doc_type": inv.get("doc_type", "delivery"), "issue_date": issue_date_str, "items": [dict(r) for r in rows]}
 
 @app.delete("/api/history/{inv_id}")
 def delete_history(inv_id: int, username: Annotated[str, Depends(authenticate)]):
@@ -3334,6 +3373,8 @@ def delete_history(inv_id: int, username: Annotated[str, Depends(authenticate)])
         cur.execute("UPDATE invoices SET deleted_at=NOW(), status='deleted' WHERE id = %s", (inv_id,))
         _audit(cur, "delete", inv_id, row.get("invoice_number"), username)
         conn.commit()
+    with _dashboard_lock:
+        _dashboard_cache.clear()
     return {"status": "ok"}
 
 def upload_drive_internal(jid: str, inv_id: int):
@@ -3391,6 +3432,8 @@ def restore_invoice(inv_id: int, username: Annotated[str, Depends(authenticate)]
             ("draft", inv_id, "deleted"),
         )
         restored = cur.rowcount
+    with _dashboard_lock:
+        _dashboard_cache.clear()
     return {"status": "ok", "restored": restored}
 
 @app.post("/api/history/{inv_id}/upload-drive")
@@ -3433,19 +3476,17 @@ def get_job_status(job_id: str, username: Annotated[str, Depends(authenticate)])
 def get_history_meta(inv_id: int, username: Annotated[str, Depends(authenticate)]):
     """軽量な履歴詳細と、スマホ表示用のHTMLプレビューを返すAPI"""
     with db_conn() as conn, conn.cursor() as cur:
-        cur.execute("SELECT * FROM invoices WHERE id=%s", (inv_id,))
+        cur.execute(
+            "SELECT i.*, u.name AS user_name FROM invoices i LEFT JOIN users u ON i.user_id = u.id WHERE i.id=%s",
+            (inv_id,),
+        )
         row = cur.fetchone()
         if not row:
             raise HTTPException(404, "Not found")
         inv = dict(row)
         cur.execute("SELECT code, color, size, unit_price, quantity FROM invoice_items WHERE invoice_id=%s", (inv_id,))
         items = [dict(r) for r in cur.fetchall()]
-        
-        user_name = ""
-        if inv.get('user_id'):
-            cur.execute("SELECT name FROM users WHERE id=%s", (inv['user_id'],))
-            u_row = cur.fetchone()
-            if u_row: user_name = u_row['name']
+        user_name = inv.get("user_name") or ""
 
     dr = inv.get("discount_rate") or 100
     doc_type = inv.get("doc_type", "delivery")
@@ -3519,6 +3560,7 @@ th{{background:#f4ecd8;}}
         "total_tax_amount": inv.get("total_tax_amount", 0),
         "total_grand_total": inv.get("total_grand_total", 0),
         "item_count": inv.get("item_count", len(items)),
+        "issue_date": iso_or_none(inv.get("issue_date")),
         "created_at": iso_or_none(inv.get("created_at")),
         "locked_at": iso_or_none(inv.get("locked_at")),
         "items": items,
@@ -3539,7 +3581,10 @@ th{{background:#f4ecd8;}}
 def get_history_data(inv_id: int, username: Annotated[str, Depends(authenticate)]):
     """(互換性維持) 全ドキュメントをBase64で含む詳細API"""
     with db_conn() as conn, conn.cursor() as cur:
-        cur.execute("SELECT * FROM invoices WHERE id=%s", (inv_id,))
+        cur.execute(
+            "SELECT i.*, u.name AS user_name FROM invoices i LEFT JOIN users u ON i.user_id = u.id WHERE i.id=%s",
+            (inv_id,),
+        )
         row = cur.fetchone()
         if not row:
             raise HTTPException(404, "Not found")
@@ -3567,6 +3612,7 @@ def get_history_data(inv_id: int, username: Annotated[str, Depends(authenticate)
         "total_tax_amount": inv.get("total_tax_amount", 0),
         "total_grand_total": inv.get("total_grand_total", 0),
         "item_count": inv.get("item_count", len(items)),
+        "issue_date": iso_or_none(inv.get("issue_date")),
         "created_at": iso_or_none(inv.get("created_at")),
         "locked_at": iso_or_none(inv.get("locked_at")),
         "items": items,

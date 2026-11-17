@@ -81,6 +81,7 @@
         <div class="header">
             <div class="customer">{{ customer_name }}</div>
             <div class="issuer">
+                {% if invoice_number %}<p>伝票No: {{ invoice_number }}</p>{% endif %}
                 <p>{{ date }}</p>
                 <p>{{ issuer }}</p>{% if registration_no %}<p>登録番号: {{ registration_no }}</p>{% endif %}
                 {% if user_name %}<p>担当: {{ user_name }}</p>{% endif %}
@@ -96,7 +97,7 @@
                     <th>サイズ</th>
                     <th>数量</th>
                     <th>単価</th>
-                    <th>金額（掛率{{ discount_rate }}%）</th>
+                    <th>金額{% if doc_type != 'statement' and discount_rate and discount_rate < 100 %}（掛率{{ discount_rate }}%）{% endif %}</th>
                 </tr>
             </thead>
             <tbody>

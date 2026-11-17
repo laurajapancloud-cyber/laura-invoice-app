@@ -215,40 +215,7 @@
       }
     }
 
-    /* PC 2ペイン: 左=設定・取込 / 右=読み取り結果を常時表示 */
-    @media (min-width: 1280px) {
-      #page-create.active {
-        max-width: 1200px;
-        display: grid;
-        grid-template-columns: 430px minmax(0, 1fr);
-        gap: 20px;
-        align-items: start;
-      }
-
-      #page-create.active > .card {
-        margin-bottom: 0;
-      }
-
-      #page-create.active > #preview-card {
-        grid-column: 2;
-        grid-row: 1 / span 2;
-        position: sticky;
-        top: 80px;
-        max-height: calc(100dvh - 110px);
-        overflow-y: auto;
-      }
-
-      #page-create.active > #dl-section {
-        grid-column: 1 / -1;
-      }
-
-      /* 解析前（結果非表示）は従来の1カラムにフォールバック */
-      #page-create.active:has(> #preview-card[style*="display:none"]),
-      #page-create.active:has(> #preview-card[style*="display: none"]) {
-        display: block;
-        max-width: 600px;
-      }
-    }
+    /* PC 2ペイン定義は @media (min-width: 1024px) セクションへ統合 */
 
     .item-card { animation: cardIn 0.28s ease both; }
     @keyframes cardIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
@@ -804,6 +771,16 @@
       background: rgba(224, 97, 87, 0.08);
       color: var(--red);
       border-color: rgba(224, 97, 87, 0.3);
+    }
+
+    .toast-warn {
+      background: rgba(240, 207, 121, 0.12);
+      color: var(--gold-bright);
+      border-color: rgba(240, 207, 121, 0.45);
+    }
+
+    [data-theme="light"] .toast-warn {
+      color: var(--gold-deep);
     }
 
     .toast-stack {
@@ -2685,27 +2662,58 @@
       }
 
       #page-create.active {
+        max-width: 1240px;
         display: grid;
-        grid-template-columns: 360px 1fr;
+        grid-template-columns: minmax(380px, 430px) minmax(0, 1fr);
         gap: 24px;
         align-items: start;
       }
 
-      #page-create>.card:nth-child(1),
-      #page-create>.card:nth-child(2) {
-        grid-column: 1;
-      }
-
-      #page-create>.card:nth-child(2) {
-        position: sticky;
-        top: 16px;
-      }
-
-      #preview-card,
-      #dl-section {
-        grid-column: 2;
-        grid-row: 1 / span 2;
+      #page-create.active > #today-card {
+        grid-column: 1 / -1;
         margin-bottom: 0;
+      }
+
+      #page-create.active > .create-left-col {
+        grid-column: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        min-width: 0;
+      }
+
+      #page-create.active > .create-left-col > .card {
+        margin-bottom: 0;
+      }
+
+      #page-create.active > #preview-card {
+        grid-column: 2;
+        position: sticky;
+        top: 20px;
+        max-height: calc(100dvh - 96px);
+        overflow-y: auto;
+        margin-bottom: 0;
+      }
+
+      #page-create.active > #dl-section {
+        grid-column: 2;
+        margin-bottom: 0;
+      }
+
+      /* 解析前・保存前（結果非表示）は1カラム中央表示にフォールバック */
+      #page-create.active:has(> #preview-card[style*="display:none"]):has(> #dl-section[style*="display:none"]),
+      #page-create.active:has(> #preview-card[style*="display: none"]):has(> #dl-section[style*="display: none"]),
+      #page-create.active:has(> #preview-card[style*="display:none"]):has(> #dl-section[style*="display: none"]),
+      #page-create.active:has(> #preview-card[style*="display: none"]):has(> #dl-section[style*="display:none"]) {
+        display: block;
+        max-width: 680px;
+      }
+
+      #page-create.active:has(> #preview-card[style*="display:none"]):has(> #dl-section[style*="display:none"]) > #today-card,
+      #page-create.active:has(> #preview-card[style*="display: none"]):has(> #dl-section[style*="display: none"]) > #today-card,
+      #page-create.active:has(> #preview-card[style*="display:none"]):has(> #dl-section[style*="display: none"]) > #today-card,
+      #page-create.active:has(> #preview-card[style*="display: none"]):has(> #dl-section[style*="display:none"]) > #today-card {
+        margin-bottom: 18px;
       }
 
       .upload-area {
@@ -2772,12 +2780,22 @@
 
       #page-settings.active {
         display: grid;
-        grid-template-columns: 360px 1fr;
+        grid-template-columns: minmax(0, 1.35fr) minmax(340px, 0.85fr);
         gap: 22px;
+        align-items: start;
       }
 
       #page-settings>.card {
         margin-bottom: 0;
+      }
+
+      #page-settings>.card:first-child {
+        grid-column: 1;
+        grid-row: 1 / span 4;
+      }
+
+      #page-settings>.card:not(:first-child) {
+        grid-column: 2;
       }
 
       #cust-list {
@@ -3076,10 +3094,6 @@
       .item-cards {
         grid-template-columns: 1fr 1fr 1fr;
       }
-
-      #page-history.active {
-        grid-template-columns: minmax(480px, 540px) 1fr;
-      }
     }
 
     @media (min-width: 769px) and (max-width: 1023px) {
@@ -3167,6 +3181,10 @@
 
       body.has-mobile-action-bar {
         padding-bottom: 160px;
+      }
+
+      body.has-mobile-action-bar .preview-bottom-actions {
+        display: none;
       }
 
       /* スマホでは ACTIVE JOBS パネルを完全に封印 */
@@ -3681,6 +3699,16 @@
       opacity: 0;
       pointer-events: none;
       z-index: 100001;
+    }
+
+    @keyframes flashAnim {
+      0% {
+        opacity: 0.85;
+      }
+
+      100% {
+        opacity: 0;
+      }
     }
 
     /* =========================================================
@@ -5006,6 +5034,7 @@
         <div class="flow-sep"></div>
         <div class="flow-step" data-step="3"><span class="fs-num">3</span>確定完了</div>
       </div>
+      <div class="create-left-col">
       <div class="card">
         <div class="card-title"><svg class="icon" aria-hidden="true"><use href="#i-crest"></use></svg>伝票設定</div>
         <div
@@ -5076,6 +5105,8 @@
                   const c = JSON.parse(sel.value);
                   this.search = c.name;
                   document.getElementById('manual-customer-group').style.display = 'none';
+                  if (c.discount_rate != null) $store.app.rate = c.discount_rate;
+                  if (c.code) document.getElementById('inp-customer-code').value = c.code;
                 } catch(e) {}
               }
             }
@@ -5168,6 +5199,7 @@
           <div class="progress-label"><span id="prog-label">準備中...</span><span id="prog-pct">0%</span></div>
         </div>
       </div>
+      </div>
 
       <div class="card" id="preview-card" style="display:none" x-data="{ isDesktop: window.innerWidth >= 1024 }"
         @resize.window.debounce.100ms="isDesktop = window.innerWidth >= 1024">
@@ -5187,6 +5219,7 @@
             <thead>
               <tr>
                 <th style="width:30px">No</th>
+                <th style="width:48px; text-align:center">写真</th>
                 <th style="width:130px">品番</th>
                 <th style="width:60px">カラー</th>
                 <th style="width:60px">サイズ</th>
@@ -5201,7 +5234,27 @@
                 <tr
                   :style="validateItem(item).level !== 'ok' ? `box-shadow: inset 4px 0 0 ${validateItem(item).level === 'error' ? 'var(--red)' : 'var(--gold-bright)'}` : ''">
                   <td x-text="index + 1" style="font-size:12px; color:var(--text-muted); text-align:center"></td>
-                  <td><input x-model="item.code" style="font-weight:600"></td>
+                  <td style="text-align:center">
+                    <template x-if="item.source_images && item.source_images.length">
+                      <img :src="item.source_images[0].thumb" @click="window.openPhotoZoom && window.openPhotoZoom(item, 0)"
+                        title="クリックして元写真を拡大"
+                        style="width:36px; height:46px; object-fit:cover; border-radius:4px; cursor:zoom-in; border:1px solid var(--border); display:inline-block; vertical-align:middle;">
+                    </template>
+                    <template x-if="!(item.source_images && item.source_images.length)">
+                      <span style="font-size:12px; color:var(--text-muted)">-</span>
+                    </template>
+                  </td>
+                  <td>
+                    <input x-model="item.code" style="font-weight:600">
+                    <div x-show="validateItem(item).level !== 'ok'" style="display:flex; flex-wrap:wrap; gap:3px; margin-top:3px;">
+                      <template x-for="err in validateItem(item).errors" :key="'e-' + err">
+                        <span class="ai-badge ai-badge-error" style="font-size:12px; padding:2px 6px; line-height:1.3;" x-text="'⚠ ' + err"></span>
+                      </template>
+                      <template x-for="warn in validateItem(item).warnings" :key="'w-' + warn">
+                        <span class="ai-badge ai-badge-warning" style="font-size:12px; padding:2px 6px; line-height:1.3;" x-text="'⚠ ' + warn"></span>
+                      </template>
+                    </div>
+                  </td>
                   <td><input x-model="item.color"></td>
                   <td><input x-model="item.size"></td>
                   <td>
@@ -5310,10 +5363,10 @@
 
                 <template x-if="item.source_images && item.source_images.length">
                   <div class="source-thumbs"
-                    style="position: sticky; top: 50px; z-index: 10; background: var(--bg-card); padding: 8px; border-radius: 8px; border: 1px solid var(--border-strong); box-shadow: var(--shadow-md); margin-bottom: 14px; justify-content: center;">
+                    style="justify-content: center;">
                     <template x-for="src in item.source_images">
                       <img class="source-thumb" :src="src.thumb" @click="openSourceImage(src)"
-                        style="width: auto; height: 140px; object-fit: contain;">
+                        style="width: auto; height: 96px; object-fit: contain;">
                     </template>
                   </div>
                 </template>
@@ -5369,7 +5422,7 @@
         <button class="btn btn-outline btn-sm" id="btn-add-row" @click="$store.app.addItem()"
           style="margin-top:14px;width:100%">＋ 空白行を追加</button>
 
-        <div style="margin-top:18px">
+        <div class="preview-bottom-actions" style="margin-top:18px">
           <button class="btn btn-gold" id="btn-generate" onclick="generateInvoice()">
             <div class="spinner" id="sp2"></div>✦ 保存して確定
           </button>
@@ -5572,7 +5625,7 @@
           <!-- さらに読み込むボタン -->
           <div style="text-align: center; padding: 16px;">
             <button class="btn btn-outline" style="width: 100%; max-width: 300px;"
-              @click="$store.app.fetchHistory(currentHistoryType, true)"
+              @click="$store.app.fetchHistory(document.getElementById('hist-type-filter')?.value || 'all', true)"
               x-show="$store.app.rawHistory.length >= 200">さらに読み込む</button>
           </div>
         </div>
@@ -5712,7 +5765,6 @@
                 </div>
               </div>
             </div>
-        </div>
         </template>
         <template x-if="!$store.app.customers.length">
           <div class="empty-state">登録された取引先はありません</div>
@@ -6288,15 +6340,16 @@
       if (/サーバーエラー \(5\d\d\)|Internal Server Error/i.test(s)) return 'サーバーで問題が発生しました。少し待ってからもう一度お試しください';
       return s;
     };
-    const toast = (msg, type, duration = 4000) => {
+    const toast = (msg, type = 'ok', duration = 4000) => {
+      const normType = (type === 'error') ? 'err' : (type === 'warning' ? 'warn' : (type || 'ok'));
       const stack = $('toast-stack');
       const el = document.createElement('div');
-      el.className = 'toast toast-' + type;
+      el.className = 'toast toast-' + normType;
       el.style.display = 'flex';
       el.style.alignItems = 'center';
       el.style.gap = '10px';
       const span = document.createElement('span');
-      span.innerHTML = (type === 'err') ? friendlyError(msg) : msg;
+      span.innerHTML = (normType === 'err') ? friendlyError(msg) : msg;
       span.style.flex = '1 1 auto';
       el.appendChild(span);
       if (duration > 0) {
@@ -6314,7 +6367,7 @@
         el.appendChild(close);
       }
       stack.appendChild(el);
-      if (type === 'ok') {
+      if (normType === 'ok') {
         const ss = $('statusbar-saved');
         if (ss) ss.textContent = `最終保存: ${new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}`;
       }
@@ -7310,8 +7363,10 @@
         extractedItems = d.items;
         setDocType(d.doc_type || 'delivery');
 
-        $('inp-rate').value = d.discount_rate;
-        if ($('inp-issue-date')) $('inp-issue-date').value = d.issue_date || new Date().toISOString().split('T')[0];
+        const rateVal = (d.discount_rate === 100) ? 0 : (d.discount_rate ?? 35);
+        $('inp-rate').value = rateVal;
+        Alpine.store('app').rate = rateVal;
+        if ($('inp-issue-date')) $('inp-issue-date').value = d.issue_date || (d.created_at || '').slice(0, 10) || new Date().toISOString().split('T')[0];
 
         // ★追加: 店舗コードを画面に復元する
         if ($('inp-customer-code')) $('inp-customer-code').value = d.customer_code || '';
@@ -7333,9 +7388,11 @@
         }
 
         $('sel-customer').dispatchEvent(new Event('change'));
+        $('inp-rate').value = rateVal;
+        Alpine.store('app').rate = rateVal;
 
-        $('drop-area').style.display = 'none';
-        $('thumbs').style.display = 'none';
+        $('drop-area').style.display = '';
+        $('thumbs').style.display = '';
         $('btn-analyze').style.display = 'none';
         $('dl-section').style.display = 'none';
         $('preview-title').textContent = `✎ 再編集: ${d.invoice_number}`;
@@ -7773,6 +7830,9 @@
       if (unitPrice <= 0) errors.push('単価未読取');
       if (!size || !VALID_SIZES.includes(size)) warnings.push('サイズ確認');
       if (qty <= 0) errors.push('数量不正');
+      if (Array.isArray(it.warnings)) {
+        it.warnings.forEach(w => { if (w && !warnings.includes(w)) warnings.push(w); });
+      }
 
       return {
         level: errors.length ? 'error' : (warnings.length ? 'warning' : 'ok'),
@@ -7933,12 +7993,6 @@
 
 
     // ===== Generate / Save =====
-    $('btn-add-row').addEventListener('click', () => {
-      syncInputs();
-      extractedItems.push({ code: '', color: '', size: '', quantity: 1, unit_price: 0 });
-      renderPreview();
-    });
-
     let forceNextGenerate = false;
     async function generateInvoice() {
       syncInputs();
