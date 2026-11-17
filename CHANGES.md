@@ -132,3 +132,21 @@
 - **モバイル表示**: `mobile-action-bar` 表示時はカード内の重複ボタンを非表示にし、カード展開時の元画像（`.source-thumbs`）の固定表示解除＆高さ最適化（96px）を実施
 - **通知・カメラ**: `.toast-warn` スタイル追加と `toast()` のタイプ正規化、シャッター時の `@keyframes flashAnim` を追加
 - Service Worker キャッシュを laura-v16 に更新
+
+## v8.3 (2026-11-17) — iPhone 17 PWA・スマホレイアウト・ライトモード全面改修
+
+### iPhone 17 PWA セーフエリア・カメラUI対応
+- **ヘッダー・カメラ上部のノッチ/Dynamic Island回避**: `.app-header`（モバイル）、`.cam-header`（連続撮影・バーコード読取）、`.pwa-modal` に `env(safe-area-inset-top/bottom)` を適用
+- **カメラ操作ボタンの視認性向上**: 撮影画面上部の「ライブラリ」「キャンセル」「✕」にグラデーション背景と半透明ピル型枠を追加
+- **プレビューモーダル改善**: モバイル時のヘッダーを折り返し対応にしタイトルの縦割れを解消。ボトムシートの最大高さを `calc(100dvh - env(safe-area-inset-top) - 12px)` に最適化
+
+### スマホフォーム・レイアウト改善
+- **伝票設定フォーム整理**: iOS Safari で `<input type="date">` が幅を突き破る問題を `-webkit-appearance: none; min-width: 0` で修正し、`伝票日付＋店舗コード（50%ずつ）` → `店名検索（100%）` → `手動入力（100%）` → `掛率＋AIモデル` の見やすい段組みに変更
+- **フローステップ均等配置**: モバイル上部の3ステップピルを均等幅配置にし、小画面での右端はみ出しを解消
+- **保存完了「ダウンロード ▾」メニュー見切れ解消**: `.card.success-card` とメニュー展開中のカードに `overflow: visible` を指定し、モバイルでは中央配置に変更
+- **履歴フィルタ2×2化・分析TOP5の1カラム化・明細カード幅調整**: 履歴の4種フィルタを2列×2段に整理。分析タブのTOP5カードをスマホでは1カラム縦積み、棒グラフを横スクロール可能に変更。明細カードの数量・単価欄をスマホ幅で1列フル幅に調整
+
+### ライトモード配色・ボタン標準化
+- **未スタイルボタンの修正**: `.btn` のベース色を定義し、「今日の状態」や画像拡大画面のボタンが iOS デフォルトの青文字になる問題を解消
+- **ライトモード完全対応**: `.bottom-nav`, `.mobile-action-bar`, `.active-job-strip`, `.user-chip`, `.doctype-btn.active`, `.flow-step.active`, `.success-card`, `#user-modal`, `.item-card-price-val`, `.hist-amt`, `#modal-title` のライトモード配色を整備し、設定画面の黒背景インラインstyleを除去
+- Service Worker キャッシュを laura-v17 に更新
