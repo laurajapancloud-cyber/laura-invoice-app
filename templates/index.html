@@ -428,8 +428,14 @@
     }
 
     .card.success-card,
-    .card:has(.dl-menu[open]) {
+    .card:has(.dl-menu[open]),
+    .hist-item:has(.dl-menu[open]) {
       overflow: visible;
+    }
+
+    .hist-item:has(.dl-menu[open]) {
+      position: relative;
+      z-index: 30;
     }
 
     .card::before {
@@ -1021,15 +1027,16 @@
     }
 
     .item-card-num {
-      font-family: 'Cormorant Garamond', serif;
+      font-family: 'Inter', 'Noto Sans JP', sans-serif;
       font-size: 13px;
-      font-weight: 600;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
       color: var(--gold-bright);
       background: var(--gold-soft);
       border: 1px solid var(--border);
       padding: 4px 12px;
       border-radius: 20px;
-      letter-spacing: 0.08em;
+      letter-spacing: 0.04em;
     }
 
     .item-card-del {
@@ -1135,20 +1142,21 @@
     }
 
     .item-card-total {
-      font-size: 22px;
-      font-weight: 700;
+      font-size: 20px;
+      font-weight: 800;
       color: var(--gold-bright);
       font-variant-numeric: tabular-nums;
-      font-family: 'Cormorant Garamond', serif;
-      letter-spacing: 0.02em;
+      font-family: 'Inter', 'Noto Sans JP', sans-serif;
+      letter-spacing: -0.01em;
     }
 
     .item-card-price-val {
       font-size: 15px;
       font-weight: 700;
       color: var(--gold-bright);
-      font-family: 'Cormorant Garamond', serif;
-      letter-spacing: 0.05em;
+      font-variant-numeric: tabular-nums;
+      font-family: 'Inter', 'Noto Sans JP', sans-serif;
+      letter-spacing: 0.01em;
       white-space: nowrap;
       flex-shrink: 0;
     }
@@ -1339,6 +1347,11 @@
       display: none;
     }
 
+    .btn-blue .spinner {
+      border-color: rgba(120, 174, 232, 0.35);
+      border-top-color: currentColor;
+    }
+
     @keyframes spin {
       to {
         transform: rotate(360deg);
@@ -1488,12 +1501,13 @@
     }
 
     .success-num {
-      font-family: 'Cormorant Garamond', serif;
+      font-family: 'Inter', 'Noto Sans JP', sans-serif;
       font-size: 18px;
-      font-weight: 600;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
       color: var(--gold-bright);
       margin-bottom: 4px;
-      letter-spacing: 0.05em;
+      letter-spacing: 0.02em;
     }
 
     .success-meta {
@@ -1705,12 +1719,27 @@
 
     .hist-actions-row {
       display: flex;
-      gap: 8px;
-      margin-top: 12px;
-      padding-top: 12px;
+      gap: 6px;
+      margin-top: 10px;
+      padding-top: 10px;
       border-top: 1px solid var(--border);
       align-items: center;
       flex-wrap: wrap;
+    }
+
+    .hist-actions-row .btn-sm {
+      padding: 6px 11px;
+      min-height: 36px;
+    }
+
+    .hist-more-menu {
+      margin-left: auto;
+    }
+
+    .hist-more-menu .dl-menu-panel {
+      right: 0;
+      left: auto;
+      min-width: 210px;
     }
 
     /* ===== Preview Tabs ===== */
@@ -2728,10 +2757,12 @@
       }
 
       .detail-header-info h2 {
-        font-family: 'Cormorant Garamond', serif;
-        font-size: 28px;
+        font-family: 'Inter', 'Noto Sans JP', sans-serif;
+        font-size: 24px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
         color: var(--gold-bright);
-        letter-spacing: 0.05em;
+        letter-spacing: 0.02em;
         margin-bottom: 4px;
       }
 
@@ -4867,6 +4898,67 @@
       background: rgba(247, 245, 240, 0.94) !important;
     }
 
+    /* ---- Compact AI Model Bar (Upload card) ---- */
+    .ai-model-compact-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: 12px;
+      padding: 6px 12px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border);
+    }
+
+    .ai-model-compact-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      white-space: nowrap;
+    }
+
+    .ai-model-compact-label .icon {
+      width: 14px;
+      height: 14px;
+      color: var(--gold);
+    }
+
+    .ai-model-compact-select {
+      flex: 1;
+      min-width: 0;
+      max-width: 240px;
+      padding: 6px 10px;
+      font-size: 12.5px;
+      font-weight: 600;
+      font-family: inherit;
+      color: var(--text-primary);
+      background: var(--bg-input);
+      border: 1px solid var(--border-strong);
+      border-radius: 8px;
+      min-height: 34px;
+      cursor: pointer;
+    }
+
+    .ai-model-compact-select:focus {
+      outline: none;
+      border-color: var(--gold);
+    }
+
+    [data-theme="light"] .ai-model-compact-bar {
+      background: #f8f6f1;
+      border-color: var(--border);
+    }
+
+    [data-theme="light"] .ai-model-compact-select {
+      background: #ffffff;
+      color: var(--text-primary);
+      border-color: var(--border-strong);
+    }
+
     /* ---- Motion: 過剰な動きを抑制 ---- */
     @media (prefers-reduced-motion: reduce) {
 
@@ -5368,16 +5460,8 @@
           <input type="text" id="inp-manual-customer" placeholder="例: 株式会社 〇〇 御中">
         </div>
         <div class="form-row">
-          <div class="form-group" style="flex: 0 0 96px;" x-data><label>掛率(%)</label><input type="number" id="inp-rate"
+          <div class="form-group" style="flex: 0 0 110px; margin-bottom: 0;" x-data><label>掛率(%)</label><input type="number" id="inp-rate"
               inputmode="numeric" min="0" max="100" x-model.number="$store.app.rate"></div>
-          <div class="form-group" style="flex: 1 1 180px;"><label>AI モデル</label>
-            <select id="sel-ai">
-              <option value="azure" selected>Azure GPT-4o (会社)</option>
-              <option value="gemini">Gemini 2.5 Flash</option>
-              <option value="openai">OpenAI GPT-4o-mini</option>
-              <option value="vision">Cloud Vision (高速OCR)</option>
-            </select>
-          </div>
         </div>
       </div>
 
@@ -5393,7 +5477,16 @@
           <div id="live-analyze-head" style="font-size:12px; color:var(--text-muted); margin-bottom:6px;"></div>
           <div id="live-analyze-rows" style="display:flex; flex-direction:column; gap:3px; font-size:12.5px;"></div>
         </div>
-        <button class="btn btn-gold" id="btn-analyze" disabled style="margin-top:14px">
+        <div class="ai-model-compact-bar">
+          <span class="ai-model-compact-label"><svg class="icon" aria-hidden="true"><use href="#i-ai"></use></svg>AIエンジン</span>
+          <select id="sel-ai" class="ai-model-compact-select" aria-label="AI モデル">
+            <option value="azure" selected>Azure GPT-4o (会社)</option>
+            <option value="gemini">Gemini 2.5 Flash</option>
+            <option value="openai">OpenAI GPT-4o-mini</option>
+            <option value="vision">Cloud Vision (高速OCR)</option>
+          </select>
+        </div>
+        <button class="btn btn-gold" id="btn-analyze" disabled style="margin-top:12px">
           <div class="spinner" id="sp1"></div><span id="btn-analyze-text">AIでデータを抽出する</span>
         </button>
         <div class="progress-wrap" id="prog-wrap" style="display:none">
@@ -5472,7 +5565,7 @@
                   <td><input type="number" inputmode="numeric" pattern="[0-9]*" x-model.number="item.unit_price"
                       style="font-weight:700; color:var(--gold-bright)"></td>
                   <td
-                    style="text-align:right; font-family:'Cormorant Garamond',serif; font-size:17px; font-weight:700; color:var(--gold-bright); white-space:nowrap;"
+                    style="text-align:right; font-family:'Inter','Noto Sans JP',sans-serif; font-variant-numeric:tabular-nums; font-size:15px; font-weight:700; color:var(--gold-bright); white-space:nowrap;"
                     x-text="'¥' + $store.app.calcItemAmount(item).toLocaleString()"></td>
                   <td style="text-align:center">
                     <button class="item-card-del" type="button" @click="$store.app.removeItem(index)"
@@ -5627,7 +5720,7 @@
 
         <div class="preview-bottom-actions" style="margin-top:18px">
           <button class="btn btn-gold" id="btn-generate" onclick="generateInvoice()">
-            <div class="spinner" id="sp2"></div>✦ 保存して確定
+            <div class="spinner" id="sp2"></div><span id="btn-generate-text">✦ 保存して確定</span>
           </button>
           <button class="btn btn-blue" id="btn-preview-only" style="margin-top:10px; width:100%">
             <svg class="icon" aria-hidden="true"><use href="#i-eye"></use></svg>プレビューを確認
@@ -5783,7 +5876,7 @@
 
               <!-- モバイル表示 -->
               <template x-if="!isDesktop">
-                <div style="width: 100%; min-width: 0; overflow: hidden;">
+                <div style="width: 100%; min-width: 0;">
                   <div class="hist-info">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px">
                       <div class="hist-num">
@@ -5805,19 +5898,32 @@
                         x-text="' • ' + (inv.created_at || '').slice(0,10).replace(/-/g,'/')"></span>
                     </div>
                     <div class="hist-actions-row">
-                      <button class="btn btn-gold btn-sm" @click.stop="quickPreview(inv.id)">高速プレビュー</button>
+                      <button class="btn btn-gold btn-sm" @click.stop="quickPreview(inv.id)">プレビュー</button>
+                      <button x-show="inv.status !== 'locked'" class="btn btn-outline btn-sm"
+                        @click.stop="editHist(inv.id)">編集</button>
                       <button x-show="inv.status !== 'locked'" class="btn btn-gold btn-sm"
                         @click.stop="lockHist(inv.id)">確定</button>
                       <button x-show="inv.status === 'locked'" class="btn btn-outline btn-sm"
                         @click.stop="unlockHist(inv.id)">解除</button>
-                      <button x-show="inv.status === 'locked'" class="btn btn-blue btn-sm"
-                        @click.stop="uploadDrive(inv.id, $el)">Driveに保存</button>
-                      <button class="btn btn-outline btn-sm" @click.stop="downloadZip(inv.id)"
-                        title="PDFとExcelが含まれています">ZIP (Excel含)</button>
-                      <button x-show="inv.status !== 'locked'" class="btn btn-outline btn-sm"
-                        @click.stop="editHist(inv.id)">編集</button>
-                      <button class="btn btn-red btn-sm"
-                        @click.stop="delHist(inv.id)">削除</button>
+                      <details class="dl-menu hist-more-menu" @click.stop>
+                        <summary class="btn btn-outline btn-sm" aria-label="その他の操作"
+                          style="padding: 0 12px; min-width: 40px;">⋯</summary>
+                        <div class="dl-menu-panel">
+                          <button type="button" x-show="inv.status === 'locked'" class="dl-menu-item"
+                            @click.stop="$el.closest('details').open=false; uploadDrive(inv.id, $el)">
+                            <svg class="icon" aria-hidden="true"><use href="#i-cloud"></use></svg>Driveに保存
+                          </button>
+                          <button type="button" class="dl-menu-item"
+                            @click.stop="$el.closest('details').open=false; downloadZip(inv.id)">
+                            <svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg>ZIP一括 (PDF+Excel)
+                          </button>
+                          <div class="dl-menu-sep"></div>
+                          <button type="button" class="dl-menu-item" style="color:var(--red)"
+                            @click.stop="$el.closest('details').open=false; delHist(inv.id)">
+                            ✕ 削除
+                          </button>
+                        </div>
+                      </details>
                     </div>
                   </div>
                 </div>
@@ -5990,8 +6096,8 @@
       </div>
     </div>
     <div class="card">
-      <div class="card-title"><svg class="icon" aria-hidden="true"><use href="#i-crest"></use></svg>表示設定</div>
-      <div style="display:flex; justify-content:space-between; align-items:center; gap:14px; padding:6px 2px;">
+      <div class="card-title"><svg class="icon" aria-hidden="true"><use href="#i-crest"></use></svg>表示・基本設定</div>
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:14px; padding:8px 2px; border-bottom:1px solid var(--border-subtle);">
         <div style="min-width:0">
           <div style="font-weight:600; color:var(--text-primary)">テーマ</div>
           <div style="font-size:12px; color:var(--text-muted); margin-top:4px">ライト / ダークの切り替え</div>
@@ -6000,6 +6106,25 @@
             class="icon" aria-hidden="true">
             <use href="#i-sun"></use>
           </svg></button>
+      </div>
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:14px; padding:12px 2px; border-bottom:1px solid var(--border-subtle); flex-wrap:wrap;">
+        <div style="min-width:0">
+          <div style="font-weight:600; color:var(--text-primary)">既定のAIモデル</div>
+          <div style="font-size:12px; color:var(--text-muted); margin-top:4px">起動時・新規作成時の初期AIエンジン</div>
+        </div>
+        <select id="sel-ai-default" class="ai-model-compact-select" aria-label="既定のAIモデル" style="max-width:220px;">
+          <option value="azure">Azure GPT-4o (会社)</option>
+          <option value="gemini">Gemini 2.5 Flash</option>
+          <option value="openai">OpenAI GPT-4o-mini</option>
+          <option value="vision">Cloud Vision (高速OCR)</option>
+        </select>
+      </div>
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:14px; padding:12px 2px 4px; flex-wrap:wrap;">
+        <div style="min-width:0">
+          <div style="font-weight:600; color:var(--text-primary)">操作マニュアル</div>
+          <div style="font-size:12px; color:var(--text-muted); margin-top:4px">撮影のコツや各項目の見方を確認</div>
+        </div>
+        <a href="/manual" target="_blank" rel="noopener" class="btn btn-outline btn-sm" style="text-decoration:none;"><svg class="icon" aria-hidden="true"><use href="#i-book"></use></svg>マニュアルを開く</a>
       </div>
     </div>
     <div class="card">
@@ -6054,8 +6179,8 @@
   <div class="mobile-action-bar" id="mobile-action-bar">
     <button class="btn btn-outline" onclick="document.getElementById('btn-add-row').click()">＋ 行追加</button>
     <button class="btn btn-blue" onclick="document.getElementById('btn-preview-only').click()"><svg class="icon" aria-hidden="true"><use href="#i-eye"></use></svg>確認</button>
-    <button class="btn btn-gold" onpointerdown="event.preventDefault(); generateInvoice()"
-      onclick="generateInvoice()">✦ 保存して確定</button>
+    <button class="btn btn-gold" id="btn-generate-mob" onpointerdown="event.preventDefault(); generateInvoice()"
+      onclick="generateInvoice()"><div class="spinner" id="sp2-mob"></div><span id="btn-generate-mob-text">✦ 保存して確定</span></button>
   </div>
 
   <script>
@@ -6179,6 +6304,29 @@
       });
     };
     applyTheme();
+
+    // 既定のAIモデル同期 (laura-ai-model)
+    (function initAiModelPreference() {
+      const selAi = $('sel-ai');
+      const selDefault = $('sel-ai-default');
+      const valid = new Set(['azure', 'gemini', 'openai', 'vision']);
+      let saved = 'azure';
+      try {
+        const s = localStorage.getItem('laura-ai-model');
+        if (s && valid.has(s)) saved = s;
+      } catch (_e) {}
+      if (selAi) selAi.value = saved;
+      if (selDefault) selDefault.value = saved;
+
+      const syncModel = (val) => {
+        if (!valid.has(val)) return;
+        try { localStorage.setItem('laura-ai-model', val); } catch (_e) {}
+        if (selAi && selAi.value !== val) selAi.value = val;
+        if (selDefault && selDefault.value !== val) selDefault.value = val;
+      };
+      if (selAi) selAi.addEventListener('change', (e) => syncModel(e.target.value));
+      if (selDefault) selDefault.addEventListener('change', (e) => syncModel(e.target.value));
+    })();
 
     // アプリ起動時に今日の日付をセット
     document.addEventListener("DOMContentLoaded", () => {
@@ -7863,7 +8011,19 @@
       const total = selectedFiles.length;
 
       $('btn-analyze').disabled = true;
+      if ($('sp1')) $('sp1').style.display = 'inline-block';
+      if ($('btn-analyze-text')) $('btn-analyze-text').textContent = `AI解析中... (0/${total}枚)`;
       toast(`${total}枚の画像をAI解析中...`, 'info', 2000);
+
+      const resetAnalyzeBtn = () => {
+        if ($('sp1')) $('sp1').style.display = 'none';
+        $('btn-analyze').disabled = false;
+        if ($('btn-analyze-text')) {
+          $('btn-analyze-text').textContent = selectedFiles.length
+            ? (extractedItems.length > 0 ? `${selectedFiles.length}枚を追加抽出・合流` : `${selectedFiles.length}枚を抽出する`)
+            : 'AIでデータを抽出する';
+        }
+      };
 
       try {
         const fd = new FormData();
@@ -7888,6 +8048,7 @@
             try {
               const pg = res && res.progress;
               if (!pg || !pg.total) return;
+              if ($('btn-analyze-text')) $('btn-analyze-text').textContent = `AI解析中... (${pg.done}/${pg.total}枚)`;
               const box = $('live-analyze');
               if (box) {
                 box.style.display = 'block';
@@ -7975,6 +8136,7 @@
             scheduleAutosave();
 
             renderPreview();
+            if ($('sp1')) $('sp1').style.display = 'none';
             $('btn-analyze').disabled = false;
             const warnCount = extractedItems.filter(it => (it.warnings || []).length > 0).length;
             if (warnCount > 0) {
@@ -7990,13 +8152,13 @@
           onError: (err) => {
             if ($('live-analyze')) $('live-analyze').style.display = 'none';
             toast('解析に失敗しました: ' + err, 'err');
-            $('btn-analyze').disabled = false;
+            resetAnalyzeBtn();
           }
         });
       } catch (e) {
         console.error(e);
         toast('準備エラー: ' + e.message, 'err');
-        $('btn-analyze').disabled = false;
+        resetAnalyzeBtn();
       }
     });
     function updProg(label, cur, tot) {
@@ -8197,6 +8359,7 @@
     // ===== Generate / Save =====
     let forceNextGenerate = false;
     async function generateInvoice() {
+      if ($('btn-generate')?.disabled) return;
       syncInputs();
       if (!extractedItems.length) return toast('商品がありません', 'err');
 
@@ -8236,7 +8399,16 @@
         if (!confirm(`確認が必要な行があります:\n\n${msg}\n\nこのまま確定保存しますか？`)) return;
       }
 
-      $('btn-generate').disabled = true;
+      const setGenerateBusy = (busy) => {
+        if ($('btn-generate')) $('btn-generate').disabled = busy;
+        if ($('btn-generate-mob')) $('btn-generate-mob').disabled = busy;
+        if ($('sp2')) $('sp2').style.display = busy ? 'inline-block' : 'none';
+        if ($('sp2-mob')) $('sp2-mob').style.display = busy ? 'inline-block' : 'none';
+        if ($('btn-generate-text')) $('btn-generate-text').textContent = busy ? '保存中...' : '✦ 保存して確定';
+        if ($('btn-generate-mob-text')) $('btn-generate-mob-text').textContent = busy ? '保存中...' : '✦ 保存して確定';
+      };
+
+      setGenerateBusy(true);
 
       const cn = getCustomerName();
       const payload = {
@@ -8254,6 +8426,7 @@
 
       jobManager.enqueue('generate', '/api/jobs/generate', payload, {
         onSuccess: async (result) => {
+          setGenerateBusy(false);
           lastInvoiceId = result.invoice_id;
           currentInvNum = result.invoice_number;
           currentDocType = result.doc_type;
@@ -8297,7 +8470,7 @@
           await loadHistory();
         },
         onError: (err) => {
-          $('btn-generate').disabled = false;
+          setGenerateBusy(false);
           if (String(err).includes('重複の可能性')) {
             if (confirm(String(err) + '\n\n重複ではないことを確認しました。このまま確定保存しますか？')) {
               forceNextGenerate = true;
@@ -8367,7 +8540,7 @@
         const menu = item.closest('details.dl-menu');
         if (menu) menu.open = false;
         if (item.dataset.dlZip) downloadZip(parseInt(item.dataset.dlZip, 10));
-        else dlFromServer(item.dataset.dlUrl, item.dataset.dlName);
+        else if (item.dataset.dlUrl) dlFromServer(item.dataset.dlUrl, item.dataset.dlName);
         return;
       }
       document.querySelectorAll('details.dl-menu[open]').forEach(m => { if (!m.contains(t)) m.open = false; });
@@ -8393,6 +8566,10 @@
       $('dl-section').style.display = 'none';
       $('btn-generate').disabled = false;
       $('sp2').style.display = 'none';
+      if ($('btn-generate-text')) $('btn-generate-text').textContent = '✦ 保存して確定';
+      if ($('btn-generate-mob')) $('btn-generate-mob').disabled = false;
+      if ($('sp2-mob')) $('sp2-mob').style.display = 'none';
+      if ($('btn-generate-mob-text')) $('btn-generate-mob-text').textContent = '✦ 保存して確定';
       $('preview-title').textContent = '✎ 読み取り結果（タップで修正可能）';
       localStorage.removeItem('laura-draft');
       currentDraftId = null; // 次の自動保存から新しい下書きとして扱う
@@ -8435,11 +8612,11 @@
                 <div style="display:flex; justify-content:space-around; text-align:center;">
                   <div>
                     <div style="font-size:12px; color:var(--text-secondary)">純売上</div>
-                    <div style="font-size:24px; font-weight:700; color:var(--gold-bright); font-family:'Cormorant Garamond'">¥${Number(d.my_this_month.total_amount || 0).toLocaleString()}</div>
+                    <div style="font-size:24px; font-weight:800; color:var(--gold-bright); font-family:'Inter','Noto Sans JP',sans-serif; font-variant-numeric:tabular-nums">¥${Number(d.my_this_month.total_amount || 0).toLocaleString()}</div>
                   </div>
                   <div>
                     <div style="font-size:12px; color:var(--text-secondary)">処理件数</div>
-                    <div style="font-size:24px; font-weight:700; color:var(--text-primary); font-family:'Cormorant Garamond'">${d.my_this_month.invoices || 0}件</div>
+                    <div style="font-size:24px; font-weight:800; color:var(--text-primary); font-family:'Inter','Noto Sans JP',sans-serif; font-variant-numeric:tabular-nums">${d.my_this_month.invoices || 0}件</div>
                   </div>
                 </div>
               </div>
@@ -8544,7 +8721,9 @@
     }
 
     async function uploadDrive(invId, btnEl) {
+      const sp = (btnEl && btnEl.querySelector) ? btnEl.querySelector('.spinner') : null;
       if (btnEl) btnEl.disabled = true;
+      if (sp) sp.style.display = 'inline-block';
 
       const fd = new FormData();
       fd.append('inv_id', invId);
@@ -8553,10 +8732,12 @@
         onSuccess: (res) => {
           const links = res.uploaded.map(u => `<a href="${u.url}" target="_blank" style="color:var(--gold-bright);text-decoration:underline">${u.type.toUpperCase()}</a>`).join(' / ');
           toast(`✦ Driveに保存しました: ${links}`, 'ok', 0);
+          if (sp) sp.style.display = 'none';
           if (btnEl) btnEl.disabled = false;
         },
         onError: (err) => {
           toast('Drive保存に失敗しました: ' + err, 'err');
+          if (sp) sp.style.display = 'none';
           if (btnEl) btnEl.disabled = false;
         }
       });

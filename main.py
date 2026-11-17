@@ -1942,53 +1942,148 @@ def build_detail_excel(invoice_number: str, customer_name: str, items: list, doc
     return out.getvalue()
 
 
-def build_detail_pdf(invoice_number: str, customer_name: str, items: list, doc_type='delivery', user_name='') -> bytes:
-    """明細 PDF"""
+def render_detail_html(
+    invoice_number: str,
+    customer_name: str,
+    items: list,
+    doc_type: str = 'delivery',
+    user_name: str = '',
+    date_str: str = '',
+    customer_code: str = '',
+    font_face_css: str = '',
+) -> str:
+    """明細表 PDF / プレビュー用 HTML を統一生成"""
     titles = DOC_TYPE_TITLES.get(doc_type, DOC_TYPE_TITLES["delivery"])
-    font_css = get_pdf_font_css()
+    sign = -1 if doc_type in ("return", "prov_return") else 1
     rows_html = ""
+    total_qty = 0
     for i, item in enumerate(items):
+        raw_q = int(item.get('quantity') or 0)
+        q = abs(raw_q) * sign if raw_q != 0 else 0
+        total_qty += q
+        up = int(item.get('unit_price') or 0)
         rows_html += (
             "<tr>"
-            f"<td>{i + 1}</td>"
-            f"<td>{h(item.get('code'))}</td>"
-            f"<td>{h(item.get('color'))}</td>"
-            f"<td>{h(item.get('size'))}</td>"
-            f"<td>{h(item.get('quantity', 0))}</td>"
-            f"<td>¥{int(item.get('unit_price') or 0):,}</td>"
+            f"<td class=\"col-no\">{i + 1}</td>"
+            f"<td class=\"col-code\">{h(item.get('code') or '-')}</td>"
+            f"<td class=\"col-color\">{h(item.get('color') or '-')}</td>"
+            f"<td class=\"col-size\">{h(item.get('size') or '-')}</td>"
+            f"<td class=\"col-qty\">{q:,}</td>"
+            f"<td class=\"col-price\">¥{up:,}</td>"
             "</tr>"
         )
 
-    html_str = f"""<!DOCTYPE html>
+    code_html = f'<div class="customer-code">店舗コード: {h(customer_code)}</div>' if customer_code else ''
+    no_html = f'<div class="title-no">伝票No. {h(invoice_number)}</div>' if invoice_number else ''
+    meta_lines = []
+    if date_str:
+        meta_lines.append(f"<div>発行日: {h(date_str)}</div>")
+    if user_name:
+        meta_lines.append(f"<div>担当: {h(user_name)}</div>")
+    meta_right_html = "".join(meta_lines)
+
+    return f"""<!DOCTYPE html>
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
-<style>{font_css}
-body{{font-family:'Noto Sans JP', -apple-system, BlinkMacSystemFont, sans-serif; font-size:12px;}}
-.title{{font-size:20px; font-weight:bold; text-align:center; margin-bottom:10px;}}
-.meta{{margin-bottom:15px;}}
-table{{width:100%; border-collapse:collapse;}}
-th,td{{border:1px solid #ccc; padding:6px; text-align:center;}}
-th{{background:#f4ecd8;}}
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{h(titles.get('detail_pdf_title') or titles['detail'])}</title>
+<style>{font_face_css}
+@page {{ size: A4 portrait; margin: 14mm 15mm; }}
+* {{ box-sizing: border-box; }}
+body {{
+  margin: 0; padding: 0; background: #ffffff; color: #1a1d24;
+  font-family: 'Inter', 'Noto Sans JP', -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif;
+  font-size: 12px; line-height: 1.5; -webkit-font-smoothing: antialiased;
+}}
+.detail-box {{ max-width: 780px; margin: 0 auto; padding: 28px 30px; background: #ffffff; }}
+.title-bar {{ display: flex; justify-content: space-between; align-items: baseline; border-bottom: 2px solid #1a1d24; padding-bottom: 10px; margin-bottom: 20px; }}
+.title {{ font-size: 20px; font-weight: 700; letter-spacing: 0.14em; color: #111827; }}
+.title-no {{ font-size: 12px; color: #4b5563; font-variant-numeric: tabular-nums; }}
+.meta-row {{ display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; margin-bottom: 22px; }}
+.customer {{ font-size: 16px; font-weight: 700; color: #111827; border-bottom: 1px solid #9ca3af; padding-bottom: 5px; display: inline-block; min-width: 220px; }}
+.customer-code {{ margin-top: 5px; font-size: 11px; color: #6b7280; font-variant-numeric: tabular-nums; }}
+.meta-right {{ text-align: right; font-size: 11.5px; color: #374151; line-height: 1.65; flex-shrink: 0; }}
+table {{ width: 100%; border-collapse: collapse; margin-bottom: 18px; font-variant-numeric: tabular-nums; }}
+thead {{ display: table-header-group; }}
+tr {{ page-break-inside: avoid; break-inside: avoid; }}
+th {{
+  background: #f5f6f8; color: #374151; font-size: 11px; font-weight: 700;
+  padding: 9px 8px; border-top: 1px solid #cbd5e1; border-bottom: 2px solid #1a1d24;
+  text-align: center; white-space: nowrap;
+}}
+td {{ padding: 8px; border-bottom: 1px solid #e5e7eb; text-align: center; color: #1f2937; vertical-align: middle; }}
+tbody tr:nth-child(even) {{ background-color: #fafbfc; }}
+.col-no {{ width: 36px; color: #6b7280; font-size: 11px; }}
+.col-code {{ text-align: left !important; padding-left: 10px !important; font-weight: 600; color: #111827; }}
+.col-color {{ width: 76px; }}
+.col-size {{ width: 64px; }}
+.col-qty {{ width: 68px; font-weight: 700; font-variant-numeric: tabular-nums; }}
+.col-price {{ width: 116px; text-align: right !important; padding-right: 10px !important; font-variant-numeric: tabular-nums; white-space: nowrap; }}
+.summary-bar {{
+  display: flex; justify-content: flex-end; gap: 20px; align-items: baseline;
+  padding: 10px 14px; background: #f5f6f8; border-top: 2px solid #1a1d24; border-bottom: 1px solid #cbd5e1;
+  font-size: 12.5px; color: #1f2937; font-variant-numeric: tabular-nums; page-break-inside: avoid; break-inside: avoid;
+}}
+.summary-bar strong {{ font-size: 15px; color: #111827; }}
+@media print {{ .detail-box {{ max-width: none; padding: 0; }} }}
 </style>
 </head>
 <body>
-<div class="title">{h(titles['detail'])}</div>
-<div class="meta">
-  <span>伝票番号: {h(invoice_number)}</span><br>
-  <span>取引先: {h(customer_name)}</span><br>
-  <span>担当: {h(user_name)}</span>
+<div class="detail-box">
+  <div class="title-bar">
+    <div class="title">{h(titles['detail'])}</div>
+    {no_html}
+  </div>
+  <div class="meta-row">
+    <div>
+      <div class="customer">{h(customer_name)}</div>
+      {code_html}
+    </div>
+    <div class="meta-right">{meta_right_html}</div>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th class="col-no">No.</th>
+        <th class="col-code">品番</th>
+        <th class="col-color">カラー</th>
+        <th class="col-size">サイズ</th>
+        <th class="col-qty">枚数</th>
+        <th class="col-price">上代（税抜）</th>
+      </tr>
+    </thead>
+    <tbody>{rows_html}</tbody>
+  </table>
+  <div class="summary-bar">
+    <span>明細行数: {len(items):,} 行</span>
+    <span>合計枚数: <strong>{total_qty:,} 点</strong></span>
+  </div>
 </div>
-<table>
-<thead>
-<tr><th>No.</th><th>品番</th><th>カラー</th><th>サイズ</th><th>枚数</th><th>上代</th></tr>
-</thead>
-<tbody>{rows_html}</tbody>
-</table>
 </body>
 </html>"""
 
+
+def build_detail_pdf(
+    invoice_number: str,
+    customer_name: str,
+    items: list,
+    doc_type='delivery',
+    user_name='',
+    date_str: str = '',
+    customer_code: str = '',
+) -> bytes:
+    """明細 PDF"""
+    html_str = render_detail_html(
+        invoice_number=invoice_number,
+        customer_name=customer_name,
+        items=items,
+        doc_type=doc_type,
+        user_name=user_name,
+        date_str=date_str,
+        customer_code=customer_code,
+        font_face_css=get_pdf_font_css(),
+    )
     if HTML is None:
         raise RuntimeError("WeasyPrint is not available. PDF generation is disabled.")
     return HTML(string=html_str).write_pdf()
@@ -2605,7 +2700,15 @@ def build_all_files(invoice_data: dict, is_preview: bool = False) -> dict:
     return {
         "pdf": build_invoice_pdf(invoice_data),
         "excel": build_invoice_excel(invoice_data, is_preview=is_preview),
-        "detail_pdf": build_detail_pdf(invoice_data["invoice_number"], invoice_data["customer_name"], invoice_data["items"], doc_type, invoice_data.get("user_name", "")),
+        "detail_pdf": build_detail_pdf(
+            invoice_data["invoice_number"],
+            invoice_data["customer_name"],
+            invoice_data["items"],
+            doc_type,
+            invoice_data.get("user_name", ""),
+            date_str=invoice_data.get("date", ""),
+            customer_code=invoice_data.get("customer_code", ""),
+        ),
         "detail_excel": build_detail_excel(invoice_data["invoice_number"], invoice_data["customer_name"], invoice_data["items"], doc_type, invoice_data.get("user_name", ""), invoice_data.get("issue_date")),
         "client_excel": build_client_excel(invoice_data, is_preview=is_preview),
     }
@@ -2634,6 +2737,8 @@ def build_single_file(kind: str, invoice_data: dict) -> bytes:
             invoice_data["items"],
             doc_type,
             invoice_data.get("user_name", ""),
+            date_str=invoice_data.get("date", ""),
+            customer_code=invoice_data.get("customer_code", ""),
         )
 
     if kind == "detail_excel":
@@ -3194,66 +3299,46 @@ def preview_pdf(inv_id: int, username: Annotated[str, Depends(authenticate)]):
 def preview_detail_pdf(inv_id: int, username: Annotated[str, Depends(authenticate)]):
     """保存済みの明細表PDFプレビューの代わりに、動的にHTMLを生成して返す"""
     with db_conn() as conn, conn.cursor() as cur:
-        cur.execute("SELECT * FROM invoices WHERE id=%s", (inv_id,))
+        cur.execute(
+            "SELECT i.*, u.name AS user_name FROM invoices i LEFT JOIN users u ON i.user_id = u.id WHERE i.id=%s",
+            (inv_id,),
+        )
         inv = cur.fetchone()
         if not inv:
             raise HTTPException(404, "Not found")
         cur.execute("SELECT code, color, size, unit_price, quantity FROM invoice_items WHERE invoice_id=%s", (inv_id,))
         items = [dict(r) for r in cur.fetchall()]
-        
-        user_name = ""
-        if inv.get('user_id'):
-            cur.execute("SELECT name FROM users WHERE id=%s", (inv['user_id'],))
-            u_row = cur.fetchone()
-            if u_row: user_name = u_row['name']
 
-    doc_type = inv.get("doc_type", "delivery")
-    titles = DOC_TYPE_TITLES.get(doc_type, DOC_TYPE_TITLES["delivery"])
-    
-    rows_html = ""
-    for i, item in enumerate(items):
-        rows_html += (
-            "<tr>"
-            f"<td>{i + 1}</td>"
-            f"<td>{h(item.get('code'))}</td>"
-            f"<td>{h(item.get('color'))}</td>"
-            f"<td>{h(item.get('size'))}</td>"
-            f"<td>{h(item.get('quantity', 0))}</td>"
-            f"<td>¥{int(item.get('unit_price') or 0):,}</td>"
-            "</tr>"
-        )
+    inv_dict = dict(inv)
+    doc_type = inv_dict.get("doc_type", "delivery")
+    dr = inv_dict.get("discount_rate") or 100
+    date_str = ""
+    if items:
+        try:
+            inv_data = assemble_invoice_data(inv_dict, items, dr, doc_type)
+            date_str = inv_data.get("date", "")
+        except ValueError:
+            pass
+    if not date_str:
+        issue_date_str = inv_dict.get("issue_date")
+        if issue_date_str:
+            try:
+                dt = datetime.datetime.strptime(str(issue_date_str), "%Y-%m-%d")
+                date_str = f"{dt.year}年{dt.month}月{dt.day}日"
+            except Exception:
+                date_str = str(issue_date_str)
+        else:
+            date_str = to_jst(inv_dict.get("locked_at") or inv_dict.get("created_at")).strftime("%Y年%m月%d日")
 
-    html_str = f"""<!DOCTYPE html>
-<html lang="ja">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
-<style>
-body{{font-family:'Noto Sans JP', -apple-system, BlinkMacSystemFont, sans-serif; font-size:12px;}}
-.title{{font-size:20px; font-weight:bold; text-align:center; margin-bottom:10px;}}
-.meta{{margin-bottom:15px;}}
-table{{width:100%; border-collapse:collapse;}}
-th,td{{border:1px solid #ccc; padding:6px; text-align:center;}}
-th{{background:#f4ecd8;}}
-</style>
-</head>
-<body>
-<div class="title">{h(titles['detail'])}</div>
-<div class="meta">
-  <span>伝票番号: {h(inv['invoice_number'])}</span><br>
-  <span>取引先: {h(inv['customer_name'])}</span>
-</div>
-<table>
-<thead>
-<tr><th>No.</th><th>品番</th><th>カラー</th><th>サイズ</th><th>枚数</th><th>上代</th></tr>
-</thead>
-<tbody>{rows_html}</tbody>
-</table>
-</body>
-</html>"""
-
-    return html_str
+    return render_detail_html(
+        invoice_number=inv_dict.get("invoice_number") or "",
+        customer_name=inv_dict.get("customer_name") or "",
+        items=items,
+        doc_type=doc_type,
+        user_name=inv_dict.get("user_name") or "",
+        date_str=date_str,
+        customer_code=inv_dict.get("customer_code") or "",
+    )
 
 def get_doc_type_folder_label(doc_type: str) -> str:
     """Drive保存用のフォルダ名ラベルを返す"""
@@ -3499,49 +3584,15 @@ def get_history_meta(inv_id: int, username: Annotated[str, Depends(authenticate)
     main_html = template.render(**{**inv_data, "font_face_css": ""})
 
     # 2. 明細表のHTMLプレビューを生成
-    titles = DOC_TYPE_TITLES.get(doc_type, DOC_TYPE_TITLES["delivery"])
-    rows_html = ""
-    for i, item in enumerate(items):
-        rows_html += (
-            "<tr>"
-            f"<td>{i + 1}</td>"
-            f"<td>{h(item.get('code'))}</td>"
-            f"<td>{h(item.get('color'))}</td>"
-            f"<td>{h(item.get('size'))}</td>"
-            f"<td>{h(item.get('quantity', 0))}</td>"
-            f"<td>¥{int(item.get('unit_price') or 0):,}</td>"
-            "</tr>"
-        )
-    detail_html = f"""<!DOCTYPE html>
-<html lang="ja">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
-<style>
-body{{font-family:'Noto Sans JP', -apple-system, BlinkMacSystemFont, sans-serif; font-size:12px;}}
-.title{{font-size:20px; font-weight:bold; text-align:center; margin-bottom:10px;}}
-.meta{{margin-bottom:15px;}}
-table{{width:100%; border-collapse:collapse;}}
-th,td{{border:1px solid #ccc; padding:6px; text-align:center;}}
-th{{background:#f4ecd8;}}
-</style>
-</head>
-<body>
-<div class="title">{h(titles['detail'])}</div>
-<div class="meta">
-  <span>伝票番号: {h(inv['invoice_number'])}</span><br>
-  <span>取引先: {h(inv['customer_name'])}</span><br>
-  <span>担当: {h(user_name)}</span>
-</div>
-<table>
-<thead>
-<tr><th>No.</th><th>品番</th><th>カラー</th><th>サイズ</th><th>枚数</th><th>上代</th></tr>
-</thead>
-<tbody>{rows_html}</tbody>
-</table>
-</body>
-</html>"""
+    detail_html = render_detail_html(
+        invoice_number=inv.get("invoice_number") or "",
+        customer_name=inv.get("customer_name") or "",
+        items=items,
+        doc_type=doc_type,
+        user_name=user_name,
+        date_str=inv_data.get("date", ""),
+        customer_code=inv.get("customer_code") or "",
+    )
 
     def iso_or_none(v):
         if not v: return None

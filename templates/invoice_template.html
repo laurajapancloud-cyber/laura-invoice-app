@@ -3,87 +3,267 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>納品書</title>
+    <title>{{ doc_pdf_title or doc_title_main or '納品書' }}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
     <style>
         {{ font_face_css|safe }}
 
+        @page {
+            size: A4 portrait;
+            margin: 14mm 15mm;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
         body {
-            font-family: 'Noto Sans JP', -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: #ffffff;
+            color: #1a1d24;
+            font-family: 'Inter', 'Noto Sans JP', -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif;
             font-size: 12px;
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
         }
 
         .invoice-box {
-            max-width: 800px;
-            margin: auto;
-            padding: 30px;
+            max-width: 780px;
+            margin: 0 auto;
+            padding: 28px 30px;
+            background: #ffffff;
+        }
+
+        .title-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            border-bottom: 2px solid #1a1d24;
+            padding-bottom: 10px;
+            margin-bottom: 24px;
+        }
+
+        .title {
+            font-size: 22px;
+            font-weight: 700;
+            letter-spacing: 0.18em;
+            color: #111827;
+        }
+
+        .title-no {
+            font-size: 12px;
+            color: #4b5563;
+            font-variant-numeric: tabular-nums;
         }
 
         .header {
             display: flex;
             justify-content: space-between;
-            margin-bottom: 40px;
+            align-items: flex-start;
+            gap: 24px;
+            margin-bottom: 28px;
         }
 
-        .title {
-            font-size: 24px;
-            font-weight: bold;
-            border-bottom: 2px solid #000;
-            padding-bottom: 10px;
-            margin-bottom: 20px;
+        .customer-block {
+            flex: 1;
+            min-width: 0;
         }
 
         .customer {
-            font-size: 18px;
-            font-weight: bold;
+            font-size: 17px;
+            font-weight: 700;
+            color: #111827;
+            border-bottom: 1px solid #9ca3af;
+            padding-bottom: 6px;
+            display: inline-block;
+            min-width: 240px;
+        }
+
+        .customer-code {
+            margin-top: 6px;
+            font-size: 11px;
+            color: #6b7280;
+            font-variant-numeric: tabular-nums;
         }
 
         .issuer {
             text-align: right;
+            font-size: 11.5px;
+            color: #374151;
+            line-height: 1.65;
+            flex-shrink: 0;
+        }
+
+        .issuer p {
+            margin: 0;
+        }
+
+        .issuer-name {
+            font-size: 13px;
+            font-weight: 700;
+            color: #111827;
+            margin-top: 4px !important;
         }
 
         .invoice-table {
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 30px;
+            margin-bottom: 22px;
+            font-variant-numeric: tabular-nums;
         }
 
-        .invoice-table th,
-        .invoice-table td {
-            border: 1px solid #ccc;
-            padding: 10px;
-            text-align: center;
+        .invoice-table thead {
+            display: table-header-group;
+        }
+
+        .invoice-table tfoot {
+            display: table-row-group;
+        }
+
+        .invoice-table tr {
+            page-break-inside: avoid;
+            break-inside: avoid;
         }
 
         .invoice-table th {
-            background-color: #f0f0f0;
+            background-color: #f5f6f8;
+            color: #374151;
+            font-size: 11px;
+            font-weight: 700;
+            padding: 9px 8px;
+            border-top: 1px solid #cbd5e1;
+            border-bottom: 2px solid #1a1d24;
+            text-align: center;
+            white-space: nowrap;
         }
 
-        .total-section {
-            text-align: right;
-            font-size: 14px;
+        .invoice-table td {
+            padding: 9px 8px;
+            border-bottom: 1px solid #e5e7eb;
+            text-align: center;
+            color: #1f2937;
+            vertical-align: middle;
         }
 
-        .grand-total {
-            font-size: 18px;
-            font-weight: bold;
-            margin-top: 10px;
-            border-top: 2px solid #000;
-            padding-top: 10px;
+        .invoice-table tbody tr:nth-child(even) {
+            background-color: #fafbfc;
+        }
+
+        .col-no {
+            width: 36px;
+            color: #6b7280;
+            font-size: 11px;
+        }
+
+        .col-code {
+            text-align: left !important;
+            padding-left: 10px !important;
+            font-weight: 600;
+            color: #111827;
+        }
+
+        .col-color {
+            width: 72px;
+        }
+
+        .col-size {
+            width: 58px;
+        }
+
+        .col-qty {
+            width: 58px;
+            font-weight: 600;
+        }
+
+        .col-num {
+            text-align: right !important;
+            padding-right: 10px !important;
+            font-variant-numeric: tabular-nums;
+            white-space: nowrap;
+        }
+
+        .col-price {
+            width: 92px;
+        }
+
+        .col-amount {
+            width: 116px;
+            font-weight: 600;
+            color: #111827;
+        }
+
+        .summary-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 24px;
+            margin-top: 8px;
+            page-break-inside: avoid;
+            break-inside: avoid;
+        }
+
+        .qty-summary {
+            font-size: 11.5px;
+            color: #4b5563;
+            padding: 8px 12px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            border-left: 3px solid #9ca3af;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .totals-box {
+            width: 280px;
+            margin-left: auto;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .total-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            padding: 6px 8px;
+            font-size: 12px;
+            color: #374151;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .total-row.grand-total {
+            margin-top: 4px;
+            padding: 10px 8px;
+            font-size: 16px;
+            font-weight: 700;
+            color: #111827;
+            border-top: 2px solid #1a1d24;
+            border-bottom: 2px solid #1a1d24;
+            background: #f8f9fa;
+        }
+
+        @media print {
+            .invoice-box {
+                max-width: none;
+                padding: 0;
+            }
         }
     </style>
 </head>
 
 <body>
     <div class="invoice-box">
-        <div class="title">{{ doc_title_main }}</div>
+        <div class="title-bar">
+            <div class="title">{{ doc_title_main }}</div>
+            {% if invoice_number %}<div class="title-no">伝票No. {{ invoice_number }}</div>{% endif %}
+        </div>
         <div class="header">
-            <div class="customer">{{ customer_name }}</div>
+            <div class="customer-block">
+                <div class="customer">{{ customer_name }}</div>
+                {% if customer_code %}<div class="customer-code">店舗コード: {{ customer_code }}</div>{% endif %}
+            </div>
             <div class="issuer">
-                {% if invoice_number %}<p>伝票No: {{ invoice_number }}</p>{% endif %}
-                <p>{{ date }}</p>
-                <p>{{ issuer }}</p>{% if registration_no %}<p>登録番号: {{ registration_no }}</p>{% endif %}
+                <p>発行日: {{ date }}</p>
+                <p class="issuer-name">{{ issuer }}</p>
+                {% if registration_no %}<p>登録番号: {{ registration_no }}</p>{% endif %}
                 {% if user_name %}<p>担当: {{ user_name }}</p>{% endif %}
             </div>
         </div>
@@ -91,34 +271,48 @@
         <table class="invoice-table">
             <thead>
                 <tr>
-                    <th>No.</th>
-                    <th>品番</th>
-                    <th>カラー</th>
-                    <th>サイズ</th>
-                    <th>数量</th>
-                    <th>単価</th>
-                    <th>金額{% if doc_type != 'statement' and discount_rate and discount_rate < 100 %}（掛率{{ discount_rate }}%）{% endif %}</th>
+                    <th class="col-no">No.</th>
+                    <th class="col-code">品番</th>
+                    <th class="col-color">カラー</th>
+                    <th class="col-size">サイズ</th>
+                    <th class="col-qty">数量</th>
+                    <th class="col-num col-price">単価</th>
+                    <th class="col-num col-amount">金額{% if doc_type != 'statement' and discount_rate and discount_rate < 100 %}（{{ discount_rate }}%）{% endif %}</th>
                 </tr>
             </thead>
             <tbody>
                 {% for item in items %}
                 <tr>
-                    <td>{{ loop.index }}</td>
-                    <td>{{ item.code }}</td>
-                    <td>{{ item.color }}</td>
-                    <td>{{ item.size }}</td>
-                    <td>{{ item.quantity }}</td>
-                    <td>¥{{ "{:,}".format(item.unit_price) }}</td>
-                    <td>¥{{ "{:,}".format(item.net_amount) }}</td>
+                    <td class="col-no">{{ loop.index }}</td>
+                    <td class="col-code">{{ item.code }}</td>
+                    <td class="col-color">{{ item.color }}</td>
+                    <td class="col-size">{{ item.size }}</td>
+                    <td class="col-qty">{{ item.quantity }}</td>
+                    <td class="col-num col-price">¥{{ "{:,}".format(item.unit_price) }}</td>
+                    <td class="col-num col-amount">¥{{ "{:,}".format(item.net_amount) }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
 
-        <div class="total-section">
-            <p>小計（10%対象・税抜）: ¥{{ "{:,}".format(total_net_amount) }}</p>
-            <p>消費税(10%): ¥{{ "{:,}".format(total_tax_amount) }}</p>
-            <p class="grand-total">合計金額: ¥{{ "{:,}".format(total_grand_total) }}</p>
+        <div class="summary-footer">
+            <div class="qty-summary">
+                明細 {{ items|length }} 行 ／ 合計数量 {{ "{:,}".format(items | sum(attribute='quantity')) }} 点
+            </div>
+            <div class="totals-box">
+                <div class="total-row">
+                    <span>小計（10%対象・税抜）</span>
+                    <span>¥{{ "{:,}".format(total_net_amount) }}</span>
+                </div>
+                <div class="total-row">
+                    <span>消費税 (10%)</span>
+                    <span>¥{{ "{:,}".format(total_tax_amount) }}</span>
+                </div>
+                <div class="total-row grand-total">
+                    <span>合計金額（税込）</span>
+                    <span>¥{{ "{:,}".format(total_grand_total) }}</span>
+                </div>
+            </div>
         </div>
     </div>
 </body>

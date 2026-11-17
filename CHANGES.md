@@ -150,3 +150,16 @@
 - **未スタイルボタンの修正**: `.btn` のベース色を定義し、「今日の状態」や画像拡大画面のボタンが iOS デフォルトの青文字になる問題を解消
 - **ライトモード完全対応**: `.bottom-nav`, `.mobile-action-bar`, `.active-job-strip`, `.user-chip`, `.doctype-btn.active`, `.flow-step.active`, `.success-card`, `#user-modal`, `.item-card-price-val`, `.hist-amt`, `#modal-title` のライトモード配色を整備し、設定画面の黒背景インラインstyleを除去
 - Service Worker キャッシュを laura-v17 に更新
+
+## v8.4 (2026-11-17) — タイポグラフィ統一・帳票刷新・モバイルUI整理
+
+### タイポグラフィ・フォーム・モバイルUI改善
+- **数字・金額・伝票番号の書体統一**: 明細カード（`.item-card-num`, `.item-card-price-val`, `.item-card-total`）、保存完了番号（`.success-num`）、PC履歴詳細見出し（`.detail-header-info h2`）、PC明細テーブル金額セル、ダッシュボード個人実績に残っていた `Cormorant Garamond` を `Inter, 'Noto Sans JP', sans-serif` + `tabular-nums` に統一
+- **AIモデル選択欄のコンパクト化＆既定値同期**: 伝票設定カードのフル幅「AI モデル」欄をアップロードカード内のコンパクトバー（`.ai-model-compact-bar`）へ移設し、スマホ初期表示で「タグを撮影」欄がより見やすい高さに整理。設定タブ「表示・基本設定」に「既定のAIモデル」を追加し `localStorage('laura-ai-model')` で双方向同期
+- **モバイル履歴カード操作ボタンの整理**: 最大6ボタンが露出していた `.hist-actions-row` を「プレビュー / 編集（未確定のみ）/ 確定・解除」＋「⋯」ドロップダウンメニュー（Drive保存・ZIP一括・削除）の1行構成にスリム化し、メニュー展開時の親クリッピング（`overflow: hidden`）も解消
+- **操作マニュアル導線の追加＆ログイン画面改善**: 設定タブから `/manual` を直接開ける導線を追加。`login.html` をセルフホストフォント化・`viewport-fit=cover` ＆左右16px余白・`laura-theme` 連動ライトモードに対応
+
+### 帳票PDF / HTMLプレビューデザイン刷新・ボタンフィードバック連動
+- **納品書・明細表デザインのモダナイズ**: `templates/invoice_template.html` と `main.py` の明細HTML生成（共通ヘルパー `render_detail_html` に統合）を刷新。`@page` A4余白・複数ページ時 `thead` 反復・水平罫線主体のテーブル・品番左揃え・単価/金額/上代の右揃え等幅数字・明細表への発行日・担当者・店舗コード・合計枚数表示を導入
+- **ボタン内スピナー連動**: 「AIでデータを抽出する」（`#sp1` ＋進捗件数表記）・「保存して確定」（`#sp2` / モバイルバー `#sp2-mob` ＆二重発火防止）・「Driveに保存」（`.spinner`）押下時にスピナーと状態文言が連動するよう接続
+- Service Worker キャッシュを laura-v18 に更新
