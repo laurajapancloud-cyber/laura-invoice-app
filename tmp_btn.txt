@@ -1,0 +1,15 @@
+5093: async function dlFromServer(url, fn) {
+5478: document.querySelector('.btn-dl-pdf').onclick = () => dlFromServer(`/api/history/${d.id}/pdf`, fPdf);
+5479: document.querySelector('.btn-dl-xl').onclick = () => dlFromServer(`/api/history/${d.id}/excel`, fXl);
+5480: document.querySelector('.btn-dl-dpdf').onclick = () => dlFromServer(`/api/history/${d.id}/detail-pdf`, fDpdf);
+5481: document.querySelector('.btn-dl-dxl').onclick = () => dlFromServer(`/api/history/${d.id}/detail-excel`, fDxl);
+5483: document.querySelector('.btn-dl-pdf').onclick = () => dlFromServer(`/api/history/${d.id}/pdf`, fPdf);
+5484: document.querySelector('.btn-dl-xl').onclick = () => dlFromServer(`/api/history/${d.id}/excel`, fXl);
+5485: document.querySelector('.btn-dl-dpdf').onclick = () => dlFromServer(`/api/history/${d.id}/detail-pdf`, fDpdf);
+5486: document.querySelector('.btn-dl-dxl').onclick = () => dlFromServer(`/api/history/${d.id}/detail-excel`, fDxl);
+5770: await dlFromServer(`/api/history/${invId}/zip`, `invoice_${invId}.zip`);
+5882: <button class="btn btn-red" onclick="dlFromServer('/api/history/${d.invoice_id}/pdf','${fPdf}')">📄 PDF保存</button>
+5883: <button class="btn btn-green" onclick="dlFromServer('/api/history/${d.invoice_id}/excel','${fXl}')">📊 Excel保存</button>
+5889: <button class="btn btn-red" onclick="dlFromServer('/api/history/${d.invoice_id}/detail-pdf','${fDpdf}')">📄 PDF保存</button>
+5890: <button class="btn btn-green" onclick="dlFromServer('/api/history/${d.invoice_id}/detail-excel','${fDxl}')">📊 Excel保存</button>
+6534: dlFromServer(urlMap[kind], filenameMap[kind]);

@@ -1,0 +1,21 @@
+39: from fastapi import FastAPI, UploadFile, File, Depends, HTTPException, status, Response, Request, Form, BackgroundTasks
+111: from googleapiclient.http import MediaInMemoryUpload
+115: MediaInMemoryUpload = None
+158: def storage_upload(path: str, data: bytes, mime: str) -> str:
+162: supabase_client.storage.from_(STORAGE_BUCKET).upload(
+1149: async def analyze_images(request: Request, username: Annotated[str, Depends(authenticate)], files: List[UploadFile] = File(...), ai_model: str = Form("gemini")):
+1162: async def enqueue_analyze(bt: BackgroundTasks, username: Annotated[str, Depends(authenticate)], files: List[UploadFile] = File(...), ai_model: str = Form("gemini")):
+2105: drive_jid = db_create_job('drive_upload', {"invoice_id": inv_id})
+2107: bt.add_task(upload_drive_internal, drive_jid, inv_id)
+2459: def upload_drive_internal(jid: str, inv_id: int):
+2483: uploaded = []
+2499: uploaded.append({"type": typ, "name": fn, "url": resp.json().get("url")})
+2500: db_update_job(jid, 'done', result={"uploaded": uploaded})
+2504: @app.post("/api/history/{inv_id}/upload-drive")
+2505: def upload_to_drive(inv_id: int, username: Annotated[str, Depends(authenticate)]):
+2506: jid = db_create_job('drive_upload', {"invoice_id": inv_id})
+2507: upload_drive_internal(jid, inv_id)
+2512: @app.post("/api/jobs/drive-upload")
+2513: def enqueue_drive_upload(bt: BackgroundTasks, username: Annotated[str, Depends(authenticate)], inv_id: int = Form(...)):
+2514: jid = db_create_job('drive_upload', {"invoice_id": inv_id})
+2515: bt.add_task(upload_drive_internal, jid, inv_id)

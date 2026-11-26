@@ -1,0 +1,39 @@
+1670: .doctype-btn[data-type="prov_return"].active {
+3950: <button class="doctype-btn" data-type="prov_return">仮返品</button>
+4202: x-text="$store.app.displayRateLabel + ' x ' + (($store.app.docType === 'return' || $store.app.docType === 'prov_return') ? '-' : '') + Math.abs(item.quantity || 1) + '個'"></span>
+4295: <option value="prov_return">仮返品</option>
+4307: <span data-sort="doc_type">種別</span>
+4340: :style="`background:${TYPE_COLORS[inv.doc_type] || '#666'}1a; color:${TYPE_COLORS[inv.doc_type] || '#aaa'}; border:1px solid ${TYPE_COLORS[inv.doc_type] || '#666'}`"
+4341: x-text="TYPE_TITLES[inv.doc_type]?.label || '不明'"></span>
+4374: :style="`background:${TYPE_COLORS[inv.doc_type] || '#666'}1a; color:${TYPE_COLORS[inv.doc_type] || '#aaa'}; border:1px solid ${TYPE_COLORS[inv.doc_type] || '#666'}`"
+4375: x-text="TYPE_TITLES[inv.doc_type]?.label || '不明'"></span>
+4749: const isReturn = this.docType === 'return' || this.docType === 'prov_return';
+4788: const r = await fetch(`/api/history?doc_type=${type}`);
+4841: prov_return: { main: '仮返品書', detail: '仮返品明細表', label: '仮返品', pdf_title: '仮返品書', detail_pdf_title: '仮返品明細表' },
+4863: prov_delivery: 'var(--blue)', prov_return: '#a87fb8'
+5467: const fPdf = getFileName(d.doc_type, customer, dateISO, 'pdf');
+5468: const fXl = getFileName(d.doc_type, customer, dateISO, 'excel');
+5469: const fDpdf = getFileName(d.doc_type, customer, dateISO, 'detail-pdf');
+5470: const fDxl = getFileName(d.doc_type, customer, dateISO, 'detail-excel');
+5529: const isReturn = payload.doc_type === 'return' || payload.doc_type === 'prov_return';
+5571: const isReturn = payload.doc_type === 'return' || payload.doc_type === 'prov_return';
+5837: const titles = TYPE_TITLES[d.doc_type] || TYPE_TITLES.delivery;
+5840: const fPdf = getFileName(d.doc_type, d.customer_name, d.locked_at || d.created_at, 'pdf');
+5841: const fXl = getFileName(d.doc_type, d.customer_name, d.locked_at || d.created_at, 'excel');
+5842: const fDpdf = getFileName(d.doc_type, d.customer_name, d.locked_at || d.created_at, 'detail-pdf');
+5843: const fDxl = getFileName(d.doc_type, d.customer_name, d.locked_at || d.created_at, 'detail-excel');
+5858: <span class="badge" style="background:${TYPE_COLORS[d.doc_type]}33; color:${TYPE_COLORS[d.doc_type]}">${titles.label}</span>
+5898: doc_type: d.doc_type
+5908: currentDocType = d.doc_type;
+5915: doc_type: d.doc_type
+5932: const payload = { customer_name: d.customer_name, customer_code: d.customer_code, discount_rate: d.discount_rate, items: d.items, doc_type: d.doc_type };
+5947: currentDocType = d.doc_type || 'delivery';
+5996: doc_type: currentDocType,
+6003: doc_type: currentDocType
+6027: doc_type: d.doc_type,
+6310: const sign = (currentDocType === 'return' || currentDocType === 'prov_return') ? -1 : 1;
+6388: doc_type: currentDocType,
+6409: currentDocType = draft.doc_type || 'delivery';
+6453: doc_type: currentDocType,
+6461: currentDocType = result.doc_type;
+6468: doc_type: result.doc_type,

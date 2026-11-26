@@ -1,0 +1,28 @@
+45: import zipfile
+164: def storage_download(path: str) -> bytes:
+168: return supabase_client.storage.from_(STORAGE_BUCKET).download(path)
+512: def _ensure_fonts_downloaded():
+535: downloaded = []
+555: downloaded.append((weight, fname))
+560: if downloaded:
+562: f.write(",".join(f"{w}:{n}" for w, n in downloaded))
+565: logger.warning("Font download failed (PDF will use fallback): %s", e)
+575: _ensure_fonts_downloaded()
+590: _ensure_fonts_downloaded()
+1567: for col, txt in zip(["A"] + h_cols, ["No."] + headers):
+2047: content = storage_download(inv[cfg["path_field"]])
+2057: logger.warning("Storage download failed, regenerating: %s", e)
+2213: key: storage_download(inv[col])
+2226: @app.get("/api/history/{inv_id}/zip")
+2227: def dl_zip(inv_id: int, username: Annotated[str, Depends(authenticate)]):
+2228: """伝票に関連する4ファイルをZIPにまとめてダウンロードする"""
+2236: zip_buffer = BytesIO()
+2237: with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as z:
+2243: zip_buffer.seek(0)
+2245: # === ここからZIPファイル名の変更 ===
+2249: zip_name = f"{customer}_{date_str}.zip"
+2253: encoded_filename = urllib.parse.quote(zip_name)
+2256: content=zip_buffer.getvalue(),
+2257: media_type="application/zip",
+2263: logger.exception("ZIP download failed for inv_id %s: %s", inv_id, e)
+2264: raise HTTPException(status_code=500, detail=f"ZIP生成に失敗しました: {str(e)}")

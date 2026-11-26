@@ -1,0 +1,2 @@
+1419: def build_invoice_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
+1694: def build_all_files(invoice_data: dict, is_preview: bool = False) -> dict:

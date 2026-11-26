@@ -1,0 +1,44 @@
+63: from openpyxl.drawing.image import Image as ExcelImage
+360: excel_storage_path TEXT,
+362: detail_excel_storage_path TEXT,
+1175: Excel出力時の印刷設定をA4に固定する。
+1205: def build_detail_excel(invoice_number: str, customer_name: str, items: list, doc_type='delivery', user_name: str = '') -> bytes:
+1206: """商品明細表 Excel (サイズ別内訳・モダンデザイン)"""
+1419: def build_invoice_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
+1420: """納品書 Excel (バーコード付き・モダンデザイン)"""
+1543: img_store = ExcelImage(bc_io_store)
+1628: img = ExcelImage(bc_io)
+1694: def build_all_files(invoice_data: dict, is_preview: bool = False) -> dict:
+1699: "excel": build_invoice_excel(invoice_data, is_preview=is_preview),
+1701: "detail_excel": build_detail_excel(invoice_data["invoice_number"], invoice_data["customer_name"], invoice_data["items"], doc_type, invoice_data.get("user_name", "")),
+1709: - excel
+1711: - detail_excel
+1718: if kind == "excel":
+1719: return build_invoice_excel(invoice_data)
+1730: if kind == "detail_excel":
+1731: return build_detail_excel(
+1868: pdf_storage_path=NULL, excel_storage_path=NULL, detail_pdf_storage_path=NULL, detail_excel_storage_path=NULL
+1914: "excel_url": f"/api/history/{inv_id}/excel",
+1916: "detail_excel_url": f"/api/history/{inv_id}/detail-excel",
+2011: # kind: "pdf" | "excel" | "detail_pdf" | "detail_excel"
+2014: "excel":        {"path_field": "excel_storage_path",        "mime": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",         "ext": "xlsx", "files_key": "excel"},
+2016: "detail_excel": {"path_field": "detail_excel_storage_path", "mime": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",         "ext": "xlsx", "files_key": "detail_excel"},
+2036: if kind in ("pdf", "excel"):
+2081: @app.get("/api/history/{inv_id}/excel")
+2082: def dl_excel(inv_id: int, username: Annotated[str, Depends(authenticate)]):
+2083: return serve_file(inv_id, "excel")
+2089: @app.get("/api/history/{inv_id}/detail-excel")
+2090: def dl_detail_excel(inv_id: int, username: Annotated[str, Depends(authenticate)]):
+2091: return serve_file(inv_id, "detail_excel")
+2207: "excel": "excel_storage_path",
+2209: "detail_excel": "detail_excel_storage_path",
+2242: z.writestr(f"{inv_num}_{customer}_{titles['pdf_title']}.xlsx", files["excel"])
+2244: z.writestr(f"{inv_num}_{customer}_{titles['detail_pdf_title']}.xlsx", files["detail_excel"])
+2282: cur.execute("SELECT pdf_storage_path, excel_storage_path, detail_pdf_storage_path, detail_excel_storage_path FROM invoices WHERE id = %s", (inv_id,))
+2289: for col in ['pdf_storage_path', 'excel_storage_path', 'detail_pdf_storage_path', 'detail_excel_storage_path']:
+2330: ("excel",        f"{inv_num}_{cust}_{main_label}.xlsx",  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", files["excel"]),
+2332: ("detail_excel", f"{inv_num}_{cust}_{detail_label}.xlsx","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", files["detail_excel"]),
+2472: "excel_url": f"/api/history/{inv_id}/excel",
+2474: "detail_excel_url": f"/api/history/{inv_id}/detail-excel",
+2519: "excel_base64": base64.b64encode(files["excel"]).decode(),
+2521: "detail_excel_base64": base64.b64encode(files["detail_excel"]).decode(),

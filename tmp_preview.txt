@@ -1,0 +1,6 @@
+4834: let selectedFiles = [], selectedFileThumbs = [], pdfData = null, excelData = null;
+4835: let detailPdfData = null, detailExcelData = null;
+5909: pdfData = d.pdf_base64 || null; excelData = d.excel_base64 || null;
+5910: detailPdfData = d.detail_pdf_base64 || null; detailExcelData = d.detail_excel_base64 || null;
+6544: pdfData = null; excelData = null;
+6545: detailPdfData = null; detailExcelData = null;

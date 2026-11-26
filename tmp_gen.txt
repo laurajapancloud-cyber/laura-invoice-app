@@ -1,0 +1,9 @@
+373: cur.execute("ALTER TABLE invoices ADD COLUMN IF NOT EXISTS client_excel_storage_path TEXT;")
+1695: def build_client_excel(invoice_data: dict, is_preview: bool = False) -> bytes:
+1846: def build_all_files(invoice_data: dict, is_preview: bool = False) -> dict:
+1854: "client_excel": build_client_excel(invoice_data, is_preview=is_preview),
+2363: "client_excel": "client_excel_storage_path",
+2380: files = build_all_files(inv_data)
+2399: if "client_excel" in files and files["client_excel"]:
+2400: z.writestr(f"{inv_num}_{customer}_{titles['pdf_title']}_提出用.xlsx", files["client_excel"])
+2652: files = build_all_files(inv_data)

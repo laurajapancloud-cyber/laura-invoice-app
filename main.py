@@ -187,7 +187,12 @@ def storage_download(path: str) -> bytes:
     return supabase_client.storage.from_(STORAGE_BUCKET).download(path)
 
 # AI Initialization
+GEMINI_MODEL_MAP = {
+    "gemini": "gemini-2.5-flash",
+    "gemini_lite": "gemini-2.5-flash-lite",
+}
 gemini_client_new = None
+gemini_models: Dict[str, Any] = {}
 gemini_model = None
 if GEMINI_API_KEY:
     if google_genai_new:
@@ -198,7 +203,9 @@ if GEMINI_API_KEY:
     if not gemini_client_new and genai:
         try:
             genai.configure(api_key=GEMINI_API_KEY)
-            gemini_model = genai.GenerativeModel("gemini-2.5-flash")
+            for key, mname in GEMINI_MODEL_MAP.items():
+                gemini_models[key] = genai.GenerativeModel(mname)
+            gemini_model = gemini_models.get("gemini")
         except Exception as e:
             logger.warning("Gemini init failed: %s", e)
 
@@ -1223,6 +1230,7 @@ def _compute_dashboard(user_id: Optional[int]):
         model = u["ai_model"]
         imgs = u["imgs"]
         if model == "gemini": cost = round(imgs * 0.1, 1)
+        elif model == "gemini_lite": cost = round(imgs * 0.05, 1)
         elif model in ["azure", "openai"]: cost = round(imgs * 0.5, 1)
         else: cost = 0
         usage_list.append({"model": model, "requests": u["cnt"], "images": imgs, "est_cost_yen": cost})
@@ -1471,10 +1479,11 @@ def _analyze_single_image(part: dict, ai_model: str, master_codes: list = None) 
             )
         return extract_json_object((response.choices[0].message.content or "").strip())
 
-    if ai_model == "gemini":
+    if ai_model in GEMINI_MODEL_MAP:
+        model_id = GEMINI_MODEL_MAP[ai_model]
         if gemini_client_new and google_genai_types:
             response = gemini_client_new.models.generate_content(
-                model="gemini-2.5-flash",
+                model=model_id,
                 contents=[
                     prompt,
                     google_genai_types.Part.from_bytes(data=part["data"], mime_type=part["mime_type"]),
@@ -1485,10 +1494,12 @@ def _analyze_single_image(part: dict, ai_model: str, master_codes: list = None) 
                 ),
             )
             return extract_json_object((response.text or "").strip())
-        if not gemini_model: raise Exception("Gemini APIキーが未設定です。")
+        g_model = gemini_models.get(ai_model) or gemini_model
+        if not g_model:
+            raise Exception("Gemini APIキー（GEMINI_API_KEY）が未設定です。")
         contents = [prompt, {"mime_type": part["mime_type"], "data": part["data"]}]
         try:
-            response = gemini_model.generate_content(
+            response = g_model.generate_content(
                 contents,
                 generation_config={
                     "temperature": 0,
@@ -1497,10 +1508,52 @@ def _analyze_single_image(part: dict, ai_model: str, master_codes: list = None) 
             )
         except TypeError:
             # 古いSDKは generation_config のキーに未対応の場合がある
-            response = gemini_model.generate_content(contents)
+            response = g_model.generate_content(contents)
         return extract_json_object(response.text.strip())
 
     raise Exception(f"未対応のAIモデルです: {ai_model}")
+
+
+# Gemini 無料枠向けレート制限対策（間隔スロットリング + 429判定・待機秒数抽出）
+_gemini_rate_lock = threading.Lock()
+_gemini_last_call_ts = 0.0
+try:
+    GEMINI_MIN_INTERVAL_SEC = max(0.0, float(os.getenv("GEMINI_MIN_INTERVAL_SEC", "1.2")))
+except Exception:
+    GEMINI_MIN_INTERVAL_SEC = 1.2
+
+
+def _gemini_rate_gate():
+    """Gemini 無料枠の瞬間バースト(RPM超過)を防ぐための最小リクエスト間隔ゲート"""
+    global _gemini_last_call_ts
+    if GEMINI_MIN_INTERVAL_SEC <= 0:
+        return
+    with _gemini_rate_lock:
+        now = time.monotonic()
+        wait = (_gemini_last_call_ts + GEMINI_MIN_INTERVAL_SEC) - now
+        if wait > 0:
+            time.sleep(wait)
+        _gemini_last_call_ts = time.monotonic()
+
+
+def _is_rate_limit_error(err: Exception) -> bool:
+    """429 / ResourceExhausted / Quota 等のレート制限エラーかを判定"""
+    msg = f"{type(err).__name__}: {err}".lower()
+    return any(k in msg for k in ("429", "resourceexhausted", "resource_exhausted", "rate limit", "too many requests", "quota"))
+
+
+def _extract_retry_delay(err: Exception, attempt: int) -> float:
+    """エラーメッセージから推奨待機秒数を抽出（無ければ指数バックオフ）"""
+    msg = str(err)
+    m = re.search(r"retry\s+(?:in|after)\s+(\d+(?:\.\d+)?)\s*s", msg, flags=re.IGNORECASE)
+    if m:
+        return min(max(float(m.group(1)) + 1.0, 2.0), 30.0)
+    m2 = re.search(r"seconds:\s*(\d+)", msg, flags=re.IGNORECASE)
+    if m2:
+        return min(max(float(m2.group(1)) + 1.0, 2.0), 30.0)
+    # 指数バックオフ: 4s -> 10s -> 18s -> 25s
+    backoff = [4.0, 10.0, 18.0, 25.0]
+    return backoff[min(attempt, len(backoff) - 1)]
 
 def _attach_variant_warnings(items: list):
     """学習型商品マスタ（過去の確定伝票実績）と突合し、価格不一致などの警告を付与する"""
@@ -1548,17 +1601,42 @@ def analyze_images_internal(jid: str, image_parts: list, ai_model: str):
         results = [None] * n
         failed = {}
 
+        is_gemini = ai_model in GEMINI_MODEL_MAP
+        progress_lock = threading.Lock()
+        done_count = 0
+
         def run_one(idx: int):
             last_err = None
-            for attempt in range(2):  # 失敗時は1回だけ自動リトライ
+            max_attempts = 5 if is_gemini else 2
+            for attempt in range(max_attempts):
                 try:
+                    if is_gemini:
+                        _gemini_rate_gate()
                     item = _analyze_single_image(image_parts[idx], ai_model, master_codes)
                     item["quantity"] = 1
                     item["source_image_no"] = idx
                     return idx, item, None
                 except Exception as e:
                     last_err = e
-                    time.sleep(0.8 * (attempt + 1))
+                    is_rl = _is_rate_limit_error(e)
+                    if is_rl and attempt + 1 < max_attempts:
+                        wait_sec = _extract_retry_delay(e, attempt)
+                        logger.warning("Rate limited on image %d (%s), waiting %.1fs (attempt %d/%d)", idx, ai_model, wait_sec, attempt + 1, max_attempts)
+                        try:
+                            with progress_lock:
+                                live = [{"code": str(r.get("code") or "-"), "size": str(r.get("size") or ""), "unit_price": r.get("unit_price") or 0} for r in results if r is not None][:30]
+                                db_update_job(jid, 'processing', result={"progress": {
+                                    "done": done_count, "total": n, "failed": len(failed), "item_count": len(live), "live_items": live,
+                                    "note": f"無料枠のレート制限のため約{int(round(wait_sec))}秒待機して再試行中..."
+                                }})
+                        except Exception:
+                            pass
+                        time.sleep(wait_sec)
+                        continue
+                    if not is_rl and attempt < 1:
+                        time.sleep(0.8 * (attempt + 1))
+                        continue
+                    break
             return idx, None, str(last_err)
 
         # 学習マスタの既知品番を取得してAIに照合させる（読み取り精度向上ループ）
@@ -1577,24 +1655,30 @@ def analyze_images_internal(jid: str, image_parts: list, ai_model: str):
             logger.warning("master codes fetch failed: %s", e)
 
         from concurrent.futures import ThreadPoolExecutor, as_completed
-        max_workers = 1 if ai_model == "vision" else min(4, max(1, n))
+        if ai_model == "vision":
+            max_workers = 1
+        elif is_gemini:
+            # Gemini 無料枠の1分あたり上限(RPM)を超えにくい並列数に制限
+            max_workers = min(2, max(1, n))
+        else:
+            max_workers = min(4, max(1, n))
         with ThreadPoolExecutor(max_workers=max_workers) as ex:
             futures = [ex.submit(run_one, i) for i in range(n)]
-            done_count = 0
             for fut in as_completed(futures):
                 idx, item, err = fut.result()
-                done_count += 1
-                if item is not None:
-                    results[idx] = item
-                else:
-                    failed[idx] = err or "unknown error"
-                    logger.warning("Image %d analyze failed (%s): %s", idx, ai_model, err)
-                # リアルタイム進捗: 1枚終わるごとに進捗と読み取り済み明細をジョブへ書き込む（ポーリングで順次表示）
-                try:
-                    live = [{"code": str(r.get("code") or "-"), "size": str(r.get("size") or ""), "unit_price": r.get("unit_price") or 0} for r in results if r is not None][:30]
-                    db_update_job(jid, 'processing', result={"progress": {"done": done_count, "total": n, "failed": len(failed), "item_count": len(live), "live_items": live}})
-                except Exception as pe:
-                    logger.warning("progress update failed: %s", pe)
+                with progress_lock:
+                    done_count += 1
+                    if item is not None:
+                        results[idx] = item
+                    else:
+                        failed[idx] = err or "unknown error"
+                        logger.warning("Image %d analyze failed (%s): %s", idx, ai_model, err)
+                    # リアルタイム進捗: 1枚終わるごとに進捗と読み取り済み明細をジョブへ書き込む（ポーリングで順次表示）
+                    try:
+                        live = [{"code": str(r.get("code") or "-"), "size": str(r.get("size") or ""), "unit_price": r.get("unit_price") or 0} for r in results if r is not None][:30]
+                        db_update_job(jid, 'processing', result={"progress": {"done": done_count, "total": n, "failed": len(failed), "item_count": len(live), "live_items": live}})
+                    except Exception as pe:
+                        logger.warning("progress update failed: %s", pe)
 
         items_data = [it for it in results if it is not None]
 
@@ -1653,6 +1737,20 @@ def analyze_images_internal(jid: str, image_parts: list, ai_model: str):
 async def analyze_images(username: Annotated[str, Depends(authenticate)]):
     """旧同期API（廃止）。長時間ブロックしプロキシタイムアウトの原因となるため 410 を返す。"""
     raise HTTPException(status_code=410, detail="このAPIは廃止されました。/api/jobs/analyze をご利用ください。")
+
+@app.get("/api/ai-models")
+def get_ai_models(username: Annotated[str, Depends(authenticate)]):
+    """環境変数が設定済みで利用可能なAIモデル一覧と推奨デフォルトを返す"""
+    gemini_ok = bool(gemini_client_new or gemini_models.get("gemini") or gemini_model)
+    models = [
+        {"id": "gemini", "label": "Gemini 2.5 Flash（無料枠・推奨）", "available": gemini_ok, "free_tier": True},
+        {"id": "gemini_lite", "label": "Gemini 2.5 Flash-Lite（軽量・高速）", "available": gemini_ok, "free_tier": True},
+        {"id": "vision", "label": "Cloud Vision（高速OCR・月1000枚無料）", "available": bool(vision_client), "free_tier": True},
+        {"id": "openai", "label": "OpenAI GPT-4o-mini", "available": bool(openai_client), "free_tier": False},
+        {"id": "azure", "label": "Azure GPT-4o（会社）", "available": bool(azure_client), "free_tier": False},
+    ]
+    default_id = next((m["id"] for m in models if m["available"]), "gemini")
+    return {"models": models, "default": default_id}
 
 @app.post("/api/jobs/analyze")
 async def enqueue_analyze(bt: BackgroundTasks, username: Annotated[str, Depends(authenticate)], files: List[UploadFile] = File(...), ai_model: str = Form("gemini")):

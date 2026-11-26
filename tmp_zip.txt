@@ -1,0 +1,6 @@
+2194: def get_invoice_generated_files(inv_id: int):
+2230: def dl_zip(inv_id: int, username: Annotated[str, Depends(authenticate)]):
+2239: zip_buffer = BytesIO()
+2240: with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as z:
+2246: zip_buffer.seek(0)
+2259: content=zip_buffer.getvalue(),

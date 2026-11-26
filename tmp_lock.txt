@@ -1,0 +1,12 @@
+364: locked_at TIMESTAMP WITH TIME ZONE,
+1737: dt = to_jst(invoice_data.get("locked_at") or invoice_data.get("created_at"))
+1933: dt = to_jst(inv_info.get("locked_at") or inv_info.get("created_at"))
+2020: item_count=%s, status='draft', locked_at=NULL, doc_type=%s, user_id=%s, issue_date=%s,
+2090: UPDATE invoices SET status='locked', locked_at=NOW()
+2134: cur.execute("UPDATE invoices SET status='draft', locked_at=NULL WHERE id=%s", (inv_id,))
+2145: to_char(i.locked_at, 'YYYY-MM-DD"T"HH24:MI:SS') as locked_at,
+2184: dt = to_jst(inv.get("locked_at") or inv.get("created_at"))
+2405: dt = to_jst(inv.get("locked_at") or inv.get("created_at"))
+2468: dt = to_jst(inv.get("locked_at") or inv.get("created_at"))
+2624: "locked_at": iso_or_none(inv.get("locked_at")),
+2672: "locked_at": iso_or_none(inv.get("locked_at")),

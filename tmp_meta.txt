@@ -1,0 +1,5 @@
+2073: "pdf_preview_url": f"/api/history/{inv_id}/pdf-preview",
+2074: "detail_pdf_preview_url": f"/api/history/{inv_id}/detail-pdf-preview",
+2540: def get_history_meta(inv_id: int, username: Annotated[str, Depends(authenticate)]):
+2640: "pdf_preview_url": f"/api/history/{inv_id}/pdf-preview",
+2641: "detail_pdf_preview_url": f"/api/history/{inv_id}/detail-pdf-preview",

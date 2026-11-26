@@ -1,0 +1,2 @@
+5420: $('modal-pdf-frame').srcdoc = '<div style="padding:20px;text-align:center;">プレビューデータを取得できませんでした</div>';
+5436: $('modal-detail-frame').srcdoc = '<div style="padding:20px;text-align:center;">プレビューデータを取得できませんでした</div>';

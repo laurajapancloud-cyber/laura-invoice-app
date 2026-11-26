@@ -5235,12 +5235,13 @@
           <div id="live-analyze-rows" style="display:flex; flex-direction:column; gap:3px; font-size:12.5px;"></div>
         </div>
         <div class="ai-model-compact-bar">
-          <span class="ai-model-compact-label"><svg class="icon" aria-hidden="true"><use href="#i-ai"></use></svg>AIエンジン</span>
+          <span class="ai-model-compact-label"><svg class="icon" aria-hidden="true"><use href="#i-ai"></use></svg>AIエンジン<span id="ai-model-status-dot" style="display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--text-muted); margin-left:2px;" title="API接続状態を確認中"></span></span>
           <select id="sel-ai" class="ai-model-compact-select" aria-label="AI モデル">
-            <option value="azure" selected>Azure GPT-4o (会社)</option>
-            <option value="gemini">Gemini 2.5 Flash</option>
+            <option value="gemini" selected>Gemini 2.5 Flash（無料枠・推奨）</option>
+            <option value="gemini_lite">Gemini 2.5 Flash-Lite（軽量・高速）</option>
+            <option value="vision">Cloud Vision（高速OCR・月1000枚無料）</option>
             <option value="openai">OpenAI GPT-4o-mini</option>
-            <option value="vision">Cloud Vision (高速OCR)</option>
+            <option value="azure">Azure GPT-4o（会社）</option>
           </select>
         </div>
         <button class="btn btn-gold" id="btn-analyze" disabled style="margin-top:12px">
@@ -5863,11 +5864,12 @@
           <div style="font-weight:600; color:var(--text-primary)">既定のAIモデル</div>
           <div style="font-size:12px; color:var(--text-muted); margin-top:4px">起動時・新規作成時の初期AIエンジン</div>
         </div>
-        <select id="sel-ai-default" class="ai-model-compact-select" aria-label="既定のAIモデル" style="max-width:220px;">
-          <option value="azure">Azure GPT-4o (会社)</option>
-          <option value="gemini">Gemini 2.5 Flash</option>
+        <select id="sel-ai-default" class="ai-model-compact-select" aria-label="既定のAIモデル" style="max-width:240px;">
+          <option value="gemini" selected>Gemini 2.5 Flash（無料枠・推奨）</option>
+          <option value="gemini_lite">Gemini 2.5 Flash-Lite（軽量・高速）</option>
+          <option value="vision">Cloud Vision（高速OCR・月1000枚無料）</option>
           <option value="openai">OpenAI GPT-4o-mini</option>
-          <option value="vision">Cloud Vision (高速OCR)</option>
+          <option value="azure">Azure GPT-4o（会社）</option>
         </select>
       </div>
       <div style="display:flex; justify-content:space-between; align-items:center; gap:14px; padding:12px 2px 4px; flex-wrap:wrap;">
@@ -6011,12 +6013,14 @@
     };
     applyTheme();
 
-    // 既定のAIモデル同期 (laura-ai-model)
+    // 既定のAIモデル同期 (laura-ai-model) & サーバー利用可否の自動反映
     (function initAiModelPreference() {
       const selAi = $('sel-ai');
       const selDefault = $('sel-ai-default');
-      const valid = new Set(['azure', 'gemini', 'openai', 'vision']);
-      let saved = 'azure';
+      const statusDot = $('ai-model-status-dot');
+      const valid = new Set(['gemini', 'gemini_lite', 'vision', 'openai', 'azure']);
+      let modelMap = {};
+      let saved = 'gemini';
       try {
         const s = localStorage.getItem('laura-ai-model');
         if (s && valid.has(s)) saved = s;
@@ -6024,14 +6028,64 @@
       if (selAi) selAi.value = saved;
       if (selDefault) selDefault.value = saved;
 
+      const updateStatusDot = (val) => {
+        if (!statusDot) return;
+        const info = modelMap[val];
+        if (!info) return;
+        if (info.available) {
+          statusDot.style.background = 'var(--green)';
+          statusDot.title = `${info.label}: 利用可能`;
+        } else {
+          statusDot.style.background = 'var(--red)';
+          statusDot.title = `${info.label}: APIキー未設定`;
+        }
+      };
+
       const syncModel = (val) => {
         if (!valid.has(val)) return;
         try { localStorage.setItem('laura-ai-model', val); } catch (_e) {}
         if (selAi && selAi.value !== val) selAi.value = val;
         if (selDefault && selDefault.value !== val) selDefault.value = val;
+        updateStatusDot(val);
       };
       if (selAi) selAi.addEventListener('change', (e) => syncModel(e.target.value));
       if (selDefault) selDefault.addEventListener('change', (e) => syncModel(e.target.value));
+
+      // サーバーの設定済みAPIキー状況を取得し、使えないモデルを明示・自動フォールバック
+      (async () => {
+        try {
+          const r = await fetch('/api/ai-models');
+          if (!r.ok) return;
+          const data = await r.json();
+          const models = Array.isArray(data.models) ? data.models : [];
+          if (!models.length) return;
+          modelMap = {};
+          models.forEach(m => { modelMap[m.id] = m; });
+
+          const applyOptions = (sel) => {
+            if (!sel) return;
+            const prev = sel.value;
+            sel.innerHTML = '';
+            models.forEach(m => {
+              const opt = document.createElement('option');
+              opt.value = m.id;
+              opt.textContent = m.available ? m.label : `${m.label}（未設定）`;
+              opt.disabled = !m.available;
+              sel.appendChild(opt);
+            });
+            if (modelMap[prev] && modelMap[prev].available) {
+              sel.value = prev;
+            } else {
+              sel.value = data.default || models[0].id;
+            }
+          };
+
+          applyOptions(selAi);
+          applyOptions(selDefault);
+          const activeId = (selAi && selAi.value) || data.default || 'gemini';
+          syncModel(activeId);
+        } catch (_e) {}
+      })();
     })();
 
     // アプリ起動時に今日の日付をセット
@@ -6658,8 +6712,8 @@
         const job = this.jobs.get(jid);
         if (!job || job.status === 'done' || job.status === 'failed') return;
 
-        // タイムアウト監視: AI解析は時間がかかるため120秒、その他は30秒
-        const timeoutMs = job.type === 'analyze' ? 120000 : 30000;
+        // タイムアウト監視: AI解析は無料枠の待機リトライを含め240秒、その他は30秒
+        const timeoutMs = job.type === 'analyze' ? 240000 : 30000;
         if (Date.now() - job.startTime > timeoutMs) {
           this.failJob(job, 'AIの応答がタイムアウトしました。画像が多い場合は少し時間がかかります。');
           return;
@@ -7720,7 +7774,7 @@
               const box = $('live-analyze');
               if (box) {
                 box.style.display = 'block';
-                $('live-analyze-head').textContent = 'AI解析中... ' + pg.done + '/' + pg.total + '枚完了' + (pg.failed ? '（' + pg.failed + '枚失敗）' : '');
+                $('live-analyze-head').textContent = 'AI解析中... ' + pg.done + '/' + pg.total + '枚完了' + (pg.failed ? '（' + pg.failed + '枚失敗）' : '') + (pg.note ? ' — ' + pg.note : '');
                 const rows = (pg.live_items || []).map(it => '<div>✓ <b>' + escapeHtml(String(it.code || '-')) + '</b>' + (it.size ? ' / ' + escapeHtml(String(it.size)) : '') + (it.unit_price ? ' / ¥' + Number(it.unit_price).toLocaleString() : '') + '</div>').join('');
                 $('live-analyze-rows').innerHTML = rows || '<div style="color:var(--text-muted)">読み取り中...</div>';
               }

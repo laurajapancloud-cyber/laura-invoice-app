@@ -1,0 +1,2 @@
+2236: def dl_excel(inv_id: int, username: Annotated[str, Depends(authenticate)]):
+2244: def dl_detail_excel(inv_id: int, username: Annotated[str, Depends(authenticate)]):
