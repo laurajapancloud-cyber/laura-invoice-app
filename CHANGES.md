@@ -177,13 +177,13 @@
 - **Gemini SDK・デッドUI整理**: `google.genai`（新SDK）優先＆ `FutureWarning` 抑止に対応。`templates/index.html` から未使用の `#gen-overlay`, `#prog-wrap`, `.swipe-row`, `bindSwipeRow`, `showGenProgress`/`hideGenProgress`, `updProg` を削除し、`JobUI.hide()` を補完
 - Service Worker キャッシュを laura-v19 に更新
 
-## v8.6 (2026-11-26) — Gemini 無料枠向けレート制限対策・既定モデル最適化
+## v8.6 (2026-11-26) — Gemini 無料枠向け5枚バッチ解析・レート制限対策・既定モデル最適化
 
 ### AI解析の無料枠最適化（脱Azure対応）
 - **既定のAIモデルを `Gemini 2.5 Flash` に変更**: 初期選択および `localStorage` の既定値を `azure` → `gemini` に変更し、未設定の Azure を誤選択してエラーになる問題を解消
-- **軽量モデル `Gemini 2.5 Flash-Lite` を追加**: `GEMINI_MODEL_MAP` により `gemini`（`gemini-2.5-flash`）と `gemini_lite`（`gemini-2.5-flash-lite`）の2種を選択可能に（API利用コスト集計にも対応）
+- **5枚まとめ送り（バッチ解析）＋自動フォールバック**: Gemini 2.5 Flash で複数枚を解析する際、5枚ずつ（`GEMINI_BATCH_SIZE` で調整可能）1リクエストにまとめて送信する `_analyze_gemini_batch` を導入。無料枠のリクエスト回数を最大5分の1に節約しつつ、件数不一致や形式エラー時は自動で1枚ずつの解析へフォールバック
 - **Gemini 無料枠向けレート制限対策**:
-  - 同時並列数を 2 に抑え、リクエスト間の最小間隔スロットリング（既定 1.2秒、`GEMINI_MIN_INTERVAL_SEC` で調整可能）を導入
+  - リクエスト間の最小間隔スロットリング（既定 1.2秒、`GEMINI_MIN_INTERVAL_SEC` で調整可能）を導入
   - 429 / ResourceExhausted / Quota エラーを自動判定し、レスポンス記載の待機秒数または指数バックオフ（4s → 10s → 18s → 25s）で最大4回自動リトライ。待機中はライブ進捗表示へ状態を通知
   - 大量解析時のフロント側ジョブタイムアウトを 120秒 → 240秒 に拡張
 - **利用可能モデルの自動判定＆状態表示（`GET /api/ai-models`）**: サーバーでAPIキーが設定済みのモデルを自動取得し、未設定モデルは「（未設定）」表示＋選択不可（`disabled`）に制御。過去に `localStorage` へ未設定モデル（旧 Azure 等）が保存されていた場合も自動で設定済みモデルへフォールバック

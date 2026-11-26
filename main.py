@@ -189,7 +189,6 @@ def storage_download(path: str) -> bytes:
 # AI Initialization
 GEMINI_MODEL_MAP = {
     "gemini": "gemini-2.5-flash",
-    "gemini_lite": "gemini-2.5-flash-lite",
 }
 gemini_client_new = None
 gemini_models: Dict[str, Any] = {}
@@ -1555,6 +1554,97 @@ def _extract_retry_delay(err: Exception, attempt: int) -> float:
     backoff = [4.0, 10.0, 18.0, 25.0]
     return backoff[min(attempt, len(backoff) - 1)]
 
+
+try:
+    GEMINI_BATCH_SIZE = max(1, min(10, int(os.getenv("GEMINI_BATCH_SIZE", "5"))))
+except Exception:
+    GEMINI_BATCH_SIZE = 5
+
+
+def _analyze_gemini_batch(batch_items: list, ai_model: str = "gemini", master_codes: list = None) -> Dict[int, dict]:
+    """Gemini 2.5 Flash で複数枚（既定5枚）を1リクエストにまとめて解析し、{orig_idx: item} を返す。
+    件数不一致・JSON不正時は例外を送出し、呼び出し元で1枚ずつ解析へ自動フォールバックする。"""
+    model_id = GEMINI_MODEL_MAP.get(ai_model, "gemini-2.5-flash")
+    n_batch = len(batch_items)
+    prompt = (
+        f"あなたはアパレルブランドのデータ入力アシスタントです。\n"
+        f"これから {n_batch} 枚の商品タグ（下げ札）画像を「=== 画像 1 ===」〜「=== 画像 {n_batch} ===」の順に渡します。\n"
+        f"各画像について1件ずつ、以下の項目を抽出してください。\n"
+        f"- image_no: 画像番号（1〜{n_batch} の整数）\n"
+        f"- code: 品番（英数字・ハイフン。例 \"AB123-45\"）\n"
+        f"- color: カラー番号または名称\n"
+        f"- size: サイズ表記\n"
+        f"- unit_price: 本体価格（税抜）の数値。「本体」「＋税」表記があればその金額を優先\n"
+        f"- quantity: 常に 1\n"
+        f"読み取れない項目は \"-\"（unit_price は 0）としてください。\n"
+        f"必ず画像1〜{n_batch}に対応する合計 {n_batch} 件のJSONオブジェクトを含むJSON配列のみを返してください。"
+    )
+    if master_codes:
+        prompt += "\n\n【既知の品番リスト（過去伝票の実績）】\n読み取った品番が下記のいずれかと酷似する場合（O/0・I/1・B/8などの見間違い、ハイフン抜け等）は、リスト側の正しい表記を採用してください。リストに無い新しい品番はそのまま返してください:\n" + ", ".join(master_codes)
+
+    if gemini_client_new and google_genai_types:
+        contents = [prompt]
+        for slot_no, (_, part) in enumerate(batch_items, start=1):
+            contents.append(f"=== 画像 {slot_no} ===")
+            contents.append(google_genai_types.Part.from_bytes(data=part["data"], mime_type=part["mime_type"]))
+        response = gemini_client_new.models.generate_content(
+            model=model_id,
+            contents=contents,
+            config=google_genai_types.GenerateContentConfig(
+                temperature=0,
+                response_mime_type="application/json",
+            ),
+        )
+        raw_text = (response.text or "").strip()
+    else:
+        g_model = gemini_models.get(ai_model) or gemini_model
+        if not g_model:
+            raise Exception("Gemini APIキー（GEMINI_API_KEY）が未設定です。")
+        contents = [prompt]
+        for slot_no, (_, part) in enumerate(batch_items, start=1):
+            contents.append(f"=== 画像 {slot_no} ===")
+            contents.append({"mime_type": part["mime_type"], "data": part["data"]})
+        try:
+            response = g_model.generate_content(
+                contents,
+                generation_config={
+                    "temperature": 0,
+                    "response_mime_type": "application/json",
+                },
+            )
+        except TypeError:
+            response = g_model.generate_content(contents)
+        raw_text = (response.text or "").strip()
+
+    arr = extract_json_array(raw_text)
+    if not isinstance(arr, list) or len(arr) != n_batch:
+        raise ValueError(f"バッチ解析件数不一致: expected={n_batch}, got={len(arr) if isinstance(arr, list) else 'invalid'}")
+
+    by_slot = {}
+    for entry in arr:
+        if not isinstance(entry, dict):
+            raise ValueError("バッチ解析結果にオブジェクト以外の要素が含まれています")
+        try:
+            ino = int(entry.get("image_no"))
+            if 1 <= ino <= n_batch and ino not in by_slot:
+                by_slot[ino] = entry
+        except Exception:
+            pass
+
+    mapped = {}
+    use_slot = (len(by_slot) == n_batch)
+    for slot_no, (orig_idx, _) in enumerate(batch_items, start=1):
+        src = by_slot[slot_no] if use_slot else arr[slot_no - 1]
+        mapped[orig_idx] = {
+            "code": src.get("code", "-"),
+            "color": src.get("color", "-"),
+            "size": src.get("size", "-"),
+            "unit_price": src.get("unit_price", 0),
+            "quantity": 1,
+            "source_image_no": orig_idx,
+        }
+    return mapped
+
 def _attach_variant_warnings(items: list):
     """学習型商品マスタ（過去の確定伝票実績）と突合し、価格不一致などの警告を付与する"""
     if not (DATABASE_URL and psycopg2):
@@ -1601,9 +1691,21 @@ def analyze_images_internal(jid: str, image_parts: list, ai_model: str):
         results = [None] * n
         failed = {}
 
+        if ai_model == "gemini_lite":
+            ai_model = "gemini"
         is_gemini = ai_model in GEMINI_MODEL_MAP
         progress_lock = threading.Lock()
         done_count = 0
+
+        def _push_progress(note: str = None):
+            try:
+                live = [{"code": str(r.get("code") or "-"), "size": str(r.get("size") or ""), "unit_price": r.get("unit_price") or 0} for r in results if r is not None][:30]
+                pg = {"done": done_count, "total": n, "failed": len(failed), "item_count": len(live), "live_items": live}
+                if note:
+                    pg["note"] = note
+                db_update_job(jid, 'processing', result={"progress": pg})
+            except Exception as pe:
+                logger.warning("progress update failed: %s", pe)
 
         def run_one(idx: int):
             last_err = None
@@ -1622,15 +1724,8 @@ def analyze_images_internal(jid: str, image_parts: list, ai_model: str):
                     if is_rl and attempt + 1 < max_attempts:
                         wait_sec = _extract_retry_delay(e, attempt)
                         logger.warning("Rate limited on image %d (%s), waiting %.1fs (attempt %d/%d)", idx, ai_model, wait_sec, attempt + 1, max_attempts)
-                        try:
-                            with progress_lock:
-                                live = [{"code": str(r.get("code") or "-"), "size": str(r.get("size") or ""), "unit_price": r.get("unit_price") or 0} for r in results if r is not None][:30]
-                                db_update_job(jid, 'processing', result={"progress": {
-                                    "done": done_count, "total": n, "failed": len(failed), "item_count": len(live), "live_items": live,
-                                    "note": f"無料枠のレート制限のため約{int(round(wait_sec))}秒待機して再試行中..."
-                                }})
-                        except Exception:
-                            pass
+                        with progress_lock:
+                            _push_progress(f"無料枠のレート制限のため約{int(round(wait_sec))}秒待機して再試行中...")
                         time.sleep(wait_sec)
                         continue
                     if not is_rl and attempt < 1:
@@ -1654,31 +1749,75 @@ def analyze_images_internal(jid: str, image_parts: list, ai_model: str):
         except Exception as e:
             logger.warning("master codes fetch failed: %s", e)
 
-        from concurrent.futures import ThreadPoolExecutor, as_completed
-        if ai_model == "vision":
-            max_workers = 1
-        elif is_gemini:
-            # Gemini 無料枠の1分あたり上限(RPM)を超えにくい並列数に制限
-            max_workers = min(2, max(1, n))
-        else:
-            max_workers = min(4, max(1, n))
-        with ThreadPoolExecutor(max_workers=max_workers) as ex:
-            futures = [ex.submit(run_one, i) for i in range(n)]
-            for fut in as_completed(futures):
-                idx, item, err = fut.result()
-                with progress_lock:
+        if is_gemini and n > 1 and GEMINI_BATCH_SIZE > 1:
+            # Gemini 無料枠最適化: 5枚ずつ1リクエストにまとめて解析（失敗時は自動で1枚ずつにフォールバック）
+            for start in range(0, n, GEMINI_BATCH_SIZE):
+                chunk = [(i, image_parts[i]) for i in range(start, min(start + GEMINI_BATCH_SIZE, n))]
+                if len(chunk) == 1:
+                    idx, item, err = run_one(chunk[0][0])
                     done_count += 1
                     if item is not None:
                         results[idx] = item
                     else:
                         failed[idx] = err or "unknown error"
-                        logger.warning("Image %d analyze failed (%s): %s", idx, ai_model, err)
-                    # リアルタイム進捗: 1枚終わるごとに進捗と読み取り済み明細をジョブへ書き込む（ポーリングで順次表示）
+                    _push_progress()
+                    continue
+
+                batch_mapped = None
+                batch_err = None
+                for attempt in range(5):
                     try:
-                        live = [{"code": str(r.get("code") or "-"), "size": str(r.get("size") or ""), "unit_price": r.get("unit_price") or 0} for r in results if r is not None][:30]
-                        db_update_job(jid, 'processing', result={"progress": {"done": done_count, "total": n, "failed": len(failed), "item_count": len(live), "live_items": live}})
-                    except Exception as pe:
-                        logger.warning("progress update failed: %s", pe)
+                        _gemini_rate_gate()
+                        batch_mapped = _analyze_gemini_batch(chunk, ai_model, master_codes)
+                        break
+                    except Exception as e:
+                        batch_err = e
+                        if _is_rate_limit_error(e) and attempt + 1 < 5:
+                            wait_sec = _extract_retry_delay(e, attempt)
+                            logger.warning("Rate limited on batch %d-%d (%s), waiting %.1fs (attempt %d/5)", start, start + len(chunk) - 1, ai_model, wait_sec, attempt + 1)
+                            _push_progress(f"無料枠のレート制限のため約{int(round(wait_sec))}秒待機して再試行中...")
+                            time.sleep(wait_sec)
+                            continue
+                        break
+
+                if batch_mapped is not None:
+                    for orig_idx, item in batch_mapped.items():
+                        results[orig_idx] = item
+                    done_count += len(chunk)
+                    _push_progress()
+                else:
+                    # バッチ解析が形式・件数エラー等で失敗した場合は1枚ずつ自動フォールバック
+                    logger.warning("Gemini batch %d-%d failed (%s); falling back to single-image mode", start, start + len(chunk) - 1, batch_err)
+                    _push_progress("まとめ解析で不一致が発生したため1枚ずつ再解析中...")
+                    for orig_idx, _ in chunk:
+                        idx, item, err = run_one(orig_idx)
+                        done_count += 1
+                        if item is not None:
+                            results[idx] = item
+                        else:
+                            failed[idx] = err or "unknown error"
+                            logger.warning("Image %d analyze failed (%s): %s", idx, ai_model, err)
+                        _push_progress()
+        else:
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            if ai_model == "vision":
+                max_workers = 1
+            elif is_gemini:
+                max_workers = min(2, max(1, n))
+            else:
+                max_workers = min(4, max(1, n))
+            with ThreadPoolExecutor(max_workers=max_workers) as ex:
+                futures = [ex.submit(run_one, i) for i in range(n)]
+                for fut in as_completed(futures):
+                    idx, item, err = fut.result()
+                    with progress_lock:
+                        done_count += 1
+                        if item is not None:
+                            results[idx] = item
+                        else:
+                            failed[idx] = err or "unknown error"
+                            logger.warning("Image %d analyze failed (%s): %s", idx, ai_model, err)
+                        _push_progress()
 
         items_data = [it for it in results if it is not None]
 
@@ -1744,7 +1883,6 @@ def get_ai_models(username: Annotated[str, Depends(authenticate)]):
     gemini_ok = bool(gemini_client_new or gemini_models.get("gemini") or gemini_model)
     models = [
         {"id": "gemini", "label": "Gemini 2.5 Flash（無料枠・推奨）", "available": gemini_ok, "free_tier": True},
-        {"id": "gemini_lite", "label": "Gemini 2.5 Flash-Lite（軽量・高速）", "available": gemini_ok, "free_tier": True},
         {"id": "vision", "label": "Cloud Vision（高速OCR・月1000枚無料）", "available": bool(vision_client), "free_tier": True},
         {"id": "openai", "label": "OpenAI GPT-4o-mini", "available": bool(openai_client), "free_tier": False},
         {"id": "azure", "label": "Azure GPT-4o（会社）", "available": bool(azure_client), "free_tier": False},

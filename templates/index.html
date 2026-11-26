@@ -5238,7 +5238,6 @@
           <span class="ai-model-compact-label"><svg class="icon" aria-hidden="true"><use href="#i-ai"></use></svg>AIエンジン<span id="ai-model-status-dot" style="display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--text-muted); margin-left:2px;" title="API接続状態を確認中"></span></span>
           <select id="sel-ai" class="ai-model-compact-select" aria-label="AI モデル">
             <option value="gemini" selected>Gemini 2.5 Flash（無料枠・推奨）</option>
-            <option value="gemini_lite">Gemini 2.5 Flash-Lite（軽量・高速）</option>
             <option value="vision">Cloud Vision（高速OCR・月1000枚無料）</option>
             <option value="openai">OpenAI GPT-4o-mini</option>
             <option value="azure">Azure GPT-4o（会社）</option>
@@ -5866,7 +5865,6 @@
         </div>
         <select id="sel-ai-default" class="ai-model-compact-select" aria-label="既定のAIモデル" style="max-width:240px;">
           <option value="gemini" selected>Gemini 2.5 Flash（無料枠・推奨）</option>
-          <option value="gemini_lite">Gemini 2.5 Flash-Lite（軽量・高速）</option>
           <option value="vision">Cloud Vision（高速OCR・月1000枚無料）</option>
           <option value="openai">OpenAI GPT-4o-mini</option>
           <option value="azure">Azure GPT-4o（会社）</option>
@@ -6018,7 +6016,7 @@
       const selAi = $('sel-ai');
       const selDefault = $('sel-ai-default');
       const statusDot = $('ai-model-status-dot');
-      const valid = new Set(['gemini', 'gemini_lite', 'vision', 'openai', 'azure']);
+      const valid = new Set(['gemini', 'vision', 'openai', 'azure']);
       let modelMap = {};
       let saved = 'gemini';
       try {
